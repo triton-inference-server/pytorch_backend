@@ -82,7 +82,7 @@ endif() # TRITON_ENABLE_GPU
 #
 # Shared library implementing the Triton Backend API
 #
-configure_file(src/libtriton_libtorch.ldscript libtriton_libtorch.ldscript COPYONLY)
+configure_file(src/libtriton_pytorch.ldscript libtriton_pytorch.ldscript COPYONLY)
 
 add_library(
   triton-libtorch-backend SHARED
@@ -120,13 +120,13 @@ set_target_properties(
   triton-libtorch-backend
   PROPERTIES
     POSITION_INDEPENDENT_CODE ON
-    OUTPUT_NAME triton_libtorch
+    OUTPUT_NAME triton_pytorch
     SKIP_BUILD_RPATH TRUE
     BUILD_WITH_INSTALL_RPATH TRUE
     INSTALL_RPATH_USE_LINK_PATH FALSE
     INSTALL_RPATH "$\{ORIGIN\}"
-    LINK_DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/libtriton_libtorch.ldscript
-    LINK_FLAGS "-Wl,--version-script libtriton_libtorch.ldscript"
+    LINK_DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/libtriton_pytorch.ldscript
+    LINK_FLAGS "-Wl,--version-script libtriton_pytorch.ldscript"
 )
 
 # Need to turn off unused-but-set-variable due to Torchvision
