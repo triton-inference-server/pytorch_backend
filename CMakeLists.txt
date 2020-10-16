@@ -153,6 +153,11 @@ target_link_libraries(
     PUBLIC -ltorch_cpu
     PUBLIC -ltorch_cuda
     PUBLIC -ltorchvision
+    PUBLIC -lc10
+    PUBLIC -lc10_cuda
+    PUBLIC -lmkl_core
+    PUBLIC -lmkl_gnu_thread
+    PUBLIC -lmkl_intel_lp64
 )
 
 if(${TRITON_ENABLE_GPU})
