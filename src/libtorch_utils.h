@@ -43,7 +43,7 @@ namespace triton { namespace backend { namespace pytorch {
 TRITONSERVER_DataType ConvertTorchTypeToDataType(
     const torch::ScalarType& ttype);
 std::pair<bool, torch::ScalarType> ConvertDataTypeToTorchType(
-    TRITONSERVER_DataType dtype);
+    const TRITONSERVER_DataType dtype);
 std::pair<bool, torch::ScalarType> ModelConfigDataTypeToTorchType(
     const std::string& data_type_str);
 

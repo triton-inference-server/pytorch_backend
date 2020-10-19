@@ -58,7 +58,7 @@ ConvertTorchTypeToDataType(const torch::ScalarType& stype)
 }
 
 std::pair<bool, torch::ScalarType>
-ConvertDataTypeToTorchType(const TRITONSERVER_DataType& dtype)
+ConvertDataTypeToTorchType(const TRITONSERVER_DataType dtype)
 {
   torch::ScalarType type = torch::kInt;
   switch (dtype) {
