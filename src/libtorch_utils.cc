@@ -130,9 +130,11 @@ ModelConfigDataTypeToTorchType(const std::string& data_type_str)
     type = torch::kFloat;
   } else if (dtype == "FP64") {
     type = torch::kDouble;
+  } else {
+    return std::make_pair(false, type);
   }
 
-  return std::make_pair(false, type);
+  return std::make_pair(true, type);
 }
 
 }}}  // namespace triton::backend::pytorch
