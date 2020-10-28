@@ -24,8 +24,8 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <torchvision/vision.h>  // Torchvision header
 #include <stdint.h>
+#include <torchvision/vision.h>  // Torchvision header
 #include <exception>
 #include "libtorch_utils.h"
 #include "triton/backend/backend_common.h"
@@ -149,7 +149,8 @@ ModelState::LoadModel(
 
   try {
     std::istringstream model_stream(model_data_str);
-    torch_model->reset(new torch::jit::Module(torch::jit::load(model_stream, device)));
+    torch_model->reset(
+        new torch::jit::Module(torch::jit::load(model_stream, device)));
   }
   catch (const std::exception& ex) {
     return TRITONSERVER_ErrorNew(
@@ -236,9 +237,7 @@ class ModelInstanceState : public BackendModelInstance {
       const std::string& control_kind, bool required, bool* have_control);
   TRITONSERVER_Error* ValidateInputs();
   TRITONSERVER_Error* ValidateOutputs();
-  void Execute(
-      std::vector<TRITONBACKEND_Response*>* responses,
-      const uint32_t response_count,
+  TRITONSERVER_Error* Execute(
       std::vector<torch::jit::IValue>* input_tensors,
       std::vector<torch::Tensor>* output_tensors);
   void SetInputTensors(
@@ -676,7 +675,10 @@ ModelInstanceState::ProcessRequests(
   SET_TIMESTAMP(compute_start_ns);
 
   // Run...
-  Execute(&responses, request_count, &input_tensors, &output_tensors);
+  TRITONSERVER_Error* exec_err = Execute(&input_tensors, &output_tensors);
+  if (exec_err != nullptr) {
+    SendErrorForResponses(&responses, request_count, exec_err);
+  }
 
   uint64_t compute_end_ns = 0;
   SET_TIMESTAMP(compute_end_ns);
@@ -742,10 +744,8 @@ ModelInstanceState::ProcessRequests(
       "failed reporting batch request statistics");
 }
 
-void
+TRITONSERVER_Error*
 ModelInstanceState::Execute(
-    std::vector<TRITONBACKEND_Response*>* responses,
-    const uint32_t response_count,
     std::vector<torch::jit::IValue>* input_tensors,
     std::vector<torch::Tensor>* output_tensors)
 {
@@ -764,12 +764,12 @@ ModelInstanceState::Execute(
     }
   }
   catch (std::exception& ex) {
-    SendErrorForResponses(
-        responses, response_count,
-        TRITONSERVER_ErrorNew(
-            TRITONSERVER_ERROR_INTERNAL,
-            ("PyTorch execute failure: " + std::string(ex.what())).c_str()));
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INTERNAL,
+        ("PyTorch execute failure: " + std::string(ex.what())).c_str());
   }
+
+  return nullptr;  // success
 }
 
 void
