@@ -70,7 +70,7 @@ class ModelState : public BackendModel {
   TRITONSERVER_Error* LoadModel(
       const std::string& artifact_name, const torch::Device device,
       std::string* model_path,
-      std::shared_ptr<torch::jit::script::Module> torch_model);
+      std::unique_ptr<torch::jit::script::Module>* torch_model);
 
  private:
   ModelState(TRITONBACKEND_Model* triton_model);
@@ -114,14 +114,14 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     : BackendModel(triton_model)
 {
-  // TODO Obtain backend configuration and validate
+  // TODO Obtain and validate backend configuration
 }
 
 TRITONSERVER_Error*
 ModelState::LoadModel(
     const std::string& artifact_name, const torch::Device device,
     std::string* model_path,
-    std::shared_ptr<torch::jit::script::Module> torch_model)
+    std::unique_ptr<torch::jit::script::Module>* torch_model)
 {
   // Find the TorchScript file that describes the model. If the model
   // configuration doesn't have an explicit model file specified then
@@ -149,8 +149,7 @@ ModelState::LoadModel(
 
   try {
     std::istringstream model_stream(model_data_str);
-    torch_model = std::make_shared<torch::jit::script::Module>(
-        torch::jit::load(model_stream, device));
+    torch_model->reset(new torch::jit::Module(torch::jit::load(model_stream, device)));
   }
   catch (const std::exception& ex) {
     return TRITONSERVER_ErrorNew(
@@ -259,7 +258,7 @@ class ModelInstanceState : public BackendModelInstance {
   // The full path to the TorchScript model file.
   std::string model_path_;
 
-  std::shared_ptr<torch::jit::script::Module> torch_model_;
+  std::unique_ptr<torch::jit::script::Module> torch_model_;
   torch::Device device_;
 
   // Map from configuration name for an input to the index of
@@ -300,7 +299,7 @@ ModelInstanceState::ModelInstanceState(
   }
 
   THROW_IF_BACKEND_INSTANCE_ERROR(model_state->LoadModel(
-      ArtifactFilename(), device_, &model_path_, torch_model_));
+      ArtifactFilename(), device_, &model_path_, &torch_model_));
 
   size_t expected_input_cnt = 0;
   {
