@@ -24,9 +24,9 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-cmake_minimum_required (VERSION 3.17)
+cmake_minimum_required (VERSION 3.18)
 
-project(tritonlibtorchbackend LANGUAGES C CXX)
+project(tritonpytorchbackend LANGUAGES C CXX)
 
 #
 # Options
@@ -85,39 +85,39 @@ endif() # TRITON_ENABLE_GPU
 configure_file(src/libtriton_pytorch.ldscript libtriton_pytorch.ldscript COPYONLY)
 
 add_library(
-  triton-libtorch-backend SHARED
+  triton-pytorch-backend SHARED
   src/libtorch.cc
   src/libtorch_utils.cc
   src/libtorch_utils.h
 )
 
 add_library(
-  TritonLibTorchBackend::triton-libtorch-backend ALIAS triton-libtorch-backend
+  TritonPyTorchBackend::triton-pytorch-backend ALIAS triton-pytorch-backend
 )
 
 target_include_directories(
-  triton-libtorch-backend
+  triton-pytorch-backend
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${TRITON_PYTORCH_INCLUDE_PATHS}
 )
 
-target_compile_features(triton-libtorch-backend PRIVATE cxx_std_11)
+target_compile_features(triton-pytorch-backend PRIVATE cxx_std_11)
 target_compile_options(
-  triton-libtorch-backend PRIVATE
+  triton-pytorch-backend PRIVATE
   $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:
     -Wall -Wextra -Wno-unused-parameter -Wno-type-limits -Werror>
 )
 
 if(${TRITON_ENABLE_GPU})
   target_compile_definitions(
-    triton-libtorch-backend
+    triton-pytorch-backend
     PRIVATE TRITON_ENABLE_GPU=1
   )
 endif() # TRITON_ENABLE_GPU
 
 set_target_properties(
-  triton-libtorch-backend
+  triton-pytorch-backend
   PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     OUTPUT_NAME triton_pytorch
@@ -126,13 +126,13 @@ set_target_properties(
     INSTALL_RPATH_USE_LINK_PATH FALSE
     INSTALL_RPATH "$\{ORIGIN\}"
     LINK_DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/libtriton_pytorch.ldscript
-    LINK_FLAGS "-Wl,--no-as-needed,--version-script libtriton_pytorch.ldscript"
+    LINK_FLAGS "-Wl,--version-script libtriton_pytorch.ldscript"
 )
 
 # Need to turn off unused-but-set-variable due to Torchvision
 # Need to turn off unknown-pragmas due to ATen OpenMP
 set_target_properties(
-  triton-libtorch-backend
+  triton-pytorch-backend
   PROPERTIES COMPILE_FLAGS
     "-Wno-unknown-pragmas -Wno-unused-but-set-variable"
 )
@@ -143,10 +143,11 @@ FOREACH(p ${TRITON_PYTORCH_LIB_PATHS})
 ENDFOREACH(p)
 
 target_link_libraries(
-  triton-libtorch-backend
+  triton-pytorch-backend
   PRIVATE
     triton-core-serverapi  # from repo-core
     triton-core-backendapi # from repo-core
+    triton-core-serverstub # from repo-core
     triton-backend-utils   # from repo-backend
     ${TRITON_PYTORCH_LDFLAGS}
     -ltorch
@@ -162,7 +163,7 @@ target_link_libraries(
 
 if(${TRITON_ENABLE_GPU})
   target_link_libraries(
-    triton-libtorch-backend
+    triton-pytorch-backend
     PRIVATE
       CUDA::cudart
   )
@@ -171,38 +172,38 @@ endif() # TRITON_ENABLE_GPU
 # Install
 #
 include(GNUInstallDirs)
-set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/TritonLibTorchBackend)
+set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/TritonPyTorchBackend)
 
 install(
   TARGETS
-    triton-libtorch-backend
+    triton-pytorch-backend
   EXPORT
-    triton-libtorch-backend-targets
+    triton-pytorch-backend-targets
   LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/pytorch
   ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/pytorch
 )
 
 install(
   EXPORT
-    triton-libtorch-backend-targets
+    triton-pytorch-backend-targets
   FILE
-    TritonLibTorchBackendTargets.cmake
+    TritonPyTorchBackendTargets.cmake
   NAMESPACE
-    TritonLibTorchBackend::
+    TritonPyTorchBackend::
   DESTINATION
     ${INSTALL_CONFIGDIR}
 )
 
 include(CMakePackageConfigHelpers)
 configure_package_config_file(
-  ${CMAKE_CURRENT_LIST_DIR}/cmake/TritonLibTorchBackendConfig.cmake.in
-  ${CMAKE_CURRENT_BINARY_DIR}/TritonLibTorchBackendConfig.cmake
+  ${CMAKE_CURRENT_LIST_DIR}/cmake/TritonPyTorchBackendConfig.cmake.in
+  ${CMAKE_CURRENT_BINARY_DIR}/TritonPyTorchBackendConfig.cmake
   INSTALL_DESTINATION ${INSTALL_CONFIGDIR}
 )
 
 install(
   FILES
-  ${CMAKE_CURRENT_BINARY_DIR}/TritonLibTorchBackendConfig.cmake
+  ${CMAKE_CURRENT_BINARY_DIR}/TritonPyTorchBackendConfig.cmake
   DESTINATION ${INSTALL_CONFIGDIR}
 )
 
@@ -210,9 +211,9 @@ install(
 # Export from build tree
 #
 export(
-  EXPORT triton-libtorch-backend-targets
-  FILE ${CMAKE_CURRENT_BINARY_DIR}/TritonLibTorchBackendTargets.cmake
-  NAMESPACE TritonLibTorchBackend::
+  EXPORT triton-pytorch-backend-targets
+  FILE ${CMAKE_CURRENT_BINARY_DIR}/TritonPyTorchBackendTargets.cmake
+  NAMESPACE TritonPyTorchBackend::
 )
 
-export(PACKAGE TritonLibTorchBackend)
+export(PACKAGE TritonPyTorchBackend)

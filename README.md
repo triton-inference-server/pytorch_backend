@@ -34,14 +34,35 @@ The Triton backend for [PyTorch](https://github.com/pytorch/pytorch).
 You can learn more about Triton backends in the [backend
 repo](https://github.com/triton-inference-server/backend). Ask
 questions or report problems on the [issues
-page](https://github.com/triton-inference-server/pytorch_backend/issues).
+page](https://github.com/triton-inference-server/server/issues).
+This backend is designed to run [TorchScript](https://pytorch.org/docs/stable/jit.html)
+models using the PyTorch C++ API. All models created in PyTorch
+using the python API must be traced/scripted to produce a TorchScript
+model.
 
-Use a recent cmake to build and install in a local directory.
+Where can I ask general questions about Triton and Triton backends?
+Be sure to read all the information below as well as the [general
+Triton documentation](https://github.com/triton-inference-server/server#triton-inference-server)
+available in the main [server](https://github.com/triton-inference-server/server)
+repo. If you don't find your answer there you can ask questions on the
+main Triton [issues page](https://github.com/triton-inference-server/server/issues).
+
+## Build the TensorFlow Backend
+
+Use a recent cmake to build. First install the required dependencies.
+
+```
+$ apt-get install patchelf rapidjson-dev python3.6-dev
+```
+
+Copy over the LibTorch and Torchvision headers and libraries from the
+[PyTorch NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch)
+into local directories.
 
 ```
 $ mkdir build
 $ cd build
-$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install ..
+$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_PYTORCH_INCLUDE_PATHS="/opt/tritonserver/include/torch;/opt/tritonserver/include/torch/torch/csrc/api/include;/opt/tritonserver/include/torchvision;/usr/include/python3.6" -DTRITON_PYTORCH_LIB_PATHS="/opt/tritonserver/backends/pytorch"..
 $ make install
 ```
 

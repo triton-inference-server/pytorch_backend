@@ -61,10 +61,7 @@ class ModelState : public BackendModel {
   virtual ~ModelState() = default;
 
   // Load a TorchScript model using 'artifact_name' as the name for the
-  // TorchScript file/directory. If 'instance_group_kind' is not
-  // TRITONSERVER_INSTANCEGROUPKIND_AUTO then use it and
-  // 'instance_group_device_id' to initialize the model when
-  // loading. Return in 'model_path' the full path to the
+  // TorchScript file. Return in 'model_path' the full path to the
   // TorchScript file, return in 'torch_model' the Torch Module
   // representing the model.
   TRITONSERVER_Error* LoadModel(
@@ -114,7 +111,6 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     : BackendModel(triton_model)
 {
-  // TODO Obtain and validate backend configuration
 }
 
 TRITONSERVER_Error*
