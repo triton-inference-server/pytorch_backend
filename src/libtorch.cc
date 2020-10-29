@@ -814,39 +814,31 @@ ModelInstanceState::SetInputTensors(
       batchn_shape[0] = total_batch_size;
     }
 
-    // The input must be in contiguous CPU/GPU memory. Use a pinned
-    // memory if possible for the case where the inputs are being
-    // provided in GPU memory.
-    //
-    // [TODO] a couple of optimizations are possible here. 1) if we
-    // know that all data for this input across all requests was not
-    // in GPU memory, then we could just use regular CPU memory and
-    // not pinned memory. 2) if there is a single request and for
-    // this input the data is already in contiguous CPU memory then
-    // we don't need to copy at all.
+    // The input must be in contiguous CPU/GPU memory.
     const int64_t batchn_byte_size = GetByteSize(input_datatype, batchn_shape);
 
     BackendMemory* input_memory;
     RESPOND_ALL_AND_RETURN_IF_ERROR(
         responses, request_count,
-        BackendMemory::CreateWithFallback(
+        BackendMemory::Create(
             model_state_->TritonMemoryManager(),
-            (device_.type() == torch::kCPU) ? TRITONSERVER_MEMORY_CPU_PINNED
-                                            : TRITONSERVER_MEMORY_GPU,
-            (device_.type() == torch::kCPU) ? 0 : device_.index(),
-            batchn_byte_size, &input_memory));
+            device_.is_cpu() ? TRITONSERVER_MEMORY_CPU
+                             : TRITONSERVER_MEMORY_GPU,
+            device_.is_cpu() ? 0 : device_.index(), batchn_byte_size,
+            &input_memory));
 
     TRITONSERVER_MemoryType memory_type = input_memory->MemoryType();
     int64_t memory_type_id = input_memory->MemoryTypeId();
     char* input_buffer = input_memory->MemoryPtr();
 
     collector->ProcessTensor(
-        input_name, input_buffer, batchn_byte_size, memory_type, 0);
+        input_name, input_buffer, batchn_byte_size, memory_type,
+        memory_type_id);
 
     // Create Torch tenor
     const auto torch_dtype = ConvertDataTypeToTorchType(input_datatype);
     torch::TensorOptions options{torch_dtype.second};
-    auto updated_options = (memory_type == TRITONSERVER_MEMORY_GPU)
+    auto updated_options = device_.is_cuda()
                                ? options.device(torch::kCUDA, memory_type_id)
                                : options.device(torch::kCPU);
 
