@@ -160,41 +160,13 @@ ModelState::LoadModel(
 TRITONSERVER_Error*
 ModelState::AutoCompleteConfig()
 {
-  // If the model configuration already specifies max_batch_size,
-  // inputs or outputs then don't to any auto-completion.
-  size_t input_cnt = 0;
-  size_t output_cnt = 0;
-  {
-    triton::common::TritonJson::Value inputs;
-    if (ModelConfig().Find("input", &inputs)) {
-      input_cnt = inputs.ArraySize();
-    }
-    triton::common::TritonJson::Value outputs;
-    if (ModelConfig().Find("output", &outputs)) {
-      output_cnt = outputs.ArraySize();
-    }
-  }
-
-  if ((MaxBatchSize() > 0) || (input_cnt > 0) || (output_cnt > 0)) {
-    LOG_MESSAGE(
-        TRITONSERVER_LOG_INFO,
-        (std::string("skipping model configuration auto-complete for '") +
-         Name() + "': max_batch_size, inputs or outputs already specified")
-            .c_str());
-    return nullptr;  // success
-  }
-
-  std::string artifact_name;
-  RETURN_IF_ERROR(
-      ModelConfig().MemberAsString("default_model_filename", &artifact_name));
-
-  if (TRITONSERVER_LogIsEnabled(TRITONSERVER_LOG_VERBOSE)) {
-    triton::common::TritonJson::WriteBuffer buffer;
-    RETURN_IF_ERROR(ModelConfig().PrettyWrite(&buffer));
-    LOG_MESSAGE(
-        TRITONSERVER_LOG_INFO,
-        (std::string("post auto-complete:\n") + buffer.Contents()).c_str());
-  }
+  // Auto-complete configuration is not supported since PyTorch does not
+  // store/capture sufficient model metadata so just log error instead.
+  LOG_MESSAGE(
+      TRITONSERVER_LOG_ERROR,
+      (std::string("skipping model configuration auto-complete for '") +
+       Name() + "': not supported for pytorch backend")
+          .c_str());
 
   return nullptr;  // success
 }
