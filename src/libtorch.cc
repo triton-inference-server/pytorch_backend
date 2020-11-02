@@ -205,7 +205,9 @@ class ModelInstanceState : public BackendModelInstance {
       const std::string& control_kind, bool required, bool* have_control);
   TRITONSERVER_Error* ValidateInputs();
   TRITONSERVER_Error* ValidateOutputs();
-  TRITONSERVER_Error* Execute(
+  void Execute(
+      std::vector<TRITONBACKEND_Response*>* responses,
+      const uint32_t response_count,
       std::vector<torch::jit::IValue>* input_tensors,
       std::vector<torch::Tensor>* output_tensors);
   void SetInputTensors(
@@ -643,10 +645,7 @@ ModelInstanceState::ProcessRequests(
   SET_TIMESTAMP(compute_start_ns);
 
   // Run...
-  TRITONSERVER_Error* exec_err = Execute(&input_tensors, &output_tensors);
-  if (exec_err != nullptr) {
-    SendErrorForResponses(&responses, request_count, exec_err);
-  }
+  Execute(&responses, request_count, &input_tensors, &output_tensors);
 
   uint64_t compute_end_ns = 0;
   SET_TIMESTAMP(compute_end_ns);
@@ -656,8 +655,8 @@ ModelInstanceState::ProcessRequests(
   for (const auto& name : output_names) {
     int op_index = output_index_map_[name];
     if ((op_index < 0) || (op_index > max_index)) {
-      RequestsRespondWithError(
-          requests, request_count,
+      SendErrorForResponses(
+          &responses, request_count,
           TRITONSERVER_ErrorNew(
               TRITONSERVER_ERROR_INVALID_ARG,
               std::string(
@@ -712,8 +711,10 @@ ModelInstanceState::ProcessRequests(
       "failed reporting batch request statistics");
 }
 
-TRITONSERVER_Error*
+void
 ModelInstanceState::Execute(
+    std::vector<TRITONBACKEND_Response*>* responses,
+    const uint32_t response_count,
     std::vector<torch::jit::IValue>* input_tensors,
     std::vector<torch::Tensor>* output_tensors)
 {
@@ -732,12 +733,12 @@ ModelInstanceState::Execute(
     }
   }
   catch (std::exception& ex) {
-    return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_INTERNAL,
-        ("PyTorch execute failure: " + std::string(ex.what())).c_str());
+    SendErrorForResponses(
+        responses, response_count,
+        TRITONSERVER_ErrorNew(
+            TRITONSERVER_ERROR_INTERNAL,
+            ("PyTorch execute failure: " + std::string(ex.what())).c_str()));
   }
-
-  return nullptr;  // success
 }
 
 void
@@ -785,6 +786,8 @@ ModelInstanceState::SetInputTensors(
     // The input must be in contiguous CPU/GPU memory.
     const int64_t batchn_byte_size = GetByteSize(input_datatype, batchn_shape);
 
+    // TODO Fix TRITONBACKEND_MemoryManagerAlloc to create CUDA memory instead
+    // of using CUDA memory pool
     BackendMemory* input_memory;
     RESPOND_ALL_AND_RETURN_IF_ERROR(
         responses, request_count,
@@ -807,7 +810,7 @@ ModelInstanceState::SetInputTensors(
     const auto torch_dtype = ConvertDataTypeToTorchType(input_datatype);
     torch::TensorOptions options{torch_dtype.second};
     auto updated_options = device_.is_cuda()
-                               ? options.device(torch::kCUDA, memory_type_id)
+                               ? options.device(torch::kCUDA, device_.index())
                                : options.device(torch::kCPU);
 
     torch::Tensor input_tensor =
