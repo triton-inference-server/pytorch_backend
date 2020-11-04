@@ -163,7 +163,7 @@ ModelState::AutoCompleteConfig()
   // Auto-complete configuration is not supported since PyTorch does not
   // store/capture sufficient model metadata so just log error instead.
   LOG_MESSAGE(
-      TRITONSERVER_LOG_ERROR,
+      TRITONSERVER_LOG_WARN,
       (std::string("skipping model configuration auto-complete for '") +
        Name() + "': not supported for pytorch backend")
           .c_str());
@@ -788,8 +788,7 @@ ModelInstanceState::SetInputTensors(
 
     std::initializer_list<BackendMemory::AllocationType> alloc_perference;
     if (device_.is_cpu()) {
-      alloc_perference = {BackendMemory::AllocationType::CPU_PINNED_POOL,
-                          BackendMemory::AllocationType::CPU};
+      alloc_perference = {BackendMemory::AllocationType::CPU};
     } else {
       alloc_perference = {BackendMemory::AllocationType::GPU_POOL,
                           BackendMemory::AllocationType::GPU};
