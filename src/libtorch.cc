@@ -786,15 +786,20 @@ ModelInstanceState::SetInputTensors(
     // The input must be in contiguous CPU/GPU memory.
     const int64_t batchn_byte_size = GetByteSize(input_datatype, batchn_shape);
 
-    // TODO Fix TRITONBACKEND_MemoryManagerAlloc to create CUDA memory instead
-    // of using CUDA memory pool
+    std::initializer_list<BackendMemory::AllocationType> alloc_perference;
+    if (device_.is_cpu()) {
+      alloc_perference = {BackendMemory::AllocationType::CPU_PINNED_POOL,
+                          BackendMemory::AllocationType::CPU};
+    } else {
+      alloc_perference = {BackendMemory::AllocationType::GPU_POOL,
+                          BackendMemory::AllocationType::GPU};
+    }
+
     BackendMemory* input_memory;
     RESPOND_ALL_AND_RETURN_IF_ERROR(
         responses, request_count,
         BackendMemory::Create(
-            model_state_->TritonMemoryManager(),
-            device_.is_cpu() ? TRITONSERVER_MEMORY_CPU
-                             : TRITONSERVER_MEMORY_GPU,
+            model_state_->TritonMemoryManager(), alloc_perference,
             device_.is_cpu() ? 0 : device_.index(), batchn_byte_size,
             &input_memory));
 
