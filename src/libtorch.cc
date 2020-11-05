@@ -215,7 +215,8 @@ class ModelInstanceState : public BackendModelInstance {
       const uint32_t request_count,
       std::vector<TRITONBACKEND_Response*>* responses,
       BackendInputCollector* collector, std::vector<const char*>* input_names,
-      std::vector<torch::jit::IValue>* input_tensors, bool* cuda_copy);
+      std::vector<torch::jit::IValue>* input_tensors,
+      std::vector<BackendMemory*>* input_memories, bool* cuda_copy);
   void ReadOutputTensors(
       size_t total_batch_size, const std::vector<const char*>& output_names,
       const std::vector<torch::Tensor>& output_tensors,
@@ -590,13 +591,14 @@ ModelInstanceState::ProcessRequests(
 
   std::vector<const char*> input_names;
   std::vector<torch::jit::IValue> input_tensors;
+  std::vector<BackendMemory*> input_memories;
   bool cuda_copy = false;
   BackendInputCollector collector(
       requests, request_count, &responses, model_state_->TritonMemoryManager(),
       model_state_->EnablePinnedInput(), CudaStream());
   SetInputTensors(
       total_batch_size, requests, request_count, &responses, &collector,
-      &input_names, &input_tensors, &cuda_copy);
+      &input_names, &input_tensors, &input_memories, &cuda_copy);
 
   // Request to retrieve all model outputs. 'output_names' and
   // 'output_tensors' are parallel vectors and so must be kept in
@@ -649,6 +651,12 @@ ModelInstanceState::ProcessRequests(
 
   uint64_t compute_end_ns = 0;
   SET_TIMESTAMP(compute_end_ns);
+
+  // Free BackendMemory used for inputs
+  for (BackendMemory* mem : input_memories) {
+    delete mem;
+  }
+  input_memories.clear();
 
   // Verify output indices are valid with number of outputs after execution
   int max_index = output_tensors.size() - 1;
@@ -747,7 +755,8 @@ ModelInstanceState::SetInputTensors(
     const uint32_t request_count,
     std::vector<TRITONBACKEND_Response*>* responses,
     BackendInputCollector* collector, std::vector<const char*>* input_names,
-    std::vector<torch::jit::IValue>* input_tensors, bool* cuda_copy)
+    std::vector<torch::jit::IValue>* input_tensors,
+    std::vector<BackendMemory*>* input_memories, bool* cuda_copy)
 {
   const int max_batch_size = model_state_->MaxBatchSize();
 
@@ -801,6 +810,7 @@ ModelInstanceState::SetInputTensors(
             model_state_->TritonMemoryManager(), alloc_perference,
             device_.is_cpu() ? 0 : device_.index(), batchn_byte_size,
             &input_memory));
+    input_memories->push_back(input_memory);
 
     TRITONSERVER_MemoryType memory_type = input_memory->MemoryType();
     int64_t memory_type_id = input_memory->MemoryTypeId();
