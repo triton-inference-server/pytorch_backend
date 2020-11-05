@@ -25,6 +25,13 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <stdint.h>
+#include <torchvision/DeformConv.h>
+#include <torchvision/PSROIAlign.h>
+#include <torchvision/PSROIPool.h>
+#include <torchvision/ROIAlign.h>
+#include <torchvision/ROIPool.h>
+#include <torchvision/empty_tensor_op.h>
+#include <torchvision/nms.h>
 #include <torchvision/vision.h>  // Torchvision header
 #include <exception>
 #include "libtorch_utils.h"
