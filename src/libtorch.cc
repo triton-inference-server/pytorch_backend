@@ -670,7 +670,7 @@ ModelInstanceState::ProcessRequests(
   for (const auto& name : output_names) {
     int op_index = output_index_map_[name];
     if ((op_index < 0) || (op_index > max_index)) {
-      SendErrorForResponses(
+      RESPOND_ALL_AND_RETURN_IF_ERROR(
           &responses, request_count,
           TRITONSERVER_ErrorNew(
               TRITONSERVER_ERROR_INVALID_ARG,
