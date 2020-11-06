@@ -883,9 +883,9 @@ ModelInstanceState::ReadOutputTensors(
           responses, request_count,
           TRITONSERVER_ErrorNew(
               TRITONSERVER_ERROR_INVALID_ARG,
-              (std::string("unexpected datatype ") +
+              (std::string("unexpected datatype TYPE_") +
                TRITONSERVER_DataTypeString(output_dtype) +
-               " for inference output '" + name + "', expecting " +
+               " for inference output '" + name + "', expecting TYPE_" +
                TRITONSERVER_DataTypeString(config_datatype))
                   .c_str()));
     }
