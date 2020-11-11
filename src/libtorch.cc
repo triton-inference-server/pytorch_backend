@@ -802,7 +802,7 @@ ModelInstanceState::SetInputTensors(
     // The input must be in contiguous CPU/GPU memory.
     const int64_t batchn_byte_size = GetByteSize(input_datatype, batchn_shape);
 
-    std::initializer_list<BackendMemory::AllocationType> alloc_perference;
+    std::vector<BackendMemory::AllocationType> alloc_perference;
     if (device_.is_cpu()) {
       alloc_perference = {BackendMemory::AllocationType::CPU};
     } else {
