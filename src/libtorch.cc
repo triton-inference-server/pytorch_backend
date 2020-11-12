@@ -327,7 +327,9 @@ ModelInstanceState::~ModelInstanceState()
 {
   torch_model_.reset();
 #ifdef TRITON_ENABLE_GPU
-  c10::cuda::CUDACachingAllocator::emptyCache();
+  if (device_.is_cuda()) {
+    c10::cuda::CUDACachingAllocator::emptyCache();
+  }
 #endif  // TRITON_ENABLE_GPU
 }
 
@@ -666,11 +668,12 @@ ModelInstanceState::ProcessRequests(
   input_memories.clear();
 
   // Verify output indices are valid with number of outputs after execution
+  bool invalid_index = false;
   int max_index = output_tensors.size() - 1;
   for (const auto& name : output_names) {
     int op_index = output_index_map_[name];
     if ((op_index < 0) || (op_index > max_index)) {
-      RESPOND_ALL_AND_RETURN_IF_ERROR(
+      SendErrorForResponses(
           &responses, request_count,
           TRITONSERVER_ErrorNew(
               TRITONSERVER_ERROR_INVALID_ARG,
@@ -680,12 +683,16 @@ ModelInstanceState::ProcessRequests(
                   " doesn't exist. This model has " +
                   std::to_string(max_index + 1) + " outputs")
                   .c_str()));
+      invalid_index = true;
+      break;
     }
   }
 
-  ReadOutputTensors(
-      total_batch_size, output_names, output_tensors, requests, request_count,
-      &responses);
+  if (!invalid_index) {
+    ReadOutputTensors(
+        total_batch_size, output_names, output_tensors, requests, request_count,
+        &responses);
+  }
 
   uint64_t exec_end_ns = 0;
   SET_TIMESTAMP(exec_end_ns);
