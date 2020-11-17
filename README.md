@@ -47,7 +47,7 @@ available in the main [server](https://github.com/triton-inference-server/server
 repo. If you don't find your answer there you can ask questions on the
 main Triton [issues page](https://github.com/triton-inference-server/server/issues).
 
-## Build the TensorFlow Backend
+## Build the PyTorch Backend
 
 Use a recent cmake to build. First install the required dependencies.
 
