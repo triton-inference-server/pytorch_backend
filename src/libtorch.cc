@@ -25,14 +25,6 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <stdint.h>
-#include <torchvision/DeformConv.h>
-#include <torchvision/PSROIAlign.h>
-#include <torchvision/PSROIPool.h>
-#include <torchvision/ROIAlign.h>
-#include <torchvision/ROIPool.h>
-#include <torchvision/empty_tensor_op.h>
-#include <torchvision/nms.h>
-#include <torchvision/vision.h>  // Torchvision header
 #include <exception>
 #include "libtorch_utils.h"
 #include "triton/backend/backend_common.h"
@@ -42,6 +34,21 @@
 #include "triton/backend/backend_model_instance.h"
 #include "triton/backend/backend_output_responder.h"
 #include "triton/core/tritonbackend.h"
+
+// Suppress warnings in torch headers
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
+#pragma warning(push, 0)
+#include <torchvision/DeformConv.h>
+#include <torchvision/PSROIAlign.h>
+#include <torchvision/PSROIPool.h>
+#include <torchvision/ROIAlign.h>
+#include <torchvision/ROIPool.h>
+#include <torchvision/empty_tensor_op.h>
+#include <torchvision/nms.h>
+#include <torchvision/vision.h>  // Torchvision header
+#pragma warning(pop)
+#pragma GCC diagnostic pop
 
 #ifdef TRITON_ENABLE_GPU
 #include <c10/cuda/CUDACachingAllocator.h>

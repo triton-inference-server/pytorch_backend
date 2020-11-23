@@ -26,8 +26,15 @@
 
 #pragma once
 
-#include <torch/script.h>  // One-stop header for TorchScript
 #include "triton/core/tritonserver.h"
+
+// Suppress warnings in torch headers
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
+#pragma warning(push, 0)
+#include <torch/script.h>  // One-stop header for TorchScript
+#pragma warning(pop)
+#pragma GCC diagnostic pop
 
 namespace triton { namespace backend { namespace pytorch {
 
