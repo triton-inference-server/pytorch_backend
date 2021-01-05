@@ -52,7 +52,7 @@ main Triton [issues page](https://github.com/triton-inference-server/server/issu
 Use a recent cmake to build. First install the required dependencies.
 
 ```
-$ apt-get install patchelf rapidjson-dev python3.6-dev
+$ apt-get install patchelf rapidjson-dev python3-dev
 ```
 
 Copy over the LibTorch and Torchvision headers and libraries from the
@@ -62,7 +62,7 @@ into local directories.
 ```
 $ mkdir build
 $ cd build
-$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_PYTORCH_INCLUDE_PATHS="/opt/tritonserver/include/torch;/opt/tritonserver/include/torch/torch/csrc/api/include;/opt/tritonserver/include/torchvision;/usr/include/python3.6" -DTRITON_PYTORCH_LIB_PATHS="/opt/tritonserver/backends/pytorch"..
+$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_PYTORCH_INCLUDE_PATHS="/opt/tritonserver/include/torch;/opt/tritonserver/include/torch/torch/csrc/api/include;/opt/tritonserver/include/torchvision" -DTRITON_PYTORCH_LIB_PATHS="/opt/tritonserver/backends/pytorch"..
 $ make install
 ```
 

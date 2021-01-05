@@ -44,6 +44,9 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
+# Python.h needed by torch headers.
+find_package(Python3 REQUIRED COMPONENTS Development)
+
 #
 # Dependencies
 #
@@ -100,6 +103,7 @@ target_include_directories(
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${TRITON_PYTORCH_INCLUDE_PATHS}
+    ${Python3_INCLUDE_DIRS}
 )
 
 target_compile_features(triton-pytorch-backend PRIVATE cxx_std_11)
