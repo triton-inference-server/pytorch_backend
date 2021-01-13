@@ -104,7 +104,9 @@ add_custom_command(
     pytorch_libs/libtorchvision.so
     LICENSE.pytorch
     include/torch
-    include/torchvision/torchvision/
+    include/torchvision/torchvision
+  COMMAND ${CMAKE_COMMAND} -E make_directory "pytorch_libs"
+  COMMAND ${CMAKE_COMMAND} -E make_directory "include/torchvision/torchvision"
   COMMAND docker pull ${TRITON_PYTORCH_DOCKER_IMAGE}
   COMMAND docker rm pytorch_backend_ptlib || echo "error ignored..." || true
   COMMAND docker create --name pytorch_backend_ptlib ${TRITON_PYTORCH_DOCKER_IMAGE}
@@ -144,7 +146,7 @@ add_custom_target(ptlib_target
     pytorch_libs/libtorchvision.so
     LICENSE.pytorch
     include/torch
-    include/torchvision/torchvision/)
+    include/torchvision/torchvision)
 add_library(ptlib SHARED IMPORTED GLOBAL)
 add_dependencies(ptlib ptlib_target)
 set_target_properties(
