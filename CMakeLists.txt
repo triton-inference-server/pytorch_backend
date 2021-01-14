@@ -167,6 +167,7 @@ target_link_libraries(
     -lmkl_def
     -liomp5
     -lmkl_intel_thread
+    -lmkl_vml_def
 )
 
 if(${TRITON_ENABLE_GPU})
