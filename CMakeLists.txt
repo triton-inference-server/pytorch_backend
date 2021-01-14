@@ -104,6 +104,7 @@ add_custom_command(
     pytorch_libs/libtorch_cpu.so
     pytorch_libs/libtorch_cuda.so
     pytorch_libs/libtorchvision.so
+    pytorch_libs/libmkl_vml_def.so
     LICENSE.pytorch
     include/torch
     include/torchvision
@@ -120,6 +121,7 @@ add_custom_command(
   COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_vml_def.so pytorch_libs/libmkl_vml_def.so
   COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_rt.so pytorch_libs/libmkl_rt.so
   COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_avx2.so pytorch_libs/libmkl_avx2.so 
+  COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_vml_def.so pytorch_libs/libmkl_vml_def.so 
   COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libiomp5.so pytorch_libs/libiomp5.so 
   COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libc10.so pytorch_libs/libc10.so  
   COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libc10_cuda.so pytorch_libs/libc10_cuda.so  
@@ -143,6 +145,7 @@ add_custom_target(ptlib_target
     pytorch_libs/libmkl_vml_def.so
     pytorch_libs/libmkl_rt.so
     pytorch_libs/libmkl_avx2.so
+    pytorch_libs/libmkl_vml_def.so
     pytorch_libs/libiomp5.so
     pytorch_libs/libc10.so
     pytorch_libs/libc10_cuda.so
@@ -236,6 +239,7 @@ target_link_libraries(
     -lmkl_gnu_thread
     -lmkl_intel_lp64
     -lmkl_avx2
+    -lmkl_vml_def
     -lmkl_def
     -liomp5
     -lmkl_intel_thread
