@@ -143,10 +143,7 @@ add_custom_target(ptlib_target
     pytorch_libs/libtorch.so
     pytorch_libs/libtorch_cpu.so
     pytorch_libs/libtorch_cuda.so
-    pytorch_libs/libtorchvision.so
-    LICENSE.pytorch
-    include/torch
-    include/torchvision/torchvision)
+    pytorch_libs/libtorchvision.so)
 add_library(ptlib SHARED IMPORTED GLOBAL)
 add_dependencies(ptlib ptlib_target)
 set_target_properties(
@@ -154,7 +151,7 @@ set_target_properties(
   PROPERTIES
     IMPORTED_LOCATION pytorch_libs
     IMPORTED_LOCATION include/torch
-    IMPORTED_LOCATION include/torchvision/torchvision}
+    IMPORTED_LOCATION include/torchvision}
 )
 
 add_library(
@@ -264,10 +261,11 @@ install(
   ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/pytorch
 )
 
+file(GLOB PYT_LIBS ${CMAKE_CURRENT_BINARY_DIR}/"pytorch_libs/*")
 install(
   FILES
-    ${CMAKE_CURRENT_BINARY_DIR}/pytorch_libs
-    ${CMAKE_CURRENT_BINARY_DIR}/LICENSE.pytorch
+    ${PYT_LIBS}
+    LICENSE.pytorch
   DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/pytorch
 )
 
