@@ -39,7 +39,13 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #pragma warning(push, 0)
-#include <torchvision/ops/ops.h>
+#include <torchvision/DeformConv.h>
+#include <torchvision/PSROIAlign.h>
+#include <torchvision/PSROIPool.h>
+#include <torchvision/ROIAlign.h>
+#include <torchvision/ROIPool.h>
+#include <torchvision/empty_tensor_op.h>
+#include <torchvision/nms.h>
 #include <torchvision/vision.h>  // Torchvision header
 #pragma warning(pop)
 #pragma GCC diagnostic pop
