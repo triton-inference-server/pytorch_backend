@@ -324,6 +324,19 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
       ${CMAKE_CURRENT_BINARY_DIR}/LICENSE.pytorch
     DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/pytorch
   )
+
+  FOREACH(plib ${PT_LIBS} ${PT_DEPS})
+    install(
+      CODE
+        "EXECUTE_PROCESS(
+          COMMAND patchelf --set-rpath '$ORIGIN' ${plib}
+          RESULT_VARIABLE PATCHELF_STATUS
+          WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/backends/pytorch)
+        if(PATCHELF_STATUS AND NOT PATCHELF_STATUS EQUAL 0)
+          message(FATAL_ERROR \"FAILED: to run patchelf\")
+        endif()"
+    )
+  ENDFOREACH(plib)
 endif() # TRITON_PYTORCH_DOCKER_BUILD
 
 install(
