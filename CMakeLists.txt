@@ -38,8 +38,8 @@ project(tritonpytorchbackend LANGUAGES C CXX)
 #
 #   or:
 #
-#   - Set TRITON_PYTORCH_DOCKER_IMAGE to the docker image of PyTorch
-#     to base the build off.
+#   - Set TRITON_PYTORCH_DOCKER_IMAGE to use the docker image of
+#     PyTorch to base the build off.
 #
 option(TRITON_ENABLE_GPU "Enable GPU support in backend" ON)
 option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
