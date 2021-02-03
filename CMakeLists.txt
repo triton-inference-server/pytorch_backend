@@ -96,63 +96,61 @@ endif() # TRITON_ENABLE_GPU
 configure_file(src/libtriton_pytorch.ldscript libtriton_pytorch.ldscript COPYONLY)
 
 if (${TRITON_PYTORCH_DOCKER_BUILD})
-  set(PYT_LIBS "pytorch_libs/libmkl_core.so"
-      "pytorch_libs/libmkl_gnu_thread.so"
-      "pytorch_libs/libmkl_intel_lp64.so"
-      "pytorch_libs/libmkl_intel_thread.so"
-      "pytorch_libs/libmkl_def.so"
-      "pytorch_libs/libmkl_vml_def.so"
-      "pytorch_libs/libmkl_rt.so"
-      "pytorch_libs/libmkl_avx2.so"
-      "pytorch_libs/libiomp5.so"
-      "pytorch_libs/libc10.so"
-      "pytorch_libs/libc10_cuda.so"
-      "pytorch_libs/libtorch.so"
-      "pytorch_libs/libtorch_cpu.so"
-      "pytorch_libs/libtorch_cuda.so"
-      "pytorch_libs/libtorchvision.so")
+  set(PT_LIBS 
+      "libmkl_core.so"
+      "libmkl_gnu_thread.so"
+      "libmkl_intel_lp64.so"
+      "libmkl_intel_thread.so"
+      "libmkl_def.so"
+      "libmkl_vml_def.so"
+      "libmkl_rt.so"
+      "libmkl_avx2.so"
+      "libiomp5.so"
+      "libc10.so"
+      "libc10_cuda.so"
+      "libtorch.so"
+      "libtorch_cpu.so"
+      "libtorch_cuda.so"
+      "libtorchvision.so"
+  )
   add_custom_command(
     OUTPUT
-      ${PYT_LIBS}
+      ${PT_LIBS}
       LICENSE.pytorch
       include/torch
       include/torchvision
-    COMMAND ${CMAKE_COMMAND} -E make_directory "pytorch_libs"
     COMMAND ${CMAKE_COMMAND} -E make_directory "include/torchvision"
     COMMAND docker pull ${TRITON_PYTORCH_DOCKER_IMAGE}
     COMMAND docker rm pytorch_backend_ptlib || echo "error ignored..." || true
     COMMAND docker create --name pytorch_backend_ptlib ${TRITON_PYTORCH_DOCKER_IMAGE}
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_core.so pytorch_libs/libmkl_core.so 
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_gnu_thread.so pytorch_libs/libmkl_gnu_thread.so 
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_intel_lp64.so pytorch_libs/libmkl_intel_lp64.so 
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_intel_thread.so pytorch_libs/libmkl_intel_thread.so
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_def.so pytorch_libs/libmkl_def.so 
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_vml_def.so pytorch_libs/libmkl_vml_def.so
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_rt.so pytorch_libs/libmkl_rt.so
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_avx2.so pytorch_libs/libmkl_avx2.so 
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libiomp5.so pytorch_libs/libiomp5.so 
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libc10.so pytorch_libs/libc10.so  
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libc10_cuda.so pytorch_libs/libc10_cuda.so  
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libtorch.so pytorch_libs/libtorch.so 
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libtorch_cpu.so pytorch_libs/libtorch_cpu.so 
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libtorch_cuda.so pytorch_libs/libtorch_cuda.so 
-    COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/vision/build/libtorchvision.so pytorch_libs/libtorchvision.so 
+    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_core.so libmkl_core.so 
+    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_gnu_thread.so libmkl_gnu_thread.so 
+    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_intel_lp64.so libmkl_intel_lp64.so 
+    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_intel_thread.so libmkl_intel_thread.so
+    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_def.so libmkl_def.so 
+    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_vml_def.so libmkl_vml_def.so
+    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_rt.so libmkl_rt.so
+    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_avx2.so libmkl_avx2.so 
+    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libiomp5.so libiomp5.so 
+    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libc10.so libc10.so  
+    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libc10_cuda.so libc10_cuda.so  
+    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libtorch.so libtorch.so 
+    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libtorch_cpu.so libtorch_cpu.so 
+    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libtorch_cuda.so libtorch_cuda.so 
+    COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/vision/build/libtorchvision.so libtorchvision.so 
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/pytorch/LICENSE LICENSE.pytorch
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/include include/torch
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/vision/torchvision/csrc include/torchvision/torchvision
     COMMAND docker rm pytorch_backend_ptlib
     COMMENT "Extracting pytorch and torchvision libraries and includes from ${TRITON_PYTORCH_DOCKER_IMAGE}"
   )
-  add_custom_target(ptlib_target
-    DEPENDS 
-      ${PYT_LIBS}
-  )
+  add_custom_target(ptlib_target DEPENDS ${PT_LIBS})
   add_library(ptlib SHARED IMPORTED GLOBAL)
   add_dependencies(ptlib ptlib_target)
   set_target_properties(
     ptlib
     PROPERTIES
-      IMPORTED_LOCATION pytorch_libs/libmkl_core.so
+      IMPORTED_LOCATION libmkl_core.so
   )
 endif() # TRITON_PYTORCH_DOCKER_BUILD
 
@@ -229,8 +227,6 @@ if (NOT ${TRITON_PYTORCH_DOCKER_BUILD})
   FOREACH(p ${TRITON_PYTORCH_LIB_PATHS})
     set(TRITON_PYTORCH_LDFLAGS ${TRITON_PYTORCH_LDFLAGS} "-L${p}")
   ENDFOREACH(p)
-else()
-  set(TRITON_PYTORCH_LDFLAGS "-L${CMAKE_CURRENT_BINARY_DIR}/pytorch_libs")
 endif() # !TRITON_PYTORCH_DOCKER_BUILD
 
 target_link_libraries(
@@ -283,10 +279,14 @@ install(
 )
 
 if (${TRITON_PYTORCH_DOCKER_BUILD})
-  file(GLOB PYT_LIBS "${CMAKE_CURRENT_BINARY_DIR}/pytorch_libs/*")
+  set(PT_LIB_PATHS "")
+  FOREACH(plib ${PT_LIBS})
+    set(PT_LIB_PATHS ${PT_LIB_PATHS} "${CMAKE_CURRENT_BINARY_DIR}/${plib}")
+  ENDFOREACH(p)
+
   install(
     FILES
-      ${PYT_LIBS}
+      ${PT_LIB_PATHS}
       ${CMAKE_CURRENT_BINARY_DIR}/LICENSE.pytorch
     DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/pytorch
   )
