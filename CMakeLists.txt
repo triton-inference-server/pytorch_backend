@@ -124,18 +124,19 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
       "libtorch_cuda.so"
       "libtorchvision.so"
   )
-  set(PT_DEPS
-      "libopencv_video.so.3.4"
-      "libopencv_videoio.so.3.4"
-      "libopencv_highgui.so.3.4"
-      "libopencv_imgcodecs.so.3.4"
-      "libopencv_imgproc.so.3.4"
-      "libopencv_core.so.3.4"
+  set(OPENCV_LIBS
+      "libopencv_video.so"
+      "libopencv_videoio.so"
+      "libopencv_highgui.so"
+      "libopencv_imgcodecs.so"
+      "libopencv_imgproc.so"
+      "libopencv_core.so"
+      "libpng16.so"
   )
   add_custom_command(
     OUTPUT
       ${PT_LIBS}
-      ${PT_DEPS}
+      ${OPENCV_LIBS}
       LICENSE.pytorch
       include/torch
       include/torchvision
@@ -162,16 +163,17 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/pytorch/LICENSE LICENSE.pytorch
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/include include/torch
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/vision/torchvision/csrc include/torchvision/torchvision
-    COMMAND docker cp pytorch_backend_ptlib:/usr/lib/x86_64-linux-gnu/libopencv_videoio.so.3.4.11 libopencv_videoio.so.3.4
-    COMMAND docker cp pytorch_backend_ptlib:/usr/lib/x86_64-linux-gnu/libopencv_highgui.so.3.4.11 libopencv_highgui.so.3.4
-    COMMAND docker cp pytorch_backend_ptlib:/usr/lib/x86_64-linux-gnu/libopencv_video.so.3.4.11 libopencv_video.so.3.4
-    COMMAND docker cp pytorch_backend_ptlib:/usr/lib/x86_64-linux-gnu/libopencv_imgcodecs.so.3.4.11 libopencv_imgcodecs.so.3.4
-    COMMAND docker cp pytorch_backend_ptlib:/usr/lib/x86_64-linux-gnu/libopencv_imgproc.so.3.4.11 libopencv_imgproc.so.3.4
-    COMMAND docker cp pytorch_backend_ptlib:/usr/lib/x86_64-linux-gnu/libopencv_core.so.3.4.11 libopencv_core.so.3.4
+    COMMAND docker cp pytorch_backend_ptlib:/usr/lib/x86_64-linux-gnu/libopencv_videoio.so.3.4.11 libopencv_videoio.so
+    COMMAND docker cp pytorch_backend_ptlib:/usr/lib/x86_64-linux-gnu/libopencv_highgui.so.3.4.11 libopencv_highgui.so
+    COMMAND docker cp pytorch_backend_ptlib:/usr/lib/x86_64-linux-gnu/libopencv_video.so.3.4.11 libopencv_video.so
+    COMMAND docker cp pytorch_backend_ptlib:/usr/lib/x86_64-linux-gnu/libopencv_imgcodecs.so.3.4.11 libopencv_imgcodecs.so
+    COMMAND docker cp pytorch_backend_ptlib:/usr/lib/x86_64-linux-gnu/libopencv_imgproc.so.3.4.11 libopencv_imgproc.so
+    COMMAND docker cp pytorch_backend_ptlib:/usr/lib/x86_64-linux-gnu/libopencv_core.so.3.4.11 libopencv_core.so
+    COMMAND docker cp pytorch_backend_ptlib:/usr/lib/x86_64-linux-gnu/libpng16.so.16.37.0 libpng16.so
     COMMAND docker rm pytorch_backend_ptlib
     COMMENT "Extracting pytorch and torchvision libraries and includes from ${TRITON_PYTORCH_DOCKER_IMAGE}"
   )
-  add_custom_target(ptlib_target DEPENDS ${PT_LIBS} ${PT_DEPS})
+  add_custom_target(ptlib_target DEPENDS ${PT_LIBS} ${OPENCV_LIBS})
   add_library(ptlib SHARED IMPORTED GLOBAL)
   add_dependencies(ptlib ptlib_target)
 
@@ -201,12 +203,7 @@ target_include_directories(
     ${Python3_INCLUDE_DIRS}
 )
 
-if (NOT ${TRITON_PYTORCH_DOCKER_BUILD})
-  target_include_directories(
-    triton-pytorch-backend
-    PRIVATE ${TRITON_PYTORCH_INCLUDE_PATHS}
-  )
-else()
+if (${TRITON_PYTORCH_DOCKER_BUILD})
   target_include_directories(
     triton-pytorch-backend
     PRIVATE
@@ -214,7 +211,12 @@ else()
       ${CMAKE_CURRENT_BINARY_DIR}/include/torch/torch/csrc/api/include
       ${CMAKE_CURRENT_BINARY_DIR}/include/torchvision
   )
-endif() # !TRITON_PYTORCH_DOCKER_BUILD
+else()
+  target_include_directories(
+    triton-pytorch-backend
+    PRIVATE ${TRITON_PYTORCH_INCLUDE_PATHS}
+  )
+endif() # TRITON_PYTORCH_DOCKER_BUILD
 
 target_compile_features(triton-pytorch-backend PRIVATE cxx_std_11)
 target_compile_options(
@@ -251,12 +253,26 @@ set_target_properties(
     "-Wno-unknown-pragmas -Wno-unused-but-set-variable"
 )
 
-if (NOT ${TRITON_PYTORCH_DOCKER_BUILD})
+
+if (${TRITON_PYTORCH_DOCKER_BUILD})
   set(TRITON_PYTORCH_LDFLAGS "")
+  target_link_libraries(
+    triton-pytorch-backend
+    PRIVATE
+      ptlib
+      -lopencv_highgui
+      -lopencv_video
+      -lopencv_videoio
+      -lopencv_imgcodecs
+      -lopencv_imgproc
+      -lopencv_core
+      -lpng16
+  )
+else()
   FOREACH(p ${TRITON_PYTORCH_LIB_PATHS})
     set(TRITON_PYTORCH_LDFLAGS ${TRITON_PYTORCH_LDFLAGS} "-L${p}")
   ENDFOREACH(p)
-endif() # !TRITON_PYTORCH_DOCKER_BUILD
+endif() # TRITON_PYTORCH_DOCKER_BUILD
 
 target_link_libraries(
   triton-pytorch-backend
@@ -265,7 +281,6 @@ target_link_libraries(
     triton-core-backendapi # from repo-core
     triton-core-serverstub # from repo-core
     triton-backend-utils   # from repo-backend
-    ptlib
     ${TRITON_PYTORCH_LDFLAGS}
     -ltorch
     -ltorch_cpu
@@ -310,11 +325,7 @@ install(
 
 if (${TRITON_PYTORCH_DOCKER_BUILD})
   set(PT_LIB_PATHS "")
-  FOREACH(plib ${PT_LIBS})
-    set(PT_LIB_PATHS ${PT_LIB_PATHS} "${CMAKE_CURRENT_BINARY_DIR}/${plib}")
-  ENDFOREACH(plib)
-
-  FOREACH(plib ${PT_DEPS})
+  FOREACH(plib ${PT_LIBS} ${OPENCV_LIBS})
     set(PT_LIB_PATHS ${PT_LIB_PATHS} "${CMAKE_CURRENT_BINARY_DIR}/${plib}")
   ENDFOREACH(plib)
 
@@ -325,7 +336,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/pytorch
   )
 
-  FOREACH(plib ${PT_LIBS} ${PT_DEPS})
+  FOREACH(plib ${PT_LIBS} ${OPENCV_LIBS})
     install(
       CODE
         "EXECUTE_PROCESS(
@@ -337,6 +348,24 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
         endif()"
     )
   ENDFOREACH(plib)
+
+  set(OPENCV_VERSION "3.4")
+  install(
+    CODE
+      "EXECUTE_PROCESS(
+        COMMAND ln -sf libopencv_video.so libopencv_video.so.${OPENCV_VERSION}
+        COMMAND ln -sf libopencv_videoio.so libopencv_videoio.so.${OPENCV_VERSION}
+        COMMAND ln -sf libopencv_highgui.so libopencv_highgui.so.${OPENCV_VERSION}
+        COMMAND ln -sf libopencv_imgcodecs.so libopencv_imgcodecs.so.${OPENCV_VERSION}
+        COMMAND ln -sf libopencv_imgproc.so libopencv_imgproc.so.${OPENCV_VERSION}
+        COMMAND ln -sf libopencv_core.so libopencv_core.so.${OPENCV_VERSION}
+        COMMAND ln -sf libpng16.so libpng16.so.16
+        RESULT_VARIABLE LINK_STATUS
+        WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/backends/pytorch)
+      if(LINK_STATUS AND NOT LINK_STATUS EQUAL 0)
+        message(FATAL_ERROR \"FAILED: to create links\")
+      endif()"
+  )
 endif() # TRITON_PYTORCH_DOCKER_BUILD
 
 install(
