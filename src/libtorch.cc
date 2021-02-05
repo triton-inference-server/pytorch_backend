@@ -750,6 +750,7 @@ ModelInstanceState::Execute(
   torch::jit::IValue model_outputs_;
 
   try {
+    torch::NoGradGuard no_grad;
     model_outputs_ = torch_model_->forward(*input_tensors);
     if (model_outputs_.isTuple()) {
       auto model_outputs_tuple = model_outputs_.toTuple();
