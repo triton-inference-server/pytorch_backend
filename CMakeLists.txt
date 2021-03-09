@@ -109,14 +109,14 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
   set(PT_LIBS 
       "libmkl_core.so"
       "libmkl_gnu_thread.so"
+      "libmkl_sequential.so"
+      "libmkl_def.so"
+      "libmkl_avx2.so"
+      "libiomp5.so"
       "libmkl_intel_lp64.so"
       "libmkl_intel_thread.so"
-      "libmkl_def.so"
       "libmkl_vml_def.so"
       "libmkl_rt.so"
-      "libmkl_avx2.so"
-      "libmkl_sequential.so"
-      "libiomp5.so"
       "libc10.so"
       "libc10_cuda.so"
       "libtorch.so"
@@ -146,14 +146,14 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker create --name pytorch_backend_ptlib ${TRITON_PYTORCH_DOCKER_IMAGE}
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_core.so libmkl_core.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_gnu_thread.so libmkl_gnu_thread.so
+    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_sequential.so libmkl_sequential.so
+    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_def.so libmkl_def.so
+    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libiomp5.so libiomp5.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_intel_lp64.so libmkl_intel_lp64.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_intel_thread.so libmkl_intel_thread.so
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_def.so libmkl_def.so
+    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_avx2.so libmkl_avx2.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_vml_def.so libmkl_vml_def.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_rt.so libmkl_rt.so
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_avx2.so libmkl_avx2.so
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_sequential.so libmkl_sequential.so
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libiomp5.so libiomp5.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libc10.so libc10.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libc10_cuda.so libc10_cuda.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libtorch.so libtorch.so
@@ -290,14 +290,8 @@ target_link_libraries(
     -lc10_cuda
     -lmkl_core
     -lmkl_gnu_thread
-    -lmkl_intel_lp64
-    -lmkl_avx2
     -lmkl_sequential
     -lmkl_def
-    -liomp5
-    -lmkl_intel_thread
-    -lmkl_vml_def
-    -lmkl_rt
 )
 
 if(${TRITON_ENABLE_GPU})
