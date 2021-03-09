@@ -977,6 +977,12 @@ TRITONBACKEND_Initialize(TRITONBACKEND_Backend* backend)
 }
 
 TRITONSERVER_Error*
+TRITONBACKEND_Finalize(TRITONBACKEND_Backend* backend)
+{
+  return nullptr;  // success
+}
+
+TRITONSERVER_Error*
 TRITONBACKEND_ModelInitialize(TRITONBACKEND_Model* model)
 {
   const char* cname;
