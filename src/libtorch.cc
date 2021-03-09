@@ -37,7 +37,7 @@
 
 // Suppress warnings in torch headers
 #pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wsign-compare"
+#pragma GCC diagnostic ignored "-Wsign-compare -Werror"
 #pragma warning(push, 0)
 #include <torchvision/ops/ops.h>
 #include <torchvision/vision.h>  // Torchvision header
