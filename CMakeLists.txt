@@ -218,7 +218,9 @@ else()
   )
 endif() # TRITON_PYTORCH_DOCKER_BUILD
 
-# Need to turn off -Werror due to Torchvision vision header extern initialization
+# Need to turn off -Werror due to Torchvision vision.h extern initialization
+# Unfortunately gcc does not provide a specific flag to ignore the specific
+# warning: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=45977
 target_compile_features(triton-pytorch-backend PRIVATE cxx_std_11)
 target_compile_options(
   triton-pytorch-backend PRIVATE
