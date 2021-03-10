@@ -218,11 +218,12 @@ else()
   )
 endif() # TRITON_PYTORCH_DOCKER_BUILD
 
+# Need to turn off -Werror due to Torchvision vision header extern initialization
 target_compile_features(triton-pytorch-backend PRIVATE cxx_std_11)
 target_compile_options(
   triton-pytorch-backend PRIVATE
   $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:
-    -Wall -Wextra -Wno-unused-parameter -Wno-type-limits -Werror>
+    -Wall -Wextra -Wno-unused-parameter -Wno-type-limits>
 )
 
 if(${TRITON_ENABLE_GPU})
