@@ -148,6 +148,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_gnu_thread.so libmkl_gnu_thread.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_sequential.so libmkl_sequential.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_def.so libmkl_def.so
+    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_core.so libmkl_core.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libiomp5.so libiomp5.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_intel_lp64.so libmkl_intel_lp64.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_intel_thread.so libmkl_intel_thread.so
