@@ -106,7 +106,7 @@ endif() # TRITON_ENABLE_GPU
 configure_file(src/libtriton_pytorch.ldscript libtriton_pytorch.ldscript COPYONLY)
 
 if (${TRITON_PYTORCH_DOCKER_BUILD})
-  set(PT_LIBS 
+  set(PT_LIBS
       "libmkl_core.so"
       "libmkl_gnu_thread.so"
       "libmkl_intel_lp64.so"
@@ -170,6 +170,8 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp pytorch_backend_ptlib:/usr/lib/x86_64-linux-gnu/libopencv_imgproc.so.3.4.11 libopencv_imgproc.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/lib/x86_64-linux-gnu/libopencv_core.so.3.4.11 libopencv_core.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/lib/x86_64-linux-gnu/libpng16.so.16.37.0 libpng16.so
+    COMMAND patchelf --add-needed libmkl_gnu_thread.so libmkl_avx2.so
+    COMMAND patchelf --add-needed libmkl_core.so libmkl_avx2.so
     COMMAND docker rm pytorch_backend_ptlib
     COMMENT "Extracting pytorch and torchvision libraries and includes from ${TRITON_PYTORCH_DOCKER_IMAGE}"
   )
@@ -256,26 +258,15 @@ set_target_properties(
     "-Wno-unknown-pragmas -Wno-unused-but-set-variable"
 )
 
+add_dependencies(
+  triton-pytorch-backend
+  ptlib
+)
 
-if (${TRITON_PYTORCH_DOCKER_BUILD})
-  set(TRITON_PYTORCH_LDFLAGS "")
-  target_link_libraries(
-    triton-pytorch-backend
-    PRIVATE
-      ptlib
-      -lopencv_highgui
-      -lopencv_video
-      -lopencv_videoio
-      -lopencv_imgcodecs
-      -lopencv_imgproc
-      -lopencv_core
-      -lpng16
-  )
-else()
-  FOREACH(p ${TRITON_PYTORCH_LIB_PATHS})
-    set(TRITON_PYTORCH_LDFLAGS ${TRITON_PYTORCH_LDFLAGS} "-L${p}")
-  ENDFOREACH(p)
-endif() # TRITON_PYTORCH_DOCKER_BUILD
+set(TRITON_PYTORCH_LDFLAGS "")
+FOREACH(p ${TRITON_PYTORCH_LIB_PATHS})
+  set(TRITON_PYTORCH_LDFLAGS ${TRITON_PYTORCH_LDFLAGS} "-L${p}")
+ENDFOREACH(p)
 
 target_link_libraries(
   triton-pytorch-backend
@@ -286,21 +277,7 @@ target_link_libraries(
     triton-backend-utils   # from repo-backend
     ${TRITON_PYTORCH_LDFLAGS}
     -ltorch
-    -ltorch_cpu
-    -ltorch_cuda
     -ltorchvision
-    -lc10
-    -lc10_cuda
-    -lmkl_core
-    -lmkl_gnu_thread
-    -lmkl_intel_lp64
-    -lmkl_avx2
-    -lmkl_sequential
-    -lmkl_def
-    -liomp5
-    -lmkl_intel_thread
-    -lmkl_vml_def
-    -lmkl_rt
 )
 
 if(${TRITON_ENABLE_GPU})
@@ -343,7 +320,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     install(
       CODE
         "EXECUTE_PROCESS(
-          COMMAND patchelf --set-rpath '$ORIGIN' ${plib}
+          COMMAND patchelf --set-rpath \$ORIGIN ${plib}
           RESULT_VARIABLE PATCHELF_STATUS
           WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/backends/pytorch)
         if(PATCHELF_STATUS AND NOT PATCHELF_STATUS EQUAL 0)
