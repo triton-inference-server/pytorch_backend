@@ -258,10 +258,12 @@ set_target_properties(
     "-Wno-unknown-pragmas -Wno-unused-but-set-variable"
 )
 
-add_dependencies(
-  triton-pytorch-backend
-  ptlib
-)
+if (${TRITON_PYTORCH_DOCKER_BUILD})
+  add_dependencies(
+    triton-pytorch-backend
+    ptlib
+  )
+endif() # TRITON_PYTORCH_DOCKER_BUILD
 
 set(TRITON_PYTORCH_LDFLAGS "")
 FOREACH(p ${TRITON_PYTORCH_LIB_PATHS})
