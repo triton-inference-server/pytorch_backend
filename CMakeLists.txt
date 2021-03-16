@@ -115,6 +115,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
       "libmkl_vml_def.so"
       "libmkl_rt.so"
       "libmkl_avx2.so"
+      "libmkl_avx512.so"
       "libmkl_sequential.so"
       "libiomp5.so"
       "libc10.so"
@@ -152,6 +153,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_vml_def.so libmkl_vml_def.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_rt.so libmkl_rt.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_avx2.so libmkl_avx2.so
+    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_avx512.so libmkl_avx512.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_sequential.so libmkl_sequential.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libiomp5.so libiomp5.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libc10.so libc10.so
@@ -170,8 +172,12 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp pytorch_backend_ptlib:/usr/lib/x86_64-linux-gnu/libopencv_imgproc.so.3.4.11 libopencv_imgproc.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/lib/x86_64-linux-gnu/libopencv_core.so.3.4.11 libopencv_core.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/lib/x86_64-linux-gnu/libpng16.so.16.37.0 libpng16.so
+    COMMAND patchelf --add-needed libmkl_gnu_thread.so libmkl_def.so
+    COMMAND patchelf --add-needed libmkl_core.so libmkl_def.so
     COMMAND patchelf --add-needed libmkl_gnu_thread.so libmkl_avx2.so
     COMMAND patchelf --add-needed libmkl_core.so libmkl_avx2.so
+    COMMAND patchelf --add-needed libmkl_gnu_thread.so libmkl_avx512.so
+    COMMAND patchelf --add-needed libmkl_core.so libmkl_avx512.so
     COMMAND docker rm pytorch_backend_ptlib
     COMMENT "Extracting pytorch and torchvision libraries and includes from ${TRITON_PYTORCH_DOCKER_IMAGE}"
   )
@@ -258,10 +264,12 @@ set_target_properties(
     "-Wno-unknown-pragmas -Wno-unused-but-set-variable"
 )
 
-add_dependencies(
-  triton-pytorch-backend
-  ptlib
-)
+if (${TRITON_PYTORCH_DOCKER_BUILD})
+  add_dependencies(
+    triton-pytorch-backend
+    ptlib
+  )
+endif() # TRITON_PYTORCH_DOCKER_BUILD
 
 set(TRITON_PYTORCH_LDFLAGS "")
 FOREACH(p ${TRITON_PYTORCH_LIB_PATHS})
