@@ -55,14 +55,14 @@ Use a recent cmake to build. First install the required dependencies.
 $ apt-get install patchelf rapidjson-dev python3-dev
 ```
 
-Copy over the LibTorch and Torchvision headers and libraries from the
-[PyTorch NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch)
-into local directories.
+An appropriate PyTorch container from [NGC](ngc.nvidia.com) must be used.
+For example, to build a backend that uses the 21.02 version of the PyTorch
+container from NGC:
 
 ```
 $ mkdir build
 $ cd build
-$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_PYTORCH_INCLUDE_PATHS="/opt/tritonserver/include/torch;/opt/tritonserver/include/torch/torch/csrc/api/include;/opt/tritonserver/include/torchvision" -DTRITON_PYTORCH_LIB_PATHS="/opt/tritonserver/backends/pytorch"..
+$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_PYTORCH_DOCKER_IMAGE="nvcr.io/nvidia/pytorch:21.02-py3" ..
 $ make install
 ```
 
@@ -73,3 +73,24 @@ but the listed CMake argument can be used to override.
 * triton-inference-server/backend: -DTRITON_BACKEND_REPO_TAG=[tag]
 * triton-inference-server/core: -DTRITON_CORE_REPO_TAG=[tag]
 * triton-inference-server/common: -DTRITON_COMMON_REPO_TAG=[tag]
+
+## Build the PyTorch Backend With Custom PyTorch
+
+Currently, Triton requires that a specially patched version of
+PyTorch be used with the PyTorch backend. The full source for
+these PyTorch versions are available as Docker images from
+[NGC](ngc.nvidia.com). For example, the PyTorch version
+compatible with the 21.02 release of Triton is available as
+nvcr.io/nvidia/pytorch:21.02-py3.
+
+Copy over the LibTorch and Torchvision headers and libraries from the
+[PyTorch NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch)
+into local directories. You can see which headers and libraries
+are needed/copied from the docker. 
+
+```
+$ mkdir build
+$ cd build
+$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_PYTORCH_INCLUDE_PATHS="<PATH_PREFIX>/torch;<PATH_PREFIX>/torch/torch/csrc/api/include;<PATH_PREFIX>/torchvision" -DTRITON_PYTORCH_LIB_PATHS="<LIB_PATH_PREFIX>" ..
+$ make install
+```
