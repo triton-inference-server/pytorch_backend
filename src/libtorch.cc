@@ -836,8 +836,9 @@ ModelInstanceState::SetInputTensors(
                                ? options.device(torch::kCUDA, device_.index())
                                : options.device(torch::kCPU);
 
+    // Remove constness to align with the signature of torch::from_blob()
     torch::Tensor input_tensor =
-        torch::from_blob(input_buffer, batchn_shape, updated_options);
+        torch::from_blob(const_cast<char*>(input_buffer), batchn_shape, updated_options);
     (*input_tensors)[input_index_map_[input_name]] = input_tensor;
   }
 
