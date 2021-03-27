@@ -814,9 +814,7 @@ ModelInstanceState::SetInputTensors(
       alloc_perference = {{TRITONSERVER_MEMORY_CPU_PINNED, 0},
                           {TRITONSERVER_MEMORY_CPU, 0}};
     } else {
-      alloc_perference = {{TRITONSERVER_MEMORY_GPU, device_.index()},
-                          {TRITONSERVER_MEMORY_CPU_PINNED, 0},
-                          {TRITONSERVER_MEMORY_CPU, 0}};
+      alloc_perference = {{TRITONSERVER_MEMORY_GPU, device_.index()}};
     }
 
     const char* input_buffer;
