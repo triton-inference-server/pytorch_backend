@@ -43,8 +43,7 @@ project(tritonpytorchbackend LANGUAGES C CXX)
 #
 option(TRITON_ENABLE_GPU "Enable GPU support in backend" ON)
 option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
-set(TRITON_PYTORCH_DOCKER_IMAGE "nvcr.io/nvidia/pytorch:20.12-py3" CACHE STRING
-    "Docker image containing the PyTorch build required by backend.")
+set(TRITON_PYTORCH_DOCKER_IMAGE "" CACHE STRING "Docker image containing the PyTorch build required by backend.")
 set(TRITON_PYTORCH_INCLUDE_PATHS "" CACHE PATH "Paths to Torch includes")
 set(TRITON_PYTORCH_LIB_PATHS "" CACHE PATH "Paths to Torch libraries")
 
@@ -58,6 +57,9 @@ endif()
 
 set(TRITON_PYTORCH_DOCKER_BUILD OFF)
 if(TRITON_PYTORCH_LIB_PATHS STREQUAL "")
+  if(TRITON_PYTORCH_DOCKER_IMAGE STREQUAL "")
+    message(FATAL_ERROR "Using the PyTorch docker based build requires TRITON_PYTORCH_DOCKER_IMAGE")
+  endif()
   set(TRITON_PYTORCH_DOCKER_BUILD ON)
 endif()
 message(STATUS "Using PyTorch docker: ${TRITON_PYTORCH_DOCKER_IMAGE}")
