@@ -809,42 +809,34 @@ ModelInstanceState::SetInputTensors(
     }
 
     // The input must be in contiguous CPU/GPU memory.
-    const int64_t batchn_byte_size = GetByteSize(input_datatype, batchn_shape);
-
-    std::vector<BackendMemory::AllocationType> alloc_perference;
+    std::vector<std::pair<TRITONSERVER_MemoryType, int64_t>> alloc_perference;
     if (device_.is_cpu()) {
-      alloc_perference = {BackendMemory::AllocationType::CPU};
+      alloc_perference = {{TRITONSERVER_MEMORY_CPU_PINNED, 0},
+                          {TRITONSERVER_MEMORY_CPU, 0}};
     } else {
-      alloc_perference = {BackendMemory::AllocationType::GPU_POOL,
-                          BackendMemory::AllocationType::GPU};
+      alloc_perference = {{TRITONSERVER_MEMORY_GPU, device_.index()}};
     }
 
-    BackendMemory* input_memory;
+    const char* input_buffer;
+    size_t batchn_byte_size;
+    TRITONSERVER_MemoryType memory_type;
+    int64_t memory_type_id;
     RESPOND_ALL_AND_RETURN_IF_ERROR(
         responses, request_count,
-        BackendMemory::Create(
-            model_state_->TritonMemoryManager(), alloc_perference,
-            device_.is_cpu() ? 0 : device_.index(), batchn_byte_size,
-            &input_memory));
-    input_memories->push_back(input_memory);
-
-    TRITONSERVER_MemoryType memory_type = input_memory->MemoryType();
-    int64_t memory_type_id = input_memory->MemoryTypeId();
-    char* input_buffer = input_memory->MemoryPtr();
-
-    collector->ProcessTensor(
-        input_name, input_buffer, batchn_byte_size, memory_type,
-        memory_type_id);
+        collector->ProcessTensor(
+            input_name, nullptr, 0, alloc_perference, &input_buffer,
+            &batchn_byte_size, &memory_type, &memory_type_id));
 
     // Create Torch tenor
     const auto torch_dtype = ConvertDataTypeToTorchType(input_datatype);
     torch::TensorOptions options{torch_dtype.second};
-    auto updated_options = device_.is_cuda()
+    auto updated_options = (memory_type == TRITONSERVER_MEMORY_GPU)
                                ? options.device(torch::kCUDA, device_.index())
                                : options.device(torch::kCPU);
 
+    // Remove constness to align with the signature of torch::from_blob()
     torch::Tensor input_tensor =
-        torch::from_blob(input_buffer, batchn_shape, updated_options);
+        torch::from_blob(const_cast<char*>(input_buffer), batchn_shape, updated_options);
     (*input_tensors)[input_index_map_[input_name]] = input_tensor;
   }
 
