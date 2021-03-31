@@ -835,8 +835,8 @@ ModelInstanceState::SetInputTensors(
                                : options.device(torch::kCPU);
 
     // Remove constness to align with the signature of torch::from_blob()
-    torch::Tensor input_tensor =
-        torch::from_blob(const_cast<char*>(input_buffer), batchn_shape, updated_options);
+    torch::Tensor input_tensor = torch::from_blob(
+        const_cast<char*>(input_buffer), batchn_shape, updated_options);
     (*input_tensors)[input_index_map_[input_name]] = input_tensor;
   }
 
@@ -884,10 +884,10 @@ ModelInstanceState::ReadOutputTensors(
           responses, request_count,
           TRITONSERVER_ErrorNew(
               TRITONSERVER_ERROR_INVALID_ARG,
-              (std::string("unexpected datatype TYPE_") +
-               TRITONSERVER_DataTypeString(output_dtype) +
-               " for inference output '" + name + "', expecting TYPE_" +
-               TRITONSERVER_DataTypeString(config_datatype))
+              (std::string("configuration expects datatype TYPE_") +
+               TRITONSERVER_DataTypeString(config_datatype) + " for output '" +
+               name + "', model provides TYPE_" +
+               TRITONSERVER_DataTypeString(output_dtype))
                   .c_str()));
     }
 
