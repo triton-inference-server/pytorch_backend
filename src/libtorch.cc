@@ -677,7 +677,7 @@ ModelInstanceState::ProcessRequests(
   // Attaching callback on the stream ensures correct timestamp
   // is captured.
   cudaLaunchHostFunc(
-      CudaStream(), TimestampCaptureCallback,
+      c10::cuda::getCurrentCUDAStream().stream(), TimestampCaptureCallback,
       reinterpret_cast<void*>(&compute_end_ns));
 #endif
 
