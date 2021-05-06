@@ -673,12 +673,16 @@ ModelInstanceState::ProcessRequests(
 
   uint64_t compute_end_ns = 0;
 #if defined(TRITON_ENABLE_GPU) && defined(TRITON_ENABLE_STATS)
-  // For GPU, the Execute runs the inference asynchronously...
-  // Attaching callback on the stream ensures correct timestamp
-  // is captured.
-  cudaLaunchHostFunc(
-      c10::cuda::getCurrentCUDAStream().stream(), TimestampCaptureCallback,
-      reinterpret_cast<void*>(&compute_end_ns));
+  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
+    // For GPU, the Execute runs the inference asynchronously...
+    // Attaching callback on the stream ensures correct timestamp
+    // is captured.
+    cudaLaunchHostFunc(
+        c10::cuda::getCurrentCUDAStream().stream(), TimestampCaptureCallback,
+        reinterpret_cast<void*>(&compute_end_ns));
+  } else {
+    SET_TIMESTAMP(compute_end_ns);
+  }
 #endif
 
   // Free BackendMemory used for inputs
