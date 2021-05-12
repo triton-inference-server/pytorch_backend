@@ -55,6 +55,18 @@
 
 namespace triton { namespace backend { namespace pytorch {
 
+namespace {
+
+#if defined(TRITON_ENABLE_GPU) && defined(TRITON_ENABLE_STATS)
+void CUDART_CB
+TimestampCaptureCallback(void* data)
+{
+  SET_TIMESTAMP(*(reinterpret_cast<uint64_t*>(data)));
+}
+#endif
+
+}  // namespace
+
 //
 // ModelState
 //
@@ -660,7 +672,18 @@ ModelInstanceState::ProcessRequests(
   Execute(&responses, request_count, &input_tensors, &output_tensors);
 
   uint64_t compute_end_ns = 0;
-  SET_TIMESTAMP(compute_end_ns);
+#if defined(TRITON_ENABLE_GPU) && defined(TRITON_ENABLE_STATS)
+  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
+    // For GPU, the Execute runs the inference asynchronously...
+    // Attaching callback on the stream ensures correct timestamp
+    // is captured.
+    cudaLaunchHostFunc(
+        torch::cuda::getCurrentCUDAStream(), TimestampCaptureCallback,
+        reinterpret_cast<void*>(&compute_end_ns));
+  } else {
+    SET_TIMESTAMP(compute_end_ns);
+  }
+#endif
 
   // Free BackendMemory used for inputs
   for (BackendMemory* mem : input_memories) {
