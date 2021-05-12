@@ -678,7 +678,7 @@ ModelInstanceState::ProcessRequests(
     // Attaching callback on the stream ensures correct timestamp
     // is captured.
     cudaLaunchHostFunc(
-        c10::cuda::getCurrentCUDAStream().stream(), TimestampCaptureCallback,
+        torch::cuda::getCurrentCUDAStream(), TimestampCaptureCallback,
         reinterpret_cast<void*>(&compute_end_ns));
   } else {
     SET_TIMESTAMP(compute_end_ns);
