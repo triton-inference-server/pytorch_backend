@@ -908,11 +908,16 @@ ModelInstanceState::ReadOutputTensors(
                                         : TRITONSERVER_MEMORY_GPU,
         (device_.type() == torch::kCPU) ? 0 : device_.index());
 
-    // Due to pytorch running inference asynchronously, we need set timestamp
-    // after first output is read to get a more accuracte estimate of compute
-    // infer time. This means the compute output time reported would be smaller
-    // than it is in reality. We do this because synchronizing manually causes a
-    // large drop in performance for fast running models.
+    // PyTorch uses asynchronous execution to run the model. Setting the compute
+    // end timestamp immediately after Execute() does not capture the complete
+    // model execution time. When the first output buffer is accessed/copied by
+    // ProcessTensor(), there is a synchronization that is done to ensure the
+    // data is correctly copied from the output tensor. To avoid overheads of
+    // additional synchronization, we continue to use the default cuda stream.
+    // However the drawback of this is that the compute infer time reported
+    // would be slightly later than it is in reality and the compute output time
+    // reported would be smaller than it is in reality. We allow this because
+    // synchronizing manually negatively impacts performance.
     if (idx == 0) {
       SET_TIMESTAMP(*compute_end_ns);
     }
