@@ -55,17 +55,6 @@
 
 namespace triton { namespace backend { namespace pytorch {
 
-namespace {
-
-#if defined(TRITON_ENABLE_GPU) && defined(TRITON_ENABLE_STATS)
-void CUDART_CB
-TimestampCaptureCallback(void* data)
-{
-  SET_TIMESTAMP(*(reinterpret_cast<uint64_t*>(data)));
-}
-#endif
-
-}  // namespace
 
 //
 // ModelState
@@ -241,7 +230,8 @@ class ModelInstanceState : public BackendModelInstance {
       size_t total_batch_size, const std::vector<const char*>& output_names,
       const std::vector<torch::Tensor>& output_tensors,
       TRITONBACKEND_Request** requests, const uint32_t request_count,
-      std::vector<TRITONBACKEND_Response*>* responses);
+      std::vector<TRITONBACKEND_Response*>* responses,
+      uint64_t* compute_end_ns);
 
   ModelState* model_state_;
 
@@ -671,20 +661,6 @@ ModelInstanceState::ProcessRequests(
   // Run...
   Execute(&responses, request_count, &input_tensors, &output_tensors);
 
-  uint64_t compute_end_ns = 0;
-#if defined(TRITON_ENABLE_GPU) && defined(TRITON_ENABLE_STATS)
-  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
-    // For GPU, the Execute runs the inference asynchronously...
-    // Attaching callback on the stream ensures correct timestamp
-    // is captured.
-    cudaLaunchHostFunc(
-        torch::cuda::getCurrentCUDAStream(), TimestampCaptureCallback,
-        reinterpret_cast<void*>(&compute_end_ns));
-  } else {
-    SET_TIMESTAMP(compute_end_ns);
-  }
-#endif
-
   // Free BackendMemory used for inputs
   for (BackendMemory* mem : input_memories) {
     delete mem;
@@ -712,10 +688,12 @@ ModelInstanceState::ProcessRequests(
     }
   }
 
+  uint64_t compute_end_ns = 0;
+
   if (!invalid_index) {
     ReadOutputTensors(
         total_batch_size, output_names, output_tensors, requests, request_count,
-        &responses);
+        &responses, &compute_end_ns);
   }
 
   uint64_t exec_end_ns = 0;
@@ -872,7 +850,7 @@ ModelInstanceState::ReadOutputTensors(
     size_t total_batch_size, const std::vector<const char*>& output_names,
     const std::vector<torch::Tensor>& output_tensors,
     TRITONBACKEND_Request** requests, const uint32_t request_count,
-    std::vector<TRITONBACKEND_Response*>* responses)
+    std::vector<TRITONBACKEND_Response*>* responses, uint64_t* compute_end_ns)
 {
   BackendOutputResponder responder(
       requests, request_count, responses, model_state_->MaxBatchSize(),
@@ -929,6 +907,20 @@ ModelInstanceState::ReadOutputTensors(
         (device_.type() == torch::kCPU) ? TRITONSERVER_MEMORY_CPU
                                         : TRITONSERVER_MEMORY_GPU,
         (device_.type() == torch::kCPU) ? 0 : device_.index());
+
+    // PyTorch uses asynchronous execution to run the model. Setting the compute
+    // end timestamp immediately after Execute() does not capture the complete
+    // model execution time. When the first output buffer is accessed/copied by
+    // ProcessTensor(), there is a synchronization that is done to ensure the
+    // data is correctly copied from the output tensor. To avoid overheads of
+    // additional synchronization, we continue to use the default cuda stream.
+    // However the drawback of this is that the compute infer time reported
+    // would be slightly later than it is in reality and the compute output time
+    // reported would be smaller than it is in reality. We allow this because
+    // synchronizing manually negatively impacts performance.
+    if (idx == 0) {
+      SET_TIMESTAMP(*compute_end_ns);
+    }
   }
 
   // Finalize and wait for any pending buffer copies.
