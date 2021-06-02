@@ -1,4 +1,4 @@
-// Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+// Copyright (c) 2020-2021, NVIDIA CORPORATION. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -135,6 +135,18 @@ ModelConfigDataTypeToTorchType(const std::string& data_type_str)
   }
 
   return std::make_pair(true, type);
+}
+
+TRITONSERVER_Error*
+ParseParameter(
+    triton::common::TritonJson::Value& params, const std::string& mkey,
+    bool* value)
+{
+  std::string value_str;
+  RETURN_IF_ERROR(GetParameterValue(params, mkey, &value_str));
+  RETURN_IF_ERROR(ParseBoolValue(value_str, value));
+
+  return nullptr;
 }
 
 }}}  // namespace triton::backend::pytorch
