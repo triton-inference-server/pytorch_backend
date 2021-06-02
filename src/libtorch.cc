@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2021, NVIDIA CORPORATION. All rights reserved.
+// Copyright (c) 2019-21 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -771,7 +771,7 @@ ModelInstanceState::Execute(
   torch::jit::IValue model_outputs_;
 
   try {
-    // enable/disable optimized exection
+    // enable/disable optimized execution
     torch::jit::setGraphExecutorOptimize(
         !model_state_->DisabledOptimizedExecution());
 
