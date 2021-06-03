@@ -95,13 +95,20 @@ $ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_PYTORCH_INCLUDE_PATHS
 $ make install
 ```
 
-## Using the OpenVINO Backend
+## Using the PyTorch Backend
 
 ### Parameters
 
 Disabling the optimized execution of the PyTorch models is done through the Parameters section of the model's 'config.pbtxt' file.
 
-* `DISABLE_OPTIMIZED_EXECUTION`: Boolean flag to disable the optimized execution of TorchScript models. By default the optimized execuiton is always enabled.
+* `DISABLE_OPTIMIZED_EXECUTION`: Boolean flag to disable the optimized execution
+of TorchScript models. By default the optimized execuiton is always enabled. 
+
+The initial calls to a loaded TorchScript model take extremely long. Due to this longer
+model warmup [issue](https://github.com/pytorch/pytorch/issues/57894), Triton also allows 
+execution of models without these optimizations. In some models, optimized execution 
+does not benefit performance as seen [here](https://github.com/pytorch/pytorch/issues/19978)
+and in other cases impacts performance negatively, as seen [here](https://github.com/pytorch/pytorch/issues/53824).
 
 The section of model config file specifying these parameters will look like:
 
@@ -112,5 +119,4 @@ key: "DISABLE_OPTIMIZED_EXECUTION"
     string_value:"true"
     }
 }
-
 ```
