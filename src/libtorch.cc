@@ -199,7 +199,7 @@ ModelState::ParseParameters()
         params, "DISABLE_OPTIMIZED_EXECUTION", &disable_optimized_execution_));
     LOG_MESSAGE(
         TRITONSERVER_LOG_INFO,
-        ("Optimized execution is " +
+        (std::string("Optimized execution is ") +
          (disable_optimized_execution_ ? "disabled" : "enabled"))
             .c_str());
   }
