@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
+// Copyright (c) 2019-21 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -78,9 +78,16 @@ class ModelState : public BackendModel {
       std::string* model_path,
       std::unique_ptr<torch::jit::script::Module>* torch_model);
 
+  bool DisabledOptimizedExecution() { return disable_optimized_execution_; }
+
  private:
   ModelState(TRITONBACKEND_Model* triton_model);
   TRITONSERVER_Error* AutoCompleteConfig();
+
+  // Parses and validates parameters in config
+  TRITONSERVER_Error* ParseParameters();
+
+  bool disable_optimized_execution_;
 };
 
 
@@ -114,11 +121,13 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
         triton_model, 1 /* config_version */, message));
   }
 
+  RETURN_IF_ERROR((*state)->ParseParameters());
+
   return nullptr;  // success
 }
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
-    : BackendModel(triton_model)
+    : BackendModel(triton_model), disable_optimized_execution_(false)
 {
 }
 
@@ -180,6 +189,23 @@ ModelState::AutoCompleteConfig()
   return nullptr;  // success
 }
 
+TRITONSERVER_Error*
+ModelState::ParseParameters()
+{
+  triton::common::TritonJson::Value params;
+  bool status = model_config_.Find("parameters", &params);
+  if (status) {
+    RETURN_IF_ERROR(ParseParameter(
+        params, "DISABLE_OPTIMIZED_EXECUTION", &disable_optimized_execution_));
+    LOG_MESSAGE(
+        TRITONSERVER_LOG_INFO,
+        ("Optimized execution is " +
+         (disable_optimized_execution_ ? "disabled" : "enabled"))
+            .c_str());
+  }
+
+  return nullptr;
+}
 
 //
 // ModelInstanceState
@@ -745,6 +771,10 @@ ModelInstanceState::Execute(
   torch::jit::IValue model_outputs_;
 
   try {
+    // enable/disable optimized execution
+    torch::jit::setGraphExecutorOptimize(
+        !model_state_->DisabledOptimizedExecution());
+
     torch::NoGradGuard no_grad;
     model_outputs_ = torch_model_->forward(*input_tensors);
     if (model_outputs_.isTuple()) {
