@@ -195,6 +195,8 @@ ModelState::ParseParameters()
   triton::common::TritonJson::Value params;
   bool status = model_config_.Find("parameters", &params);
   if (status) {
+    // If 'DISABLE_OPTIMIZED_EXECUTION' is not present in 'parameters' then no
+    // update is made to 'disable_optimized_execution_'.
     TRITONSERVER_Error* err = ParseParameter(
         params, "DISABLE_OPTIMIZED_EXECUTION", &disable_optimized_execution_);
     if (err != nullptr) {
