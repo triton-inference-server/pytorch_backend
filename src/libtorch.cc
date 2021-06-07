@@ -201,14 +201,15 @@ ModelState::ParseParameters()
       if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
         return err;
       } else {
-        LOG_MESSAGE(
-            TRITONSERVER_LOG_INFO,
-            (std::string("Optimized execution is ") +
-             (disable_optimized_execution_ ? "disabled" : "enabled"))
-                .c_str());
         TRITONSERVER_ErrorDelete(err);
       }
     }
+
+    LOG_MESSAGE(
+        TRITONSERVER_LOG_INFO,
+        (std::string("Optimized execution is ") +
+         (disable_optimized_execution_ ? "disabled" : "enabled"))
+            .c_str());
   }
 
   return nullptr;
