@@ -55,6 +55,9 @@ std::pair<bool, torch::ScalarType> ConvertDataTypeToTorchType(
 std::pair<bool, torch::ScalarType> ModelConfigDataTypeToTorchType(
     const std::string& data_type_str);
 
+// If the key 'mkey' is present in 'params' then update 'value' with the value
+// associated with that key. If 'mkey' is not present in 'params' then no update
+// is made to 'value'.
 TRITONSERVER_Error* ParseParameter(
     triton::common::TritonJson::Value& params, const std::string& mkey,
     bool* value);
