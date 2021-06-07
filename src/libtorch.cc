@@ -195,13 +195,20 @@ ModelState::ParseParameters()
   triton::common::TritonJson::Value params;
   bool status = model_config_.Find("parameters", &params);
   if (status) {
-    RETURN_IF_ERROR(ParseParameter(
-        params, "DISABLE_OPTIMIZED_EXECUTION", &disable_optimized_execution_));
-    LOG_MESSAGE(
-        TRITONSERVER_LOG_INFO,
-        (std::string("Optimized execution is ") +
-         (disable_optimized_execution_ ? "disabled" : "enabled"))
-            .c_str());
+    TRITONSERVER_Error* err = ParseParameter(
+        params, "DISABLE_OPTIMIZED_EXECUTION", &disable_optimized_execution_);
+    if (err != nullptr) {
+      if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
+        return err;
+      } else {
+        LOG_MESSAGE(
+            TRITONSERVER_LOG_INFO,
+            (std::string("Optimized execution is ") +
+             (disable_optimized_execution_ ? "disabled" : "enabled"))
+                .c_str());
+        TRITONSERVER_ErrorDelete(err);
+      }
+    }
   }
 
   return nullptr;
