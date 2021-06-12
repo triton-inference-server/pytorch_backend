@@ -942,6 +942,16 @@ ModelInstanceState::ReadOutputTensors(
       batchn_shape.push_back(*itr);
     }
 
+    if (batchn_shape.size() == 0) {
+      RESPOND_ALL_AND_RETURN_IF_ERROR(
+          responses, request_count,
+          TRITONSERVER_ErrorNew(
+              TRITONSERVER_ERROR_INVALID_ARG,
+              (std::string("output '") + name +
+               "' is a scalar which is not supported.")
+                  .c_str()));
+    }
+
     responder.ProcessTensor(
         name, output_dtype, batchn_shape, output_buffer,
         (device_.type() == torch::kCPU) ? TRITONSERVER_MEMORY_CPU
