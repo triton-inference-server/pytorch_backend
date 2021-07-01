@@ -1,4 +1,4 @@
-// Copyright (c) 2019-21 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2021 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -643,7 +643,8 @@ ModelInstanceState::ProcessRequests(
   bool cuda_copy = false;
   BackendInputCollector collector(
       requests, request_count, &responses, model_state_->TritonMemoryManager(),
-      model_state_->EnablePinnedInput(), CudaStream());
+      model_state_->EnablePinnedInput(), CudaStream(), nullptr, nullptr, 0,
+      HostPolicyName().c_str());
   SetInputTensors(
       total_batch_size, requests, request_count, &responses, &collector,
       &input_names, &input_tensors, &input_memories, &cuda_copy);
