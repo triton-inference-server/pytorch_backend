@@ -55,7 +55,7 @@ Use a recent cmake to build. First install the required dependencies.
 $ apt-get install patchelf rapidjson-dev python3-dev
 ```
 
-An appropriate PyTorch container from [NGC](ngc.nvidia.com) must be used.
+An appropriate PyTorch container from [NGC](https://ngc.nvidia.com) must be used.
 For example, to build a backend that uses the 21.02 version of the PyTorch
 container from NGC:
 
@@ -79,7 +79,7 @@ but the listed CMake argument can be used to override.
 Currently, Triton requires that a specially patched version of
 PyTorch be used with the PyTorch backend. The full source for
 these PyTorch versions are available as Docker images from
-[NGC](ngc.nvidia.com). For example, the PyTorch version
+[NGC](https://ngc.nvidia.com). For example, the PyTorch version
 compatible with the 21.02 release of Triton is available as
 nvcr.io/nvidia/pytorch:21.02-py3.
 
