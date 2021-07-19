@@ -120,3 +120,15 @@ key: "DISABLE_OPTIMIZED_EXECUTION"
     }
 }
 ```
+
+### Important Note
+
+* The execution of pytorch model on GPU is asynchronous in nature. See
+  [here](https://pytorch.org/docs/stable/notes/cuda.html#asynchronous-execution)
+  for more details. Consequently, an error in pytorch model execution may
+  be raised during the next few inference requests to the server. Setting
+  environment variable `CUDA_LAUNCH_BLOCKING=1` when launching server will
+  help in correctly debugging failing cases by forcing synchronous execution.
+  * The PyTorch model in such cases may or may not recover from the failed
+    state and a restart of the server may be required to continue serving
+    successfully.
