@@ -161,6 +161,9 @@ ModelState::LoadModel(
   std::string model_data_str;
   RETURN_IF_ERROR(ReadTextFile(*model_path, &model_data_str));
 
+  // InferenceMode should be used to guard all tensors operations including
+  // model loading: https://pytorch.org/cppdocs/notes/inference_mode.html
+  torch::InferenceMode infer_guard;
   try {
     std::istringstream model_stream(model_data_str);
     torch_model->reset(
@@ -786,7 +789,8 @@ ModelInstanceState::Execute(
     torch::jit::setGraphExecutorOptimize(
         !model_state_->DisabledOptimizedExecution());
 
-    torch::NoGradGuard no_grad;
+    // InferenceMode is a faster and more restricive version of NoGradGuard
+    torch::InferenceMode infer_guard;
     model_outputs_ = torch_model_->forward(*input_tensors);
     if (model_outputs_.isTuple()) {
       auto model_outputs_tuple = model_outputs_.toTuple();
@@ -817,6 +821,9 @@ ModelInstanceState::SetInputTensors(
     std::vector<BackendMemory*>* input_memories, bool* cuda_copy)
 {
   const int max_batch_size = model_state_->MaxBatchSize();
+
+  // InferenceMode should be used to guard all tensors operations
+  torch::InferenceMode infer_guard;
 
   // All requests must have equally-sized input tensors so use any
   // request as the representative for the input tensors.
