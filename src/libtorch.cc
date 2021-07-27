@@ -789,7 +789,6 @@ ModelInstanceState::Execute(
     torch::jit::setGraphExecutorOptimize(
         !model_state_->DisabledOptimizedExecution());
 
-    // InferenceMode is a faster and more restricive version of NoGradGuard
     torch::InferenceMode infer_guard;
     model_outputs_ = torch_model_->forward(*input_tensors);
     if (model_outputs_.isTuple()) {
