@@ -811,8 +811,10 @@ ModelInstanceState::Execute(
     torch::jit::setGraphExecutorOptimize(
         !model_state_->DisabledOptimizedExecution());
 
-    // enable/disable inference mode
+    // enable/disable inference mode - supersedes NoGradGuard
     torch::InferenceMode infer_guard(model_state_->InferenceMode());
+
+    torch::NoGradGuard no_grad;
     model_outputs_ = torch_model_->forward(*input_tensors);
     if (model_outputs_.isTuple()) {
       auto model_outputs_tuple = model_outputs_.toTuple();
