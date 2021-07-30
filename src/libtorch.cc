@@ -79,6 +79,7 @@ class ModelState : public BackendModel {
       std::unique_ptr<torch::jit::script::Module>* torch_model);
 
   bool DisabledOptimizedExecution() { return disable_optimized_execution_; }
+  bool InferenceMode() { return inference_mode_; }
 
  private:
   ModelState(TRITONBACKEND_Model* triton_model);
@@ -87,7 +88,11 @@ class ModelState : public BackendModel {
   // Parses and validates parameters in config
   TRITONSERVER_Error* ParseParameters();
 
+  // Flag to indicate whether optimized execution is disabled
   bool disable_optimized_execution_;
+
+  // Flag to indicate whether inference mode is enabled
+  bool inference_mode_;
 };
 
 
@@ -127,7 +132,8 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 }
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
-    : BackendModel(triton_model), disable_optimized_execution_(false)
+    : BackendModel(triton_model), disable_optimized_execution_(false),
+      inference_mode_(false)
 {
 }
 
@@ -163,7 +169,7 @@ ModelState::LoadModel(
 
   // InferenceMode should be used to guard all tensors operations including
   // model loading: https://pytorch.org/cppdocs/notes/inference_mode.html
-  torch::InferenceMode infer_guard;
+  torch::InferenceMode infer_guard(InferenceMode());
   try {
     std::istringstream model_stream(model_data_str);
     torch_model->reset(
@@ -215,6 +221,22 @@ ModelState::ParseParameters()
         (std::string("Optimized execution is ") +
          (disable_optimized_execution_ ? "disabled" : "enabled"))
             .c_str());
+
+    // If 'INFERENCE_MODE' is not present in 'parameters' then no update is made
+    // to 'inference_mode_'.
+    err = ParseParameter(params, "INFERENCE_MODE", &inference_mode_);
+    if (err != nullptr) {
+      if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
+        return err;
+      } else {
+        TRITONSERVER_ErrorDelete(err);
+      }
+    }
+
+    LOG_MESSAGE(
+        TRITONSERVER_LOG_INFO, (std::string("Inference Mode is ") +
+                                (inference_mode_ ? "disabled" : "enabled"))
+                                   .c_str());
   }
 
   return nullptr;
@@ -789,7 +811,8 @@ ModelInstanceState::Execute(
     torch::jit::setGraphExecutorOptimize(
         !model_state_->DisabledOptimizedExecution());
 
-    torch::InferenceMode infer_guard;
+    // enable/disable inference mode
+    torch::InferenceMode infer_guard(model_state_->InferenceMode());
     model_outputs_ = torch_model_->forward(*input_tensors);
     if (model_outputs_.isTuple()) {
       auto model_outputs_tuple = model_outputs_.toTuple();
@@ -822,7 +845,7 @@ ModelInstanceState::SetInputTensors(
   const int max_batch_size = model_state_->MaxBatchSize();
 
   // InferenceMode should be used to guard all tensors operations
-  torch::InferenceMode infer_guard;
+  torch::InferenceMode infer_guard(model_state_->InferenceMode());
 
   // All requests must have equally-sized input tensors so use any
   // request as the representative for the input tensors.
