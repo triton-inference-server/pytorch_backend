@@ -235,7 +235,7 @@ ModelState::ParseParameters()
 
     LOG_MESSAGE(
         TRITONSERVER_LOG_INFO, (std::string("Inference Mode is ") +
-                                (inference_mode_ ? "disabled" : "enabled"))
+                                (inference_mode_ ? "enabled" : "disabled"))
                                    .c_str());
   }
 
