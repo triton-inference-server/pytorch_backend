@@ -99,7 +99,8 @@ $ make install
 
 ### Parameters
 
-Disabling the optimized execution of the PyTorch models is done through the Parameters section of the model's 'config.pbtxt' file.
+Triton exposes some flags to control the execution mode of the TorchScript models through
+the Parameters section of the model's 'config.pbtxt' file.
 
 * `DISABLE_OPTIMIZED_EXECUTION`: Boolean flag to disable the optimized execution
 of TorchScript models. By default the optimized execuiton is always enabled. 
@@ -110,11 +111,33 @@ execution of models without these optimizations. In some models, optimized execu
 does not benefit performance as seen [here](https://github.com/pytorch/pytorch/issues/19978)
 and in other cases impacts performance negatively, as seen [here](https://github.com/pytorch/pytorch/issues/53824).
 
-The section of model config file specifying these parameters will look like:
+The section of model config file specifying this parameters will look like:
 
 ```
 parameters: {
 key: "DISABLE_OPTIMIZED_EXECUTION"
+    value: {
+    string_value:"true"
+    }
+}
+```
+
+* `INFERENCE_MODE`: Boolean flag to enable the Inference Mode execution
+of TorchScript models. By default the inference mode is disabled. 
+
+[InferenceMode](https://pytorch.org/cppdocs/notes/inference_mode.html) is a new
+RAII guard analogous to NoGradMode to be used when you are certain your operations
+will have no interactions with autograd. Compared to NoGradMode, code run under
+this mode gets better performance by disabling autograd.
+
+Please note that in some models, InferenceMode might not benefit performance
+and in fewer cases might impact performance negatively.
+
+The section of model config file specifying this parameters will look like:
+
+```
+parameters: {
+key: "INFERENCE_MODE"
     value: {
     string_value:"true"
     }
