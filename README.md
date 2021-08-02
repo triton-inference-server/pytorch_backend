@@ -132,3 +132,11 @@ key: "DISABLE_OPTIMIZED_EXECUTION"
   * The PyTorch model in such cases may or may not recover from the failed
     state and a restart of the server may be required to continue serving
     successfully.
+
+* Multiple instances of the pytorch model on GPU do not always
+  increase performance. Due to thread specific caching in pytorch, using
+  multiple instances of the model interact negatively. See
+  [here](https://github.com/pytorch/pytorch/issues/27902) for more details.
+  Setting the parameter `DISABLE_OPTIMIZED_EXECUTION` to "true" in the model
+  configuration may help in some cases to avoid these negative interactions
+  due to model specific caching and increase multiple instance performance.
