@@ -823,8 +823,16 @@ ModelInstanceState::Execute(
         output_tensors->push_back(m_op.toTensor());
       }
     } else {
-      auto model_output_tensor = model_outputs_.toTensor();
-      output_tensors->push_back(model_output_tensor);
+      try {
+        auto model_output_tensor = model_outputs_.toTensor();
+        output_tensors->push_back(model_output_tensor);
+      }
+      catch (std::exception& exx) {
+        throw std::invalid_argument(
+            "Output of torch model should be tensor or a tuple of tensors, not "
+            "a list / dictionary of tensors or a scalar: " +
+            std::string(exx.what()));
+      }
     }
   }
   catch (std::exception& ex) {
