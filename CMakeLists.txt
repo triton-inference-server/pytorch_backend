@@ -108,18 +108,24 @@ endif() # TRITON_ENABLE_GPU
 configure_file(src/libtriton_pytorch.ldscript libtriton_pytorch.ldscript COPYONLY)
 
 if (${TRITON_PYTORCH_DOCKER_BUILD})
+  set(MKL_LIBS "")
+  if (NOT CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
+    set(MKL_LIBS
+        "libmkl_core.so"
+        "libmkl_gnu_thread.so"
+        "libmkl_intel_lp64.so"
+        "libmkl_intel_thread.so"
+        "libmkl_def.so"
+        "libmkl_vml_def.so"
+        "libmkl_rt.so"
+        "libmkl_avx2.so"
+        "libmkl_avx512.so"
+        "libmkl_sequential.so"
+        "libomp.so"
+    )
+  endif()
   set(PT_LIBS
-      "libmkl_core.so"
-      "libmkl_gnu_thread.so"
-      "libmkl_intel_lp64.so"
-      "libmkl_intel_thread.so"
-      "libmkl_def.so"
-      "libmkl_vml_def.so"
-      "libmkl_rt.so"
-      "libmkl_avx2.so"
-      "libmkl_avx512.so"
-      "libmkl_sequential.so"
-      "libomp.so"
+      ${MKL_LIBS}
       "libc10.so"
       "libc10_cuda.so"
       "libtorch.so"
@@ -136,6 +142,9 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
       "libopencv_core.so"
       "libpng16.so"
   )
+
+  string(REPLACE ";" " " MKL_LIBS_STR "${MKL_LIBS}")
+
   add_custom_command(
     OUTPUT
       ${PT_LIBS}
@@ -147,17 +156,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker pull ${TRITON_PYTORCH_DOCKER_IMAGE}
     COMMAND docker rm pytorch_backend_ptlib || echo "error ignored..." || true
     COMMAND docker create --name pytorch_backend_ptlib ${TRITON_PYTORCH_DOCKER_IMAGE}
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_core.so libmkl_core.so
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_gnu_thread.so libmkl_gnu_thread.so
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_intel_lp64.so libmkl_intel_lp64.so
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_intel_thread.so libmkl_intel_thread.so
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_def.so libmkl_def.so
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_vml_def.so libmkl_vml_def.so
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_rt.so libmkl_rt.so
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_avx2.so libmkl_avx2.so
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_avx512.so libmkl_avx512.so
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libmkl_sequential.so libmkl_sequential.so
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/libomp.so libomp.so
+    COMMAND /bin/sh -c "for i in ${MKL_LIBS_STR} ; do echo copying $i && docker cp pytorch_backend_ptlib:/opt/conda/lib/$i $i ; done"
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libc10.so libc10.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libc10_cuda.so libc10_cuda.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libtorch.so libtorch.so
@@ -174,14 +173,15 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp pytorch_backend_ptlib:/usr/lib/x86_64-linux-gnu/libopencv_imgproc.so.3.4.11 libopencv_imgproc.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/lib/x86_64-linux-gnu/libopencv_core.so.3.4.11 libopencv_core.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/lib/x86_64-linux-gnu/libpng16.so.16.37.0 libpng16.so
-    COMMAND patchelf --add-needed libmkl_gnu_thread.so libmkl_def.so
-    COMMAND patchelf --add-needed libmkl_core.so libmkl_def.so
-    COMMAND patchelf --add-needed libmkl_gnu_thread.so libmkl_avx2.so
-    COMMAND patchelf --add-needed libmkl_core.so libmkl_avx2.so
-    COMMAND patchelf --add-needed libmkl_gnu_thread.so libmkl_avx512.so
-    COMMAND patchelf --add-needed libmkl_core.so libmkl_avx512.so
+    COMMAND /bin/sh -c "if [ -f libmkl_def.so ]; then patchelf --add-needed libmkl_gnu_thread.so libmkl_def.so; fi"
+    COMMAND /bin/sh -c "if [ -f libmkl_def.so ]; then patchelf --add-needed libmkl_core.so libmkl_def.so; fi"
+    COMMAND /bin/sh -c "if [ -f libmkl_avx2.so ]; then patchelf --add-needed libmkl_gnu_thread.so libmkl_avx2.so; fi"
+    COMMAND /bin/sh -c "if [ -f libmkl_avx2.so ]; then patchelf --add-needed libmkl_core.so libmkl_avx2.so; fi"
+    COMMAND /bin/sh -c "if [ -f libmkl_avx512.so ]; then patchelf --add-needed libmkl_gnu_thread.so libmkl_avx512.so; fi"
+    COMMAND /bin/sh -c "if [ -f libmkl_avx512.so ]; then patchelf --add-needed libmkl_core.so libmkl_avx512.so; fi"
     COMMAND docker rm pytorch_backend_ptlib
     COMMENT "Extracting pytorch and torchvision libraries and includes from ${TRITON_PYTORCH_DOCKER_IMAGE}"
+    VERBATIM
   )
   add_custom_target(ptlib_target DEPENDS ${PT_LIBS} ${OPENCV_LIBS})
   add_library(ptlib SHARED IMPORTED GLOBAL)
