@@ -108,12 +108,14 @@ endif() # TRITON_ENABLE_GPU
 configure_file(src/libtriton_pytorch.ldscript libtriton_pytorch.ldscript COPYONLY)
 
 if (${TRITON_PYTORCH_DOCKER_BUILD})
-  set(MKL_LIBS "")
   if (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
     set(LIBS_ARCH "aarch64")
+    set(CONDA_LIBS
+        "libopenblas.so.0"
+    )
   else()
     set(LIBS_ARCH "x86_64")
-    set(MKL_LIBS
+    set(CONDA_LIBS
         "libmkl_core.so"
         "libmkl_gnu_thread.so"
         "libmkl_intel_lp64.so"
@@ -128,7 +130,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     )
   endif()
   set(PT_LIBS
-      ${MKL_LIBS}
+      ${CONDA_LIBS}
       "libc10.so"
       "libc10_cuda.so"
       "libtorch.so"
@@ -146,7 +148,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
       "libpng16.so"
   )
 
-  string(REPLACE ";" " " MKL_LIBS_STR "${MKL_LIBS}")
+  string(REPLACE ";" " " CONDA_LIBS_STR "${CONDA_LIBS}")
 
   add_custom_command(
     OUTPUT
@@ -159,7 +161,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker pull ${TRITON_PYTORCH_DOCKER_IMAGE}
     COMMAND docker rm pytorch_backend_ptlib || echo "error ignored..." || true
     COMMAND docker create --name pytorch_backend_ptlib ${TRITON_PYTORCH_DOCKER_IMAGE}
-    COMMAND /bin/sh -c "for i in ${MKL_LIBS_STR} ; do echo copying $i && docker cp pytorch_backend_ptlib:/opt/conda/lib/$i $i ; done"
+    COMMAND /bin/sh -c "for i in ${CONDA_LIBS_STR} ; do echo copying $i && docker cp -L pytorch_backend_ptlib:/opt/conda/lib/$i $i ; done"
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libc10.so libc10.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libc10_cuda.so libc10_cuda.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libtorch.so libtorch.so
