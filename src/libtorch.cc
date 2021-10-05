@@ -80,6 +80,7 @@ class ModelState : public BackendModel {
 
   bool DisabledOptimizedExecution() { return disable_optimized_execution_; }
   bool InferenceMode() { return inference_mode_; }
+  bool DisabledNvfuser() { return disable_nvfuser_; }
 
  private:
   ModelState(TRITONBACKEND_Model* triton_model);
@@ -93,6 +94,9 @@ class ModelState : public BackendModel {
 
   // Flag to indicate whether inference mode is enabled
   bool inference_mode_;
+
+  // Flag to indicate whether nvfuser is disabled
+  bool disable_nvfuser_;
 };
 
 
@@ -133,7 +137,7 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     : BackendModel(triton_model), disable_optimized_execution_(false),
-      inference_mode_(false)
+      inference_mode_(false), disable_nvfuser_(false)
 {
 }
 
@@ -170,6 +174,14 @@ ModelState::LoadModel(
   // InferenceMode should be used to guard all tensors operations including
   // model loading: https://pytorch.org/cppdocs/notes/inference_mode.html
   torch::InferenceMode infer_guard(InferenceMode());
+
+  if (!DisabledNvfuser()) {
+    torch::jit::overrideCanFuseOnCPU(false);
+    torch::jit::overrideCanFuseOnGPU(false);
+    torch::jit::setTensorExprFuserEnabled(false);
+    torch::jit::RegisterCudaFuseGraph::registerPass(true);
+  }
+
   try {
     std::istringstream model_stream(model_data_str);
     torch_model->reset(
@@ -237,6 +249,24 @@ ModelState::ParseParameters()
         TRITONSERVER_LOG_INFO, (std::string("Inference Mode is ") +
                                 (inference_mode_ ? "enabled" : "disabled"))
                                    .c_str());
+
+    // If 'DISABLE_NVFUSER' is not present in 'parameters' then no
+    // update is made to 'disable_nvfuser_'.
+    err = ParseParameter(
+        params, "DISABLE_NVFUSER", &disable_nvfuser_);
+    if (err != nullptr) {
+      if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
+        return err;
+      } else {
+        TRITONSERVER_ErrorDelete(err);
+      }
+    }
+
+    LOG_MESSAGE(
+        TRITONSERVER_LOG_INFO,
+        (std::string("NvFuser is ") +
+         (disable_nvfuser_ ? "disabled" : "enabled"))
+            .c_str());
   }
 
   return nullptr;
