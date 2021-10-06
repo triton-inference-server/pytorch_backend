@@ -175,7 +175,7 @@ ModelState::LoadModel(
   // model loading: https://pytorch.org/cppdocs/notes/inference_mode.html
   torch::InferenceMode infer_guard(InferenceMode());
 
-  if (!DisabledNvfuser()) {
+  if (!DisabledNvfuser() && (device != torch::kCPU)) {
     torch::jit::overrideCanFuseOnCPU(false);
     torch::jit::overrideCanFuseOnGPU(false);
     torch::jit::setTensorExprFuserEnabled(false);
