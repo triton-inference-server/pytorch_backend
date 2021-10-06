@@ -89,13 +89,13 @@ class ModelState : public BackendModel {
   // Parses and validates parameters in config
   TRITONSERVER_Error* ParseParameters();
 
-  // Flag to indicate whether optimized execution is disabled
+  // Flag to indicate whether optimized execution is disabled. Defaults to false.
   bool disable_optimized_execution_;
 
-  // Flag to indicate whether inference mode is enabled
+  // Flag to indicate whether inference mode is enabled. Defaults to false.
   bool inference_mode_;
 
-  // Flag to indicate whether nvfuser is disabled
+  // Flag to indicate whether nvfuser is disabled. Defaults to true.
   bool disable_nvfuser_;
 };
 
@@ -137,7 +137,7 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     : BackendModel(triton_model), disable_optimized_execution_(false),
-      inference_mode_(false), disable_nvfuser_(false)
+      inference_mode_(false), disable_nvfuser_(true)
 {
 }
 
