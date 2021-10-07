@@ -78,7 +78,7 @@ class ModelState : public BackendModel {
       std::string* model_path,
       std::unique_ptr<torch::jit::script::Module>* torch_model);
 
-  bool DisabledOptimizedExecution() { return disable_optimized_execution_; }
+  bool EnabledOptimizedExecution() { return enable_optimized_execution_; }
   bool EnabledInferenceMode() { return enable_inference_mode_; }
   bool EnabledNvfuser() { return enable_nvfuser_; }
 
@@ -89,8 +89,8 @@ class ModelState : public BackendModel {
   // Parses and validates parameters in config
   TRITONSERVER_Error* ParseParameters();
 
-  // Flag to indicate whether optimized execution is disabled. Defaults to false.
-  bool disable_optimized_execution_;
+  // Flag to indicate whether optimized execution is enabled. Defaults to true.
+  bool enable_optimized_execution_;
 
   // Flag to indicate whether inference mode is enabled. Defaults to false.
   bool enable_inference_mode_;
@@ -136,7 +136,7 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 }
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
-    : BackendModel(triton_model), disable_optimized_execution_(false),
+    : BackendModel(triton_model), enable_optimized_execution_(true),
       enable_inference_mode_(false), enable_nvfuser_(false)
 {
 }
@@ -175,7 +175,8 @@ ModelState::LoadModel(
   // model loading: https://pytorch.org/cppdocs/notes/inference_mode.html
   torch::InferenceMode infer_guard(EnabledInferenceMode());
 
-  if (!EnabledNvfuser() && (device != torch::kCPU)) {
+  // NvFuser is only supported for GPU instances
+  if (EnabledNvfuser() && (device != torch::kCPU)) {
     torch::jit::overrideCanFuseOnCPU(false);
     torch::jit::overrideCanFuseOnGPU(false);
     torch::jit::setTensorExprFuserEnabled(false);
@@ -217,9 +218,10 @@ ModelState::ParseParameters()
   bool status = model_config_.Find("parameters", &params);
   if (status) {
     // If 'DISABLE_OPTIMIZED_EXECUTION' is not present in 'parameters' then no
-    // update is made to 'disable_optimized_execution_'.
+    // update is made to 'enable_optimized_execution_'.
+    bool disable_optimized_execution = false;
     TRITONSERVER_Error* err = ParseParameter(
-        params, "DISABLE_OPTIMIZED_EXECUTION", &disable_optimized_execution_);
+        params, "DISABLE_OPTIMIZED_EXECUTION", &disable_optimized_execution);
     if (err != nullptr) {
       if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
         return err;
@@ -227,11 +229,13 @@ ModelState::ParseParameters()
         TRITONSERVER_ErrorDelete(err);
       }
     }
+    enable_optimized_execution_ = !disable_optimized_execution;
 
     LOG_MESSAGE(
         TRITONSERVER_LOG_INFO,
         (std::string("Optimized execution is ") +
-         (disable_optimized_execution_ ? "disabled" : "enabled"))
+         (enable_optimized_execution_ ? "enabled" : "disabled") +
+         " for model instance '" + Name() + "'")
             .c_str());
 
     // If 'INFERENCE_MODE' is not present in 'parameters' then no update is made
@@ -246,14 +250,15 @@ ModelState::ParseParameters()
     }
 
     LOG_MESSAGE(
-        TRITONSERVER_LOG_INFO, (std::string("Inference Mode is ") +
-                                (enable_inference_mode_ ? "enabled" : "disabled"))
-                                   .c_str());
+        TRITONSERVER_LOG_INFO,
+        (std::string("Inference Mode is ") +
+         (enable_inference_mode_ ? "enabled" : "disabled") +
+         " for model instance '" + Name() + "'")
+            .c_str());
 
     // If 'ENABLE_NVFUSER' is not present in 'parameters' then no
     // update is made to 'enable_nvfuser_'.
-    err = ParseParameter(
-        params, "ENABLE_NVFUSER", &enable_nvfuser_);
+    err = ParseParameter(params, "ENABLE_NVFUSER", &enable_nvfuser_);
     if (err != nullptr) {
       if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
         return err;
@@ -264,7 +269,8 @@ ModelState::ParseParameters()
 
     LOG_MESSAGE(
         TRITONSERVER_LOG_INFO, (std::string("NvFuser is ") +
-                                (enable_nvfuser_ ? "enabled" : "disabled"))
+                                (enable_nvfuser_ ? "enabled" : "disabled") +
+                                " for model instance '" + Name() + "'")
                                    .c_str());
   }
 
@@ -839,7 +845,7 @@ ModelInstanceState::Execute(
   try {
     // enable/disable optimized execution
     torch::jit::setGraphExecutorOptimize(
-        !model_state_->DisabledOptimizedExecution());
+        model_state_->EnabledOptimizedExecution());
 
     // enable/disable inference mode - supersedes NoGradGuard
     torch::InferenceMode infer_guard(model_state_->EnabledInferenceMode());
