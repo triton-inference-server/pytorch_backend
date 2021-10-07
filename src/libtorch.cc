@@ -79,8 +79,8 @@ class ModelState : public BackendModel {
       std::unique_ptr<torch::jit::script::Module>* torch_model);
 
   bool DisabledOptimizedExecution() { return disable_optimized_execution_; }
-  bool InferenceMode() { return inference_mode_; }
-  bool DisabledNvfuser() { return disable_nvfuser_; }
+  bool EnabledInferenceMode() { return enable_inference_mode_; }
+  bool EnabledNvfuser() { return enable_nvfuser_; }
 
  private:
   ModelState(TRITONBACKEND_Model* triton_model);
@@ -93,10 +93,10 @@ class ModelState : public BackendModel {
   bool disable_optimized_execution_;
 
   // Flag to indicate whether inference mode is enabled. Defaults to false.
-  bool inference_mode_;
+  bool enable_inference_mode_;
 
-  // Flag to indicate whether nvfuser is disabled. Defaults to true.
-  bool disable_nvfuser_;
+  // Flag to indicate whether nvfuser is enabled. Defaults to false.
+  bool enable_nvfuser_;
 };
 
 
@@ -137,7 +137,7 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     : BackendModel(triton_model), disable_optimized_execution_(false),
-      inference_mode_(false), disable_nvfuser_(true)
+      enable_inference_mode_(false), enable_nvfuser_(false)
 {
 }
 
@@ -173,9 +173,9 @@ ModelState::LoadModel(
 
   // InferenceMode should be used to guard all tensors operations including
   // model loading: https://pytorch.org/cppdocs/notes/inference_mode.html
-  torch::InferenceMode infer_guard(InferenceMode());
+  torch::InferenceMode infer_guard(EnabledInferenceMode());
 
-  if (!DisabledNvfuser() && (device != torch::kCPU)) {
+  if (!EnabledNvfuser() && (device != torch::kCPU)) {
     torch::jit::overrideCanFuseOnCPU(false);
     torch::jit::overrideCanFuseOnGPU(false);
     torch::jit::setTensorExprFuserEnabled(false);
@@ -235,8 +235,8 @@ ModelState::ParseParameters()
             .c_str());
 
     // If 'INFERENCE_MODE' is not present in 'parameters' then no update is made
-    // to 'inference_mode_'.
-    err = ParseParameter(params, "INFERENCE_MODE", &inference_mode_);
+    // to 'enable_inference_mode_'.
+    err = ParseParameter(params, "INFERENCE_MODE", &enable_inference_mode_);
     if (err != nullptr) {
       if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
         return err;
@@ -247,13 +247,13 @@ ModelState::ParseParameters()
 
     LOG_MESSAGE(
         TRITONSERVER_LOG_INFO, (std::string("Inference Mode is ") +
-                                (inference_mode_ ? "enabled" : "disabled"))
+                                (enable_inference_mode_ ? "enabled" : "disabled"))
                                    .c_str());
 
-    // If 'DISABLE_NVFUSER' is not present in 'parameters' then no
-    // update is made to 'disable_nvfuser_'.
+    // If 'ENABLE_NVFUSER' is not present in 'parameters' then no
+    // update is made to 'enable_nvfuser_'.
     err = ParseParameter(
-        params, "DISABLE_NVFUSER", &disable_nvfuser_);
+        params, "ENABLE_NVFUSER", &enable_nvfuser_);
     if (err != nullptr) {
       if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
         return err;
@@ -263,10 +263,9 @@ ModelState::ParseParameters()
     }
 
     LOG_MESSAGE(
-        TRITONSERVER_LOG_INFO,
-        (std::string("NvFuser is ") +
-         (disable_nvfuser_ ? "disabled" : "enabled"))
-            .c_str());
+        TRITONSERVER_LOG_INFO, (std::string("NvFuser is ") +
+                                (enable_nvfuser_ ? "enabled" : "disabled"))
+                                   .c_str());
   }
 
   return nullptr;
@@ -843,7 +842,7 @@ ModelInstanceState::Execute(
         !model_state_->DisabledOptimizedExecution());
 
     // enable/disable inference mode - supersedes NoGradGuard
-    torch::InferenceMode infer_guard(model_state_->InferenceMode());
+    torch::InferenceMode infer_guard(model_state_->EnabledInferenceMode());
 
     torch::NoGradGuard no_grad;
     model_outputs_ = torch_model_->forward(*input_tensors);
@@ -886,7 +885,7 @@ ModelInstanceState::SetInputTensors(
   const int max_batch_size = model_state_->MaxBatchSize();
 
   // InferenceMode should be used to guard all tensors operations
-  torch::InferenceMode infer_guard(model_state_->InferenceMode());
+  torch::InferenceMode infer_guard(model_state_->EnabledInferenceMode());
 
   // All requests must have equally-sized input tensors so use any
   // request as the representative for the input tensors.
