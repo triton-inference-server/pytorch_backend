@@ -148,7 +148,7 @@ key: "INFERENCE_MODE"
 TorchScript models. By default the NvFuser is disabled. 
 
 Please note that in some models generated using trace in old PyTorch versions might not work
-correctly with NvFuser. We recommend using scripting and a recently version of PyTorch
+correctly with NvFuser. We recommend using scripting and a recent version of PyTorch
 to generate these models.
 
 The section of model config file specifying this parameters will look like:
