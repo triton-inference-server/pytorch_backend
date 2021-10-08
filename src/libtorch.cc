@@ -260,17 +260,20 @@ ModelState::ParseParameters()
       if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
         return err;
       } else {
+        LOG_MESSAGE(
+            TRITONSERVER_LOG_INFO, (std::string("NvFuser is not specified") +
+                                    " for model instance '" + Name() + "'")
+                                       .c_str());
         TRITONSERVER_ErrorDelete(err);
       }
     } else {
       enable_nvfuser_pair_ = {true, enable_nvfuser};
+      LOG_MESSAGE(
+          TRITONSERVER_LOG_INFO, (std::string("NvFuser is ") +
+                                  (enable_nvfuser ? "enabled" : "disabled") +
+                                  " for model instance '" + Name() + "'")
+                                     .c_str());
     }
-
-    LOG_MESSAGE(
-        TRITONSERVER_LOG_INFO, (std::string("NvFuser is ") +
-                                (enable_nvfuser ? "enabled" : "disabled") +
-                                " for model instance '" + Name() + "'")
-                                   .c_str());
   }
 
   return nullptr;
