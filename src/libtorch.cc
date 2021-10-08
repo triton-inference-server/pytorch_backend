@@ -80,7 +80,10 @@ class ModelState : public BackendModel {
 
   bool EnabledOptimizedExecution() { return enable_optimized_execution_; }
   bool EnabledInferenceMode() { return enable_inference_mode_; }
-  std::pair<bool, bool> EnabledNvfuserPair() { return enable_nvfuser_pair_; }
+  const std::pair<bool, bool>& EnabledNvfuserPair() const
+  {
+    return enable_nvfuser_pair_;
+  }
 
  private:
   ModelState(TRITONBACKEND_Model* triton_model);
