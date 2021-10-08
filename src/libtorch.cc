@@ -175,14 +175,6 @@ ModelState::LoadModel(
   // model loading: https://pytorch.org/cppdocs/notes/inference_mode.html
   torch::InferenceMode infer_guard(EnabledInferenceMode());
 
-  // NvFuser is only supported for GPU instances
-  if (EnabledNvfuser() && (device != torch::kCPU)) {
-    torch::jit::overrideCanFuseOnCPU(false);
-    torch::jit::overrideCanFuseOnGPU(false);
-    torch::jit::setTensorExprFuserEnabled(false);
-    torch::jit::RegisterCudaFuseGraph::registerPass(true);
-  }
-
   try {
     std::istringstream model_stream(model_data_str);
     torch_model->reset(
@@ -849,6 +841,19 @@ ModelInstanceState::Execute(
 
     // enable/disable inference mode - supersedes NoGradGuard
     torch::InferenceMode infer_guard(model_state_->EnabledInferenceMode());
+
+    // NvFuser is only supported for GPU instances
+    if (model_state_->EnabledNvfuser() && (device_ != torch::kCPU)) {
+      torch::jit::overrideCanFuseOnCPU(false);
+      torch::jit::overrideCanFuseOnGPU(false);
+      torch::jit::setTensorExprFuserEnabled(false);
+      torch::jit::RegisterCudaFuseGraph::registerPass(true);
+    } else {
+      torch::jit::overrideCanFuseOnCPU(true);
+      torch::jit::overrideCanFuseOnGPU(true);
+      torch::jit::setTensorExprFuserEnabled(true);
+      torch::jit::RegisterCudaFuseGraph::registerPass(false);
+    }
 
     torch::NoGradGuard no_grad;
     model_outputs_ = torch_model_->forward(*input_tensors);
