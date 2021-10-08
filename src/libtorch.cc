@@ -80,7 +80,7 @@ class ModelState : public BackendModel {
 
   bool EnabledOptimizedExecution() { return enable_optimized_execution_; }
   bool EnabledInferenceMode() { return enable_inference_mode_; }
-  bool EnabledNvfuser() { return enable_nvfuser_; }
+  std::pair<bool, bool> EnabledNvfuserPair() { return enable_nvfuser_pair_; }
 
  private:
   ModelState(TRITONBACKEND_Model* triton_model);
@@ -95,8 +95,9 @@ class ModelState : public BackendModel {
   // Flag to indicate whether inference mode is enabled. Defaults to false.
   bool enable_inference_mode_;
 
-  // Flag to indicate whether nvfuser is enabled. Defaults to false.
-  bool enable_nvfuser_;
+  // Flag pair to indicate whether nvfuser is set and enabled respectively.
+  // Defaults to (false, false).
+  std::pair<bool, bool> enable_nvfuser_pair_;
 };
 
 
@@ -137,7 +138,7 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     : BackendModel(triton_model), enable_optimized_execution_(true),
-      enable_inference_mode_(false), enable_nvfuser_(false)
+      enable_inference_mode_(false), enable_nvfuser_pair_({false, false})
 {
 }
 
@@ -249,19 +250,22 @@ ModelState::ParseParameters()
             .c_str());
 
     // If 'ENABLE_NVFUSER' is not present in 'parameters' then no
-    // update is made to 'enable_nvfuser_'.
-    err = ParseParameter(params, "ENABLE_NVFUSER", &enable_nvfuser_);
+    // update is made to 'enable_nvfuser'.
+    bool enable_nvfuser = false;
+    err = ParseParameter(params, "ENABLE_NVFUSER", &enable_nvfuser);
     if (err != nullptr) {
       if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
         return err;
       } else {
         TRITONSERVER_ErrorDelete(err);
       }
+    } else {
+      enable_nvfuser_pair_ = {true, enable_nvfuser};
     }
 
     LOG_MESSAGE(
         TRITONSERVER_LOG_INFO, (std::string("NvFuser is ") +
-                                (enable_nvfuser_ ? "enabled" : "disabled") +
+                                (enable_nvfuser ? "enabled" : "disabled") +
                                 " for model instance '" + Name() + "'")
                                    .c_str());
   }
@@ -842,17 +846,21 @@ ModelInstanceState::Execute(
     // enable/disable inference mode - supersedes NoGradGuard
     torch::InferenceMode infer_guard(model_state_->EnabledInferenceMode());
 
-    // NvFuser is only supported for GPU instances
-    if (model_state_->EnabledNvfuser() && (device_ != torch::kCPU)) {
-      torch::jit::overrideCanFuseOnCPU(false);
-      torch::jit::overrideCanFuseOnGPU(false);
-      torch::jit::setTensorExprFuserEnabled(false);
-      torch::jit::RegisterCudaFuseGraph::registerPass(true);
-    } else {
-      torch::jit::overrideCanFuseOnCPU(true);
-      torch::jit::overrideCanFuseOnGPU(true);
-      torch::jit::setTensorExprFuserEnabled(true);
-      torch::jit::RegisterCudaFuseGraph::registerPass(false);
+    // NvFuser is only supported for GPU instances. No change is made if
+    // enable_nvfuser is not set by user
+    auto nvfuser_pair = model_state_->EnabledNvfuserPair();
+    if (std::get<0>(nvfuser_pair)) {
+      if (std::get<1>(nvfuser_pair) && (device_ != torch::kCPU)) {
+        torch::jit::overrideCanFuseOnCPU(false);
+        torch::jit::overrideCanFuseOnGPU(false);
+        torch::jit::setTensorExprFuserEnabled(false);
+        torch::jit::RegisterCudaFuseGraph::registerPass(true);
+      } else {
+        torch::jit::overrideCanFuseOnCPU(true);
+        torch::jit::overrideCanFuseOnGPU(true);
+        torch::jit::setTensorExprFuserEnabled(true);
+        torch::jit::RegisterCudaFuseGraph::registerPass(false);
+      }
     }
 
     torch::NoGradGuard no_grad;
