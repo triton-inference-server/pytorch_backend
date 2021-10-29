@@ -25,7 +25,9 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <stdint.h>
+
 #include <exception>
+
 #include "libtorch_utils.h"
 #include "triton/backend/backend_common.h"
 #include "triton/backend/backend_input_collector.h"
@@ -79,6 +81,9 @@ class ModelState : public BackendModel {
       std::unique_ptr<torch::jit::script::Module>* torch_model);
 
   bool EnabledOptimizedExecution() { return enable_optimized_execution_; }
+  bool EnabledTensorExprFuser() { return enable_tensor_fuser_; }
+  bool EnabledJitProfilingMode() { return enable_jit_profiling_; }
+  bool EnabledJitExecutorMode() { return enable_jit_executor_; }
   bool EnabledInferenceMode() { return enable_inference_mode_; }
   const std::pair<bool, bool>& EnabledNvfuserPair() const
   {
@@ -97,6 +102,12 @@ class ModelState : public BackendModel {
 
   // Flag to indicate whether inference mode is enabled. Defaults to false.
   bool enable_inference_mode_;
+
+  // Flag to enable/disable various JIT components. Defaults to true.
+  // Tensor fuser configuration will be overridden by configuration of nvfuser.
+  bool enable_tensor_fuser_;
+  bool enable_jit_profiling_;
+  bool enable_jit_executor_;
 
   // Flag pair to indicate whether nvfuser is set and enabled respectively.
   // Defaults to (false, false).
@@ -141,7 +152,9 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     : BackendModel(triton_model), enable_optimized_execution_(true),
-      enable_inference_mode_(false), enable_nvfuser_pair_({false, false})
+      enable_tensor_fuser_(true), enable_jit_profiling_(true),
+      enable_jit_executor_(true), enable_inference_mode_(false),
+      enable_nvfuser_pair_({false, false})
 {
 }
 
@@ -251,6 +264,62 @@ ModelState::ParseParameters()
          (enable_inference_mode_ ? "enabled" : "disabled") +
          " for model instance '" + Name() + "'")
             .c_str());
+
+    // If 'ENABLE_TORCH_TENSOR_FUSER' is not present in 'parameters' then no
+    // update is made to 'enable_inference_mode_'.
+    err = ParseParameter(
+        params, "ENABLE_TORCH_TENSOR_FUSER", &enable_tensor_fuser_);
+    if (err != nullptr) {
+      if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
+        return err;
+      } else {
+        TRITONSERVER_ErrorDelete(err);
+      }
+    } else {
+      LOG_MESSAGE(
+          TRITONSERVER_LOG_INFO,
+          (std::string("Torch tensor fuser is ") +
+           (enable_inference_mode_ ? "enabled" : "disabled") +
+           " for model instance '" + Name() + "'")
+              .c_str());
+    }
+
+    // If 'ENABLE_JIT_PROFILING' is not present in 'parameters' then no update
+    // is made to 'enable_inference_mode_'.
+    err =
+        ParseParameter(params, "ENABLE_JIT_PROFILING", &enable_jit_profiling_);
+    if (err != nullptr) {
+      if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
+        return err;
+      } else {
+        TRITONSERVER_ErrorDelete(err);
+      }
+    } else {
+      LOG_MESSAGE(
+          TRITONSERVER_LOG_INFO,
+          (std::string("Jit profiling is ") +
+           (enable_inference_mode_ ? "enabled" : "disabled") +
+           " for model instance '" + Name() + "'")
+              .c_str());
+    }
+
+    // If 'ENABLE_JIT_EXECUTOR' is not present in 'parameters' then no update is
+    // made to 'enable_inference_mode_'.
+    err = ParseParameter(params, "ENABLE_JIT_EXECUTOR", &enable_jit_executor_);
+    if (err != nullptr) {
+      if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
+        return err;
+      } else {
+        TRITONSERVER_ErrorDelete(err);
+      }
+    } else {
+      LOG_MESSAGE(
+          TRITONSERVER_LOG_INFO,
+          (std::string("Jit executor is ") +
+           (enable_inference_mode_ ? "enabled" : "disabled") +
+           " for model instance '" + Name() + "'")
+              .c_str());
+    }
 
     // If 'ENABLE_NVFUSER' is not present in 'parameters' then no
     // update is made to 'enable_nvfuser'.
@@ -848,6 +917,10 @@ ModelInstanceState::Execute(
     // enable/disable optimized execution
     torch::jit::setGraphExecutorOptimize(
         model_state_->EnabledOptimizedExecution());
+    torch::jit::setTensorExprFuserEnabled(
+        model_state_->EnabledTensorExprFuser());
+    torch::jit::getProfilingMode() = model_state_->EnabledJitProfilingMode();
+    torch::jit::getExecutorMode() = model_state_->EnabledJitExecutorMode();
 
     // enable/disable inference mode - supersedes NoGradGuard
     torch::InferenceMode infer_guard(model_state_->EnabledInferenceMode());
@@ -947,8 +1020,8 @@ ModelInstanceState::SetInputTensors(
     // The input must be in contiguous CPU/GPU memory.
     std::vector<std::pair<TRITONSERVER_MemoryType, int64_t>> alloc_perference;
     if (device_.is_cpu()) {
-      alloc_perference = {{TRITONSERVER_MEMORY_CPU_PINNED, 0},
-                          {TRITONSERVER_MEMORY_CPU, 0}};
+      alloc_perference = {
+          {TRITONSERVER_MEMORY_CPU_PINNED, 0}, {TRITONSERVER_MEMORY_CPU, 0}};
     } else {
       alloc_perference = {{TRITONSERVER_MEMORY_GPU, device_.index()}};
     }

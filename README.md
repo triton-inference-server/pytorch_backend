@@ -162,6 +162,16 @@ key: "ENABLE_NVFUSER"
 }
 ```
 
+* Additional Optimizations: Three additional boolean parameters are available to disable
+certain Torch optimizations that can sometimes cause latency regressions in models with
+complex execution modes and dynamic shapes. If not specified, all are enabled by default.
+
+    `ENABLE_JIT_EXECUTOR`
+
+    `ENABLE_JIT_PROFILING`
+
+    `ENABLE_TORCH_TENSOR_FUSER`
+
 ### Important Note
 
 * The execution of pytorch model on GPU is asynchronous in nature. See
