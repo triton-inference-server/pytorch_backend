@@ -25,7 +25,6 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <stdint.h>
-
 #include <exception>
 
 #include "libtorch_utils.h"
@@ -152,8 +151,8 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     : BackendModel(triton_model), enable_optimized_execution_(true),
-      enable_tensor_fuser_(true), enable_jit_profiling_(true),
-      enable_jit_executor_(true), enable_inference_mode_(false),
+      enable_inference_mode_(false), enable_tensor_fuser_(true),
+      enable_jit_profiling_(true), enable_jit_executor_(true), 
       enable_nvfuser_pair_({false, false})
 {
 }
@@ -266,9 +265,9 @@ ModelState::ParseParameters()
             .c_str());
 
     // If 'ENABLE_TORCH_TENSOR_FUSER' is not present in 'parameters' then no
-    // update is made to 'enable_inference_mode_'.
+    // update is made to 'enable_tensor_fuser_'.
     err = ParseParameter(
-        params, "ENABLE_TORCH_TENSOR_FUSER", &enable_tensor_fuser_);
+        params, "ENABLE_TENSOR_FUSER", &enable_tensor_fuser_);
     if (err != nullptr) {
       if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
         return err;
@@ -279,13 +278,13 @@ ModelState::ParseParameters()
       LOG_MESSAGE(
           TRITONSERVER_LOG_INFO,
           (std::string("Torch tensor fuser is ") +
-           (enable_inference_mode_ ? "enabled" : "disabled") +
+           (enable_tensor_fuser_ ? "enabled" : "disabled") +
            " for model instance '" + Name() + "'")
               .c_str());
     }
 
     // If 'ENABLE_JIT_PROFILING' is not present in 'parameters' then no update
-    // is made to 'enable_inference_mode_'.
+    // is made to 'enable_jit_profiling_'.
     err =
         ParseParameter(params, "ENABLE_JIT_PROFILING", &enable_jit_profiling_);
     if (err != nullptr) {
@@ -298,13 +297,13 @@ ModelState::ParseParameters()
       LOG_MESSAGE(
           TRITONSERVER_LOG_INFO,
           (std::string("Jit profiling is ") +
-           (enable_inference_mode_ ? "enabled" : "disabled") +
+           (enable_jit_profiling_ ? "enabled" : "disabled") +
            " for model instance '" + Name() + "'")
               .c_str());
     }
 
     // If 'ENABLE_JIT_EXECUTOR' is not present in 'parameters' then no update is
-    // made to 'enable_inference_mode_'.
+    // made to 'enable_jit_executor_'.
     err = ParseParameter(params, "ENABLE_JIT_EXECUTOR", &enable_jit_executor_);
     if (err != nullptr) {
       if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
@@ -316,32 +315,34 @@ ModelState::ParseParameters()
       LOG_MESSAGE(
           TRITONSERVER_LOG_INFO,
           (std::string("Jit executor is ") +
-           (enable_inference_mode_ ? "enabled" : "disabled") +
+           (enable_jit_executor_ ? "enabled" : "disabled") +
            " for model instance '" + Name() + "'")
               .c_str());
     }
 
     // If 'ENABLE_NVFUSER' is not present in 'parameters' then no
     // update is made to 'enable_nvfuser'.
-    bool enable_nvfuser = false;
-    err = ParseParameter(params, "ENABLE_NVFUSER", &enable_nvfuser);
-    if (err != nullptr) {
-      if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
-        return err;
+    if (enable_tensor_fuser_) {
+      bool enable_nvfuser = false;
+      err = ParseParameter(params, "ENABLE_NVFUSER", &enable_nvfuser);
+      if (err != nullptr) {
+        if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
+          return err;
+        } else {
+          LOG_MESSAGE(
+              TRITONSERVER_LOG_INFO, (std::string("NvFuser is not specified") +
+                                      " for model instance '" + Name() + "'")
+                                        .c_str());
+          TRITONSERVER_ErrorDelete(err);
+        }
       } else {
+        enable_nvfuser_pair_ = {true, enable_nvfuser};
         LOG_MESSAGE(
-            TRITONSERVER_LOG_INFO, (std::string("NvFuser is not specified") +
+            TRITONSERVER_LOG_INFO, (std::string("NvFuser is ") +
+                                    (enable_nvfuser ? "enabled" : "disabled") +
                                     " for model instance '" + Name() + "'")
-                                       .c_str());
-        TRITONSERVER_ErrorDelete(err);
+                                      .c_str());
       }
-    } else {
-      enable_nvfuser_pair_ = {true, enable_nvfuser};
-      LOG_MESSAGE(
-          TRITONSERVER_LOG_INFO, (std::string("NvFuser is ") +
-                                  (enable_nvfuser ? "enabled" : "disabled") +
-                                  " for model instance '" + Name() + "'")
-                                     .c_str());
     }
   }
 

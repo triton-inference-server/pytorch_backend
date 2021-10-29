@@ -145,7 +145,8 @@ key: "INFERENCE_MODE"
 ```
 
 * `ENABLE_NVFUSER`: Boolean flag to enable the NvFuser (CUDA Graph Fuser) optimization for
-TorchScript models. If not specified, the default pytorch fuser is used. 
+TorchScript models. If not specified, the default pytorch fuser is used.
+If `ENABLE_TENSOR_FUSER` is specified and _disabled_, the NvFuser configuration is ignored.
 
 Please note that in some models generated using trace in old PyTorch versions might not work
 correctly with NvFuser. We recommend using scripting and a recent version of PyTorch
@@ -170,7 +171,7 @@ complex execution modes and dynamic shapes. If not specified, all are enabled by
 
     `ENABLE_JIT_PROFILING`
 
-    `ENABLE_TORCH_TENSOR_FUSER`
+    `ENABLE_TENSOR_FUSER`
 
 ### Important Note
 
