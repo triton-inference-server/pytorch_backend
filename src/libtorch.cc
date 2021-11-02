@@ -55,7 +55,6 @@
 
 namespace triton { namespace backend { namespace pytorch {
 
-
 //
 // ModelState
 //
@@ -110,9 +109,10 @@ class ModelState : public BackendModel {
   // Flag to indicate whether inference mode is enabled. Defaults to false.
   bool enable_inference_mode_;
 
-  // Flag pair to enable/disable various JIT components. Default to false,
-  // false. Default behavior is to do nothing if not explicitly set. If tensor
-  // fuser flag is set, it must be enabled for nvfuser to be an option.
+  // Flag pairs to indicate if various JIT settings are set and
+  // enabled respectively. Defaults to (false, true). Default behavior
+  // is to do nothing if not explicitly set. Tensor fuser flag is
+  // ignore if nvfuser is explicitly set.
   std::pair<bool, bool> enable_tensor_fuser_pair_;
   std::pair<bool, bool> enable_jit_profiling_pair_;
   std::pair<bool, bool> enable_jit_executor_pair_;
@@ -121,7 +121,6 @@ class ModelState : public BackendModel {
   // Defaults to (false, false).
   std::pair<bool, bool> enable_nvfuser_pair_;
 };
-
 
 TRITONSERVER_Error*
 ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
@@ -160,9 +159,10 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     : BackendModel(triton_model), enable_optimized_execution_(true),
-      enable_inference_mode_(false), enable_tensor_fuser_pair_({false, false}),
-      enable_jit_profiling_pair_({false, false}),
-      enable_jit_executor_({false, false}), enable_nvfuser_pair_({false, false})
+      enable_inference_mode_(false), enable_tensor_fuser_pair_({false, true}),
+      enable_jit_profiling_pair_({false, true}),
+      enable_jit_executor_pair_({false, true}),
+      enable_nvfuser_pair_({false, false})
 {
 }
 
@@ -929,33 +929,43 @@ ModelInstanceState::Execute(
     // enable/disable optimized execution
     torch::jit::setGraphExecutorOptimize(
         model_state_->EnabledOptimizedExecution());
-    torch::jit::setTensorExprFuserEnabled(
-        model_state_->EnabledTensorExprFuser());
-    torch::jit::getProfilingMode() = model_state_->EnabledJitProfiling();
-    torch::jit::getExecutorMode() = model_state_->EnabledJitExecutor();
 
     // enable/disable inference mode - supersedes NoGradGuard
     torch::InferenceMode infer_guard(model_state_->EnabledInferenceMode());
 
-    // NvFuser is only supported for GPU instances. No change is made if
-    // enable_nvfuser is not set by user
-    auto fuser_pair = model_state_->EnabledTensorExprFuser();
-    // run allow nvfuser setup below to run if tensorfuser configuration isn't
-    // overridden (fuser_pair[0] == false) or if it is explicitly enabled
-    if (!(std::get<0>(fuser_pair) && !std::get<1>(fuser_pair)) {
-      auto nvfuser_pair = model_state_->EnabledNvfuserPair();
-      if (std::get<0>(nvfuser_pair)) {
-        if (std::get<1>(nvfuser_pair) && (device_ != torch::kCPU)) {
-          torch::jit::overrideCanFuseOnCPU(false);
-          torch::jit::overrideCanFuseOnGPU(false);
-          torch::jit::setTensorExprFuserEnabled(false);
-          torch::jit::RegisterCudaFuseGraph::registerPass(true);
-        } else {
-          torch::jit::overrideCanFuseOnCPU(true);
-          torch::jit::overrideCanFuseOnGPU(true);
-          torch::jit::setTensorExprFuserEnabled(true);
-          torch::jit::RegisterCudaFuseGraph::registerPass(false);
-        }
+    // JIT. No change is made unless parameter is explicitly set.
+    if (std::get<0>(model_state_->EnabledJitProfiling())) {
+      torch::jit::getProfilingMode() =
+          std::get<1>(model_state_->EnabledJitProfiling());
+    }
+
+    if (std::get<0>(model_state_->EnabledJitExecutor())) {
+      torch::jit::getExecutorMode() =
+          std::get<1>(model_state_->EnabledJitExecutor());
+    }
+
+    // Fuser. Parameter is ignored if NVFuser parameter is explicitily
+    // set (either enabled or disabled). No change is made unless
+    // fuser is explicitly set in parameters.
+    if (!std::get<0>(model_state_->EnabledNvfuserPair()) &&
+        std::get<0>(model_state_->EnabledTensorExprFuser())) {
+      torch::jit::setTensorExprFuserEnabled(
+          std::get<1>(model_state_->EnabledTensorExprFuser()));
+    }
+
+    // NV-Fuser. No change is made unless parameter is explicitly set.
+    if (std::get<0>(model_state_->EnabledNvfuserPair())) {
+      if (std::get<1>(model_state_->EnabledNvfuserPair()) &&
+          (device_ != torch::kCPU)) {
+        torch::jit::overrideCanFuseOnCPU(false);
+        torch::jit::overrideCanFuseOnGPU(false);
+        torch::jit::setTensorExprFuserEnabled(false);
+        torch::jit::RegisterCudaFuseGraph::registerPass(true);
+      } else {
+        torch::jit::overrideCanFuseOnCPU(true);
+        torch::jit::overrideCanFuseOnGPU(true);
+        torch::jit::setTensorExprFuserEnabled(true);
+        torch::jit::RegisterCudaFuseGraph::registerPass(false);
       }
     }
 

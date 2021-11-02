@@ -30,7 +30,7 @@
 
 # PyTorch (LibTorch) Backend
 
-The Triton backend for [PyTorch](https://github.com/pytorch/pytorch). 
+The Triton backend for [PyTorch](https://github.com/pytorch/pytorch).
 You can learn more about Triton backends in the [backend
 repo](https://github.com/triton-inference-server/backend). Ask
 questions or report problems on the [issues
@@ -86,7 +86,7 @@ nvcr.io/nvidia/pytorch:21.02-py3.
 Copy over the LibTorch and Torchvision headers and libraries from the
 [PyTorch NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch)
 into local directories. You can see which headers and libraries
-are needed/copied from the docker. 
+are needed/copied from the docker.
 
 ```
 $ mkdir build
@@ -103,11 +103,11 @@ Triton exposes some flags to control the execution mode of the TorchScript model
 the Parameters section of the model's 'config.pbtxt' file.
 
 * `DISABLE_OPTIMIZED_EXECUTION`: Boolean flag to disable the optimized execution
-of TorchScript models. By default the optimized execuiton is always enabled. 
+of TorchScript models. By default the optimized execuiton is always enabled.
 
 The initial calls to a loaded TorchScript model take extremely long. Due to this longer
-model warmup [issue](https://github.com/pytorch/pytorch/issues/57894), Triton also allows 
-execution of models without these optimizations. In some models, optimized execution 
+model warmup [issue](https://github.com/pytorch/pytorch/issues/57894), Triton also allows
+execution of models without these optimizations. In some models, optimized execution
 does not benefit performance as seen [here](https://github.com/pytorch/pytorch/issues/19978)
 and in other cases impacts performance negatively, as seen [here](https://github.com/pytorch/pytorch/issues/53824).
 
@@ -123,7 +123,7 @@ key: "DISABLE_OPTIMIZED_EXECUTION"
 ```
 
 * `INFERENCE_MODE`: Boolean flag to enable the Inference Mode execution
-of TorchScript models. By default the inference mode is disabled. 
+of TorchScript models. By default the inference mode is disabled.
 
 [InferenceMode](https://pytorch.org/cppdocs/notes/inference_mode.html) is a new
 RAII guard analogous to NoGradMode to be used when you are certain your operations
@@ -144,9 +144,10 @@ key: "INFERENCE_MODE"
 }
 ```
 
-* `ENABLE_NVFUSER`: Boolean flag to enable the NvFuser (CUDA Graph Fuser) optimization for
-TorchScript models. If not specified, the default pytorch fuser is used.
-If `ENABLE_TENSOR_FUSER` is specified and _disabled_, the NvFuser configuration is ignored.
+* `ENABLE_NVFUSER`: Boolean flag to enable the NvFuser (CUDA Graph
+Fuser) optimization for TorchScript models. If not specified, the
+default pytorch fuser is used.  If `ENABLE_NVFUSER` is specified, the
+`ENABLE_TENSOR_FUSER` configuration (see below) is ignored.
 
 Please note that in some models generated using trace in old PyTorch versions might not work
 correctly with NvFuser. We recommend using scripting and a recent version of PyTorch
