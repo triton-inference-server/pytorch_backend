@@ -288,7 +288,7 @@ ModelState::ParseParameters()
       LOG_MESSAGE(
           TRITONSERVER_LOG_INFO,
           (std::string("Tensor fuser is ") +
-           (enable_tensor_fuser_ ? "enabled" : "disabled") +
+           (enable_tensor_fuser ? "enabled" : "disabled") +
            " for model instance '" + Name() + "'")
               .c_str());
     }
