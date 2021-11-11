@@ -117,11 +117,11 @@ endif() # TRITON_ENABLE_GPU
 configure_file(src/libtriton_pytorch.ldscript libtriton_pytorch.ldscript COPYONLY)
 
 if (TRITON_PYTORCH_ENABLE_TORCHTRT)
-   set(TORCHTRT_COPY_COMMAND "docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch-tensorrt/lib/libtorchtrtrt.so libtorchtrtrt.so")
-   set(TORCHTRT_LIBS "libtorchtrtrt.so")												      
+   set(TORCHTRT_COPY_COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch_tensorrt/lib/libtorchtrt_runtime.so libtorchtrt_runtime.so)
+   set(TORCHTRT_LIBS "libtorchtrt_runtime.so")												      
 else()	     
    set(TORCHTRT_COMMAND "true")
-   unset TORCHTRT_LIBS											        
+   unset(TORCHTRT_LIBS)
 endif()
 
 if (${TRITON_PYTORCH_DOCKER_BUILD})
@@ -298,7 +298,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
   )
 endif() # TRITON_PYTORCH_DOCKER_BUILD
 
-set(TRITON_PYTORCH_LDFLAGS "")
+set(TRITON_PYTORCH_LDFLAGS "-L.")
 FOREACH(p ${TRITON_PYTORCH_LIB_PATHS} ${TRITON_PYTORCH_TORCHTRT_LIB_PATH})
   set(TRITON_PYTORCH_LDFLAGS ${TRITON_PYTORCH_LDFLAGS} "-L${p}")
 ENDFOREACH(p)
