@@ -41,11 +41,20 @@ project(tritonpytorchbackend LANGUAGES C CXX)
 #   - Set TRITON_PYTORCH_DOCKER_IMAGE to use the docker image of
 #     PyTorch to base the build off.
 #
+# TRITON_PYTORCH_ENABLE_TORCHTRT: enables Torch-TRT runtime support.
+#   With TRITON_PYTORCH_DOCKER_IMAGE: set if to OFF for images before 21.11
+#   Without TRITON_PYTORCH_DOCKER_IMAGE:
+#     If you leave it ON: set TRITON_PYTORCH_TORCHTRT_LIB_PATH to Torch-TRT runtime lib. 
+#
+
 option(TRITON_ENABLE_GPU "Enable GPU support in backend" ON)
 option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
+option(TRITON_PYTORCH_ENABLE_TORCHTRT "Enable TorchTRT support" ON)
+
 set(TRITON_PYTORCH_DOCKER_IMAGE "" CACHE STRING "Docker image containing the PyTorch build required by backend.")
 set(TRITON_PYTORCH_INCLUDE_PATHS "" CACHE PATH "Paths to Torch includes")
 set(TRITON_PYTORCH_LIB_PATHS "" CACHE PATH "Paths to Torch libraries")
+set(TRITON_PYTORCH_TORCHTRT_LIB_PATH "" CACHE PATH "Path to TorchTRT runtime library")
 
 set(TRITON_BACKEND_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/backend repo")
 set(TRITON_CORE_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/core repo")
@@ -107,6 +116,14 @@ endif() # TRITON_ENABLE_GPU
 #
 configure_file(src/libtriton_pytorch.ldscript libtriton_pytorch.ldscript COPYONLY)
 
+if (TRITON_PYTORCH_ENABLE_TORCHTRT)
+   set(TORCHTRT_COPY_COMMAND "docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch-tensorrt/lib/libtorchtrtrt.so libtorchtrtrt.so")
+   set(TORCHTRT_LIBS "libtorchtrtrt.so")												      
+else()	     
+   set(TORCHTRT_COMMAND "true")
+   unset TORCHTRT_LIBS											        
+endif()
+
 if (${TRITON_PYTORCH_DOCKER_BUILD})
   if (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
     set(LIBS_ARCH "aarch64")
@@ -147,12 +164,13 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
       "libopencv_core.so"
       "libpng16.so"
   )
-
+  
   string(REPLACE ";" " " CONDA_LIBS_STR "${CONDA_LIBS}")
 
   add_custom_command(
     OUTPUT
       ${PT_LIBS}
+      ${TORCHTRT_LIBS}
       ${OPENCV_LIBS}
       LICENSE.pytorch
       include/torch
@@ -168,6 +186,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libtorch_cpu.so libtorch_cpu.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libtorch_cuda.so libtorch_cuda.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/vision/build/libtorchvision.so libtorchvision.so
+    COMMAND ${TORCHTRT_COPY_COMMAND}
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/pytorch/LICENSE LICENSE.pytorch
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/include include/torch
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/pytorch/torch/csrc/jit/codegen include/torch/torch/csrc/jit/codegen
@@ -189,7 +208,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMENT "Extracting pytorch and torchvision libraries and includes from ${TRITON_PYTORCH_DOCKER_IMAGE}"
     VERBATIM
   )
-  add_custom_target(ptlib_target DEPENDS ${PT_LIBS} ${OPENCV_LIBS})
+  add_custom_target(ptlib_target DEPENDS ${PT_LIBS} ${TORCHTRT_LIBS} ${OPENCV_LIBS})
   add_library(ptlib SHARED IMPORTED GLOBAL)
   add_dependencies(ptlib ptlib_target)
 
@@ -280,7 +299,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
 endif() # TRITON_PYTORCH_DOCKER_BUILD
 
 set(TRITON_PYTORCH_LDFLAGS "")
-FOREACH(p ${TRITON_PYTORCH_LIB_PATHS})
+FOREACH(p ${TRITON_PYTORCH_LIB_PATHS} ${TRITON_PYTORCH_TORCHTRT_LIB_PATH})
   set(TRITON_PYTORCH_LDFLAGS ${TRITON_PYTORCH_LDFLAGS} "-L${p}")
 ENDFOREACH(p)
 
@@ -292,6 +311,7 @@ target_link_libraries(
     triton-core-serverstub # from repo-core
     triton-backend-utils   # from repo-backend
     ${TRITON_PYTORCH_LDFLAGS}
+    ${TORCHTRT_LIBS}
     -ltorch
     -ltorchvision
 )
@@ -321,7 +341,7 @@ install(
 
 if (${TRITON_PYTORCH_DOCKER_BUILD})
   set(PT_LIB_PATHS "")
-  FOREACH(plib ${PT_LIBS} ${OPENCV_LIBS})
+  FOREACH(plib ${PT_LIBS} ${TORCHTRT_LIBS} ${OPENCV_LIBS})
     set(PT_LIB_PATHS ${PT_LIB_PATHS} "${CMAKE_CURRENT_BINARY_DIR}/${plib}")
   ENDFOREACH(plib)
 
@@ -332,7 +352,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/pytorch
   )
 
-  FOREACH(plib ${PT_LIBS} ${OPENCV_LIBS})
+  FOREACH(plib ${PT_LIBS} ${TORCHTRT_LIBS} ${OPENCV_LIBS})
     install(
       CODE
         "EXECUTE_PROCESS(
