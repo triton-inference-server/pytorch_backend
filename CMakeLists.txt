@@ -117,10 +117,12 @@ endif() # TRITON_ENABLE_GPU
 configure_file(src/libtriton_pytorch.ldscript libtriton_pytorch.ldscript COPYONLY)
 
 if (TRITON_PYTORCH_ENABLE_TORCHTRT)
-   set(TORCHTRT_COPY_COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch_tensorrt/lib/libtorchtrt_runtime.so libtorchtrt_runtime.so; docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch_tensorrt/bin/torchtrtc torchtrtc)
+   set(TORCHTRT_COPY_COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch_tensorrt/lib/libtorchtrt_runtime.so libtorchtrt_runtime.so)
+   set(TORCHTRT_BIN_COPY_COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch_tensorrt/bin/torchtrtc torchtrtc)
    set(TORCHTRT_LIBS "libtorchtrt_runtime.so")												      
 else()	     
    set(TORCHTRT_COPY_COMMAND "true")
+   set(TORCHTRT_BIN_COPY_COMMAND "true")
    unset(TORCHTRT_LIBS)
 endif()
 
@@ -187,6 +189,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libtorch_cuda.so libtorch_cuda.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/vision/build/libtorchvision.so libtorchvision.so
     COMMAND ${TORCHTRT_COPY_COMMAND}
+    COMMAND ${TORCHTRT_BIN_COPY_COMMAND}
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/pytorch/LICENSE LICENSE.pytorch
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/include include/torch
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/pytorch/torch/csrc/jit/codegen include/torch/torch/csrc/jit/codegen
@@ -353,7 +356,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
   )
 
   install(
-    FILES       torchtrtc
+    FILES       ${CMAKE_CURRENT_BINARY_DIR}/torchtrtc
     DESTINATION ${CMAKE_INSTALL_PREFIX}/bin
   )
 
