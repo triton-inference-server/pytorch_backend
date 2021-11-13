@@ -117,10 +117,10 @@ endif() # TRITON_ENABLE_GPU
 configure_file(src/libtriton_pytorch.ldscript libtriton_pytorch.ldscript COPYONLY)
 
 if (TRITON_PYTORCH_ENABLE_TORCHTRT)
-   set(TORCHTRT_COPY_COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch_tensorrt/lib/libtorchtrt_runtime.so libtorchtrt_runtime.so)
+   set(TORCHTRT_COPY_COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch_tensorrt/lib/libtorchtrt_runtime.so libtorchtrt_runtime.so; docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch_tensorrt/bin/torchtrtc torchtrtc)
    set(TORCHTRT_LIBS "libtorchtrt_runtime.so")												      
 else()	     
-   set(TORCHTRT_COMMAND "true")
+   set(TORCHTRT_COPY_COMMAND "true")
    unset(TORCHTRT_LIBS)
 endif()
 
@@ -350,6 +350,11 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
       ${PT_LIB_PATHS}
       ${CMAKE_CURRENT_BINARY_DIR}/LICENSE.pytorch
     DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/pytorch
+  )
+
+  install(
+    FILES       torchtrtc
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/bin
   )
 
   FOREACH(plib ${PT_LIBS} ${TORCHTRT_LIBS} ${OPENCV_LIBS})
