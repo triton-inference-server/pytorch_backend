@@ -155,6 +155,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
       "libtorch.so"
       "libtorch_cpu.so"
       "libtorch_cuda.so"
+      "libtorch_global_deps.so"
       "libtorchvision.so"
   )
   set(OPENCV_LIBS
@@ -187,6 +188,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libtorch.so libtorch.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libtorch_cpu.so libtorch_cpu.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libtorch_cuda.so libtorch_cuda.so
+    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libtorch_global_deps.so libtorch_global_deps.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/vision/build/libtorchvision.so libtorchvision.so
     COMMAND ${TORCHTRT_COPY_COMMAND}
     COMMAND ${TORCHTRT_BIN_COPY_COMMAND}
