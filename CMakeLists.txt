@@ -41,15 +41,11 @@ project(tritonpytorchbackend LANGUAGES C CXX)
 #   - Set TRITON_PYTORCH_DOCKER_IMAGE to use the docker image of
 #     PyTorch to base the build off.
 #
-# TRITON_PYTORCH_ENABLE_TORCHTRT: enables Torch-TRT runtime support. Default is OFF.
-#   With TRITON_PYTORCH_DOCKER_IMAGE: will be set automatically
-#   Without TRITON_PYTORCH_DOCKER_IMAGE:
-#     If you set it to ON: make sure to add Torch-TRT runtime lib path to TRITON_PYTORCH_LIB_PATHS. 
 #
 
 option(TRITON_ENABLE_GPU "Enable GPU support in backend" ON)
 option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
-option(TRITON_PYTORCH_ENABLE_TORCHTRT "Enable TorchTRT support" OFF)
+option(TRITON_PYTORCH_ENABLE_TORCHTRT "Enable TorchTRT support" ON)
 
 set(TRITON_PYTORCH_DOCKER_IMAGE "" CACHE STRING "Docker image containing the PyTorch build required by backend.")
 set(TRITON_PYTORCH_INCLUDE_PATHS "" CACHE PATH "Paths to Torch includes")
@@ -69,6 +65,11 @@ if(TRITON_PYTORCH_LIB_PATHS STREQUAL "")
     message(FATAL_ERROR "Using the PyTorch docker based build requires TRITON_PYTORCH_DOCKER_IMAGE")
   endif()
   set(TRITON_PYTORCH_DOCKER_BUILD ON)
+else()
+  # Look for installed Torch-TRT package in lib paths
+  if(NOT TRITON_PYTORCH_LIB_PATHS MATCHES "torch_tensorrt")
+    set(TRITON_PYTORCH_ENABLE_TORCHTRT OFF)
+  endif()
 endif()
 message(STATUS "Using PyTorch docker: ${TRITON_PYTORCH_DOCKER_IMAGE}")
 
@@ -158,26 +159,23 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
   )
 
   string(REPLACE ";" " " CONDA_LIBS_STR "${CONDA_LIBS}")
-  
-  execute_process(
-    COMMAND "docker run --rm -it  ${TRITON_PYTORCH_DOCKER_IMAGE} ls /opt/conda/lib/python3.8/site-packages/torch_tensorrt/lib/libtorchtrt_runtime.so"
-    RESULT_VARIABLE HAVE_TORCHTRT
-    OUTPUT_QUIET
-    ERROR_QUIET
-  )
 
-  if (HAVE_TORCHTRT)
-     set(TRITON_PYTORCH_ENABLE_TORCHTRT ON)
-  else()
-     set(TRITON_PYTORCH_ENABLE_TORCHTRT OFF)
-  endif()
-  
-  if (TRITON_PYTORCH_ENABLE_TORCHTRT)
-    set(PT_LIBS
-        ${PT_LIBS}
-        "libtorchtrt_runtime.so"
+  if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
+    execute_process(
+      COMMAND docker run --rm -it  ${TRITON_PYTORCH_DOCKER_IMAGE} ls /opt/conda/lib/python3.8/site-packages/torch_tensorrt/lib/libtorchtrt_runtime.so
+      RESULT_VARIABLE TORCHTRT_STATUS
+      OUTPUT_QUIET
+      ERROR_QUIET
     )
-  endif() #TRITON_PYTORCH_ENABLE_TORCHTRT
+    if (${TRITON_ENABLE_GPU} AND ${TORCHTRT_STATUS} EQUAL 0)
+      set(PT_LIBS
+          ${PT_LIBS}
+          "libtorchtrt_runtime.so"
+      )
+    else()
+      set(TRITON_PYTORCH_ENABLE_TORCHTRT OFF)
+    endif() # ${TRITON_ENABLE_GPU} AND ${TORCHTRT_STATUS} EQUAL 0
+  endif() # ${TRITON_PYTORCH_ENABLE_TORCHTRT}
 
   add_custom_command(
     OUTPUT
@@ -231,7 +229,6 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     PROPERTIES
       IMPORTED_LOCATION libtorch.so
   )
-
 endif() # TRITON_PYTORCH_DOCKER_BUILD
 
 add_library(
@@ -317,15 +314,15 @@ set (TRITON_PYTORCH_LIBS
 	"-ltorchvision"
 )
 
-if (TRITON_PYTORCH_ENABLE_TORCHTRT)
-   message(STATUS "Torch-TRT support is ON")
+message(STATUS "Torch-TRT support is ${TRITON_PYTORCH_ENABLE_TORCHTRT}")
+if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
    set(TRITON_PYTORCH_LIBS
        ${TRITON_PYTORCH_LIBS}
        "-ltorchtrt_runtime"
    )
 endif() #TRITON_PYTORCH_ENABLE_TORCHTRT
 
-set(TRITON_PYTORCH_LDFLAGS "-L.")
+set(TRITON_PYTORCH_LDFLAGS "")
 FOREACH(p ${TRITON_PYTORCH_LIB_PATHS})
   set(TRITON_PYTORCH_LDFLAGS ${TRITON_PYTORCH_LDFLAGS} "-L${p}")
 ENDFOREACH(p)
@@ -377,7 +374,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/pytorch
   )
 
-  if (TRITON_PYTORCH_ENABLE_TORCHTRT)
+  if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
     install(
       FILES
         ${CMAKE_CURRENT_BINARY_DIR}/torchtrtc
