@@ -164,9 +164,10 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     execute_process(
       COMMAND docker run --rm -it  ${TRITON_PYTORCH_DOCKER_IMAGE} ls /opt/conda/lib/python3.8/site-packages/torch_tensorrt/lib/libtorchtrt_runtime.so
       RESULT_VARIABLE TORCHTRT_STATUS
-      OUTPUT_QUIET
+      OUTPUT_VARIABLE TORCHTRT_OUT
       ERROR_QUIET
     )
+    message("TORCHTRT_OUT is ${TORCHTRT_OUT}")
     if (${TRITON_ENABLE_GPU} AND ${TORCHTRT_STATUS} EQUAL 0)
       set(PT_LIBS
           ${PT_LIBS}
