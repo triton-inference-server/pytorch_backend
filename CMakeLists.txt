@@ -162,12 +162,12 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
 
   if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
     execute_process(
-      COMMAND docker run --rm -it  ${TRITON_PYTORCH_DOCKER_IMAGE} ls /opt/conda/lib/python3.8/site-packages/torch_tensorrt/lib/libtorchtrt_runtime.so
+      COMMAND /bin/sh -c "rm -fr /tmp/ttrt.so; docker rm -f pytorch_backend_ptlib > /dev/null 2>&1 || true; docker create --name pytorch_backend_ptlib ${TRITON_PYTORCH_DOCKER_IMAGE} && docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch_tensorrt/lib/libtorchtrt_runtime.so /tmp/ttrt.so && docker rm pytorch_backend_ptlib"
       RESULT_VARIABLE TORCHTRT_STATUS
       OUTPUT_VARIABLE TORCHTRT_OUT
-      ERROR_QUIET
+      ERROR_VARIABLE  TORCHTRT_ERR
     )
-    message("TORCHTRT_OUT is ${TORCHTRT_OUT}")
+    message("TORCHTRT_STATUS is ${TORCHTRT_STATUS}\nTORCHTRT_OUT is ${TORCHTRT_OUT}\nTORCHTRT_ERR is ${TORCHTRT_ERR}")
     if (${TRITON_ENABLE_GPU} AND ${TORCHTRT_STATUS} EQUAL 0)
       set(PT_LIBS
           ${PT_LIBS}
