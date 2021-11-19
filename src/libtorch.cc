@@ -225,29 +225,6 @@ ModelState::AutoCompleteConfig()
        Name() + "': not supported for pytorch backend")
           .c_str());
 
-  // If the model configuration doesn't specify any inputs or outputs
-  // then return error since pytorch backend does not support auto-completion.
-  size_t input_cnt = 0;
-  size_t output_cnt = 0;
-  {
-    triton::common::TritonJson::Value inputs;
-    if (ModelConfig().Find("input", &inputs)) {
-      input_cnt = inputs.ArraySize();
-    }
-
-    triton::common::TritonJson::Value outputs;
-    if (ModelConfig().Find("output", &outputs)) {
-      output_cnt = outputs.ArraySize();
-    }
-  }
-
-  if ((input_cnt == 0) || (output_cnt == 0)) {
-    return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_INTERNAL,
-        "model configuration must contain inputs and outputs since "
-        "auto-complete is not supported for pytorch backend");
-  }
-
   return nullptr;  // success
 }
 
@@ -618,7 +595,8 @@ ModelInstanceState::ValidateInputs()
   if (ios.ArraySize() == 0) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INTERNAL,
-        "model configuration must contain inputs, none were specified.");
+        "model configuration must contain at least one input, none were "
+        "specified.");
   }
 
   for (size_t i = 0; i < ios.ArraySize(); i++) {
@@ -671,7 +649,8 @@ ModelInstanceState::ValidateOutputs()
   if (ios.ArraySize() == 0) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INTERNAL,
-        "model configuration must contain outputs, none were specified.");
+        "model configuration must contain at least one output, none were "
+        "specified.");
   }
 
   for (size_t i = 0; i < ios.ArraySize(); i++) {
