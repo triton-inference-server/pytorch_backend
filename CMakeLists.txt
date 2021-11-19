@@ -41,11 +41,10 @@ project(tritonpytorchbackend LANGUAGES C CXX)
 #   - Set TRITON_PYTORCH_DOCKER_IMAGE to use the docker image of
 #     PyTorch to base the build off.
 #
-#
 
 option(TRITON_ENABLE_GPU "Enable GPU support in backend" ON)
 option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
-option(TRITON_PYTORCH_ENABLE_TORCHTRT "Enable TorchTRT support" ON)
+option(TRITON_PYTORCH_ENABLE_TORCHTRT "Enable TorchTRT support" OFF)
 
 set(TRITON_PYTORCH_DOCKER_IMAGE "" CACHE STRING "Docker image containing the PyTorch build required by backend.")
 set(TRITON_PYTORCH_INCLUDE_PATHS "" CACHE PATH "Paths to Torch includes")
@@ -67,8 +66,8 @@ if(TRITON_PYTORCH_LIB_PATHS STREQUAL "")
   set(TRITON_PYTORCH_DOCKER_BUILD ON)
 else()
   # Look for installed Torch-TRT package in lib paths
-  if(NOT TRITON_PYTORCH_LIB_PATHS MATCHES "torch_tensorrt")
-    set(TRITON_PYTORCH_ENABLE_TORCHTRT OFF)
+  if(TRITON_PYTORCH_ENABLE_TORCHTRT AND NOT TRITON_PYTORCH_LIB_PATHS MATCHES "torch_tensorrt")
+    message(WARNING "TRITON_PYTORCH_ENABLE_TORCHTRT is on, but TRITON_PYTORCH_LIB_PATHS does not contain Torch-TRT package install path!")
   endif()
 endif()
 message(STATUS "Using PyTorch docker: ${TRITON_PYTORCH_DOCKER_IMAGE}")
@@ -167,13 +166,14 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
       OUTPUT_VARIABLE TORCHTRT_OUT
       ERROR_VARIABLE  TORCHTRT_ERR
     )
-    message("TORCHTRT_STATUS is ${TORCHTRT_STATUS}\nTORCHTRT_OUT is ${TORCHTRT_OUT}\nTORCHTRT_ERR is ${TORCHTRT_ERR}")
+    # message("TORCHTRT_STATUS is ${TORCHTRT_STATUS}\nTORCHTRT_OUT is ${TORCHTRT_OUT}\nTORCHTRT_ERR is ${TORCHTRT_ERR}")
     if (${TRITON_ENABLE_GPU} AND ${TORCHTRT_STATUS} EQUAL 0)
       set(PT_LIBS
           ${PT_LIBS}
           "libtorchtrt_runtime.so"
       )
     else()
+      message(WARNING "GPU is OFF or PyTorch image does not have Torch-TRT installed - turning TRITON_PYTORCH_ENABLE_TORCHTRT OFF")
       set(TRITON_PYTORCH_ENABLE_TORCHTRT OFF)
     endif() # ${TRITON_ENABLE_GPU} AND ${TORCHTRT_STATUS} EQUAL 0
   endif() # ${TRITON_PYTORCH_ENABLE_TORCHTRT}
