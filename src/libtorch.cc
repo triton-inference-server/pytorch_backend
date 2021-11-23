@@ -592,6 +592,13 @@ ModelInstanceState::ValidateInputs()
   std::string deliminator = "__";
   int ip_index = 0;
 
+  if (ios.ArraySize() == 0) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INTERNAL,
+        "model configuration must contain at least one input, none were "
+        "specified.");
+  }
+
   for (size_t i = 0; i < ios.ArraySize(); i++) {
     triton::common::TritonJson::Value io;
     RETURN_IF_ERROR(ios.IndexAsObject(i, &io));
@@ -638,6 +645,13 @@ ModelInstanceState::ValidateOutputs()
   RETURN_IF_ERROR(model_state_->ModelConfig().MemberAsArray("output", &ios));
   std::string deliminator = "__";
   int op_index = 0;
+
+  if (ios.ArraySize() == 0) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INTERNAL,
+        "model configuration must contain at least one output, none were "
+        "specified.");
+  }
 
   for (size_t i = 0; i < ios.ArraySize(); i++) {
     triton::common::TritonJson::Value io;
