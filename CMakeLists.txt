@@ -108,6 +108,10 @@ FetchContent_MakeAvailable(repo-common repo-core repo-backend)
 #
 if(${TRITON_ENABLE_GPU})
   find_package(CUDAToolkit REQUIRED)
+else()
+  if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
+    message(FATAL_ERROR "TRITON_PYTORCH_ENABLE_TORCHTRT is ON when TRITON_ENABLE_GPU is OFF")
+  endif()
 endif() # TRITON_ENABLE_GPU
 
 #
@@ -160,22 +164,10 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
   string(REPLACE ";" " " CONDA_LIBS_STR "${CONDA_LIBS}")
 
   if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
-    execute_process(
-      COMMAND /bin/sh -c "rm -fr /tmp/ttrt.so; docker rm -f pytorch_backend_ptlib > /dev/null 2>&1 || true; docker create --name pytorch_backend_ptlib ${TRITON_PYTORCH_DOCKER_IMAGE} && docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch_tensorrt/lib/libtorchtrt_runtime.so /tmp/ttrt.so && docker rm pytorch_backend_ptlib"
-      RESULT_VARIABLE TORCHTRT_STATUS
-      OUTPUT_VARIABLE TORCHTRT_OUT
-      ERROR_VARIABLE  TORCHTRT_ERR
+    set(PT_LIBS
+        ${PT_LIBS}
+        "libtorchtrt_runtime.so"
     )
-    # message("TORCHTRT_STATUS is ${TORCHTRT_STATUS}\nTORCHTRT_OUT is ${TORCHTRT_OUT}\nTORCHTRT_ERR is ${TORCHTRT_ERR}")
-    if (${TRITON_ENABLE_GPU} AND ${TORCHTRT_STATUS} EQUAL 0)
-      set(PT_LIBS
-          ${PT_LIBS}
-          "libtorchtrt_runtime.so"
-      )
-    else()
-      message(WARNING "GPU is OFF or PyTorch image does not have Torch-TRT installed - turning TRITON_PYTORCH_ENABLE_TORCHTRT OFF")
-      set(TRITON_PYTORCH_ENABLE_TORCHTRT OFF)
-    endif() # ${TRITON_ENABLE_GPU} AND ${TORCHTRT_STATUS} EQUAL 0
   endif() # ${TRITON_PYTORCH_ENABLE_TORCHTRT}
 
   add_custom_command(
