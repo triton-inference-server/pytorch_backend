@@ -41,8 +41,11 @@ project(tritonpytorchbackend LANGUAGES C CXX)
 #   - Set TRITON_PYTORCH_DOCKER_IMAGE to use the docker image of
 #     PyTorch to base the build off.
 #
+
 option(TRITON_ENABLE_GPU "Enable GPU support in backend" ON)
 option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
+option(TRITON_PYTORCH_ENABLE_TORCHTRT "Enable TorchTRT support" OFF)
+
 set(TRITON_PYTORCH_DOCKER_IMAGE "" CACHE STRING "Docker image containing the PyTorch build required by backend.")
 set(TRITON_PYTORCH_INCLUDE_PATHS "" CACHE PATH "Paths to Torch includes")
 set(TRITON_PYTORCH_LIB_PATHS "" CACHE PATH "Paths to Torch libraries")
@@ -61,6 +64,11 @@ if(TRITON_PYTORCH_LIB_PATHS STREQUAL "")
     message(FATAL_ERROR "Using the PyTorch docker based build requires TRITON_PYTORCH_DOCKER_IMAGE")
   endif()
   set(TRITON_PYTORCH_DOCKER_BUILD ON)
+else()
+  # Look for installed Torch-TRT package in lib paths
+  if(TRITON_PYTORCH_ENABLE_TORCHTRT AND NOT TRITON_PYTORCH_LIB_PATHS MATCHES "torch_tensorrt")
+    message(WARNING "TRITON_PYTORCH_ENABLE_TORCHTRT is on, but TRITON_PYTORCH_LIB_PATHS does not contain Torch-TRT package install path!")
+  endif()
 endif()
 message(STATUS "Using PyTorch docker: ${TRITON_PYTORCH_DOCKER_IMAGE}")
 
@@ -100,6 +108,10 @@ FetchContent_MakeAvailable(repo-common repo-core repo-backend)
 #
 if(${TRITON_ENABLE_GPU})
   find_package(CUDAToolkit REQUIRED)
+else()
+  if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
+    message(FATAL_ERROR "TRITON_PYTORCH_ENABLE_TORCHTRT is ON when TRITON_ENABLE_GPU is OFF")
+  endif()
 endif() # TRITON_ENABLE_GPU
 
 #
@@ -136,6 +148,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
       "libtorch.so"
       "libtorch_cpu.so"
       "libtorch_cuda.so"
+      "libtorch_global_deps.so"
       "libtorchvision.so"
   )
   set(OPENCV_LIBS
@@ -149,6 +162,13 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
   )
 
   string(REPLACE ";" " " CONDA_LIBS_STR "${CONDA_LIBS}")
+
+  if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
+    set(PT_LIBS
+        ${PT_LIBS}
+        "libtorchtrt_runtime.so"
+    )
+  endif() # ${TRITON_PYTORCH_ENABLE_TORCHTRT}
 
   add_custom_command(
     OUTPUT
@@ -167,7 +187,10 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libtorch.so libtorch.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libtorch_cpu.so libtorch_cpu.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libtorch_cuda.so libtorch_cuda.so
+    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libtorch_global_deps.so libtorch_global_deps.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/vision/build/libtorchvision.so libtorchvision.so
+    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch_tensorrt/lib/libtorchtrt_runtime.so libtorchtrt_runtime.so || echo "error ignored..." || true
+    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch_tensorrt/bin/torchtrtc torchtrtc || echo "error ignored..." || true
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/pytorch/LICENSE LICENSE.pytorch
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/include include/torch
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/pytorch/torch/csrc/jit/codegen include/torch/torch/csrc/jit/codegen
@@ -279,6 +302,19 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
   )
 endif() # TRITON_PYTORCH_DOCKER_BUILD
 
+set (TRITON_PYTORCH_LIBS
+	"-ltorch"
+	"-ltorchvision"
+)
+
+message(STATUS "Torch-TRT support is ${TRITON_PYTORCH_ENABLE_TORCHTRT}")
+if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
+   set(TRITON_PYTORCH_LIBS
+       ${TRITON_PYTORCH_LIBS}
+       "-ltorchtrt_runtime"
+   )
+endif() #TRITON_PYTORCH_ENABLE_TORCHTRT
+
 set(TRITON_PYTORCH_LDFLAGS "")
 FOREACH(p ${TRITON_PYTORCH_LIB_PATHS})
   set(TRITON_PYTORCH_LDFLAGS ${TRITON_PYTORCH_LDFLAGS} "-L${p}")
@@ -292,8 +328,7 @@ target_link_libraries(
     triton-core-serverstub # from repo-core
     triton-backend-utils   # from repo-backend
     ${TRITON_PYTORCH_LDFLAGS}
-    -ltorch
-    -ltorchvision
+    ${TRITON_PYTORCH_LIBS}
 )
 
 if(${TRITON_ENABLE_GPU})
@@ -331,6 +366,14 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
       ${CMAKE_CURRENT_BINARY_DIR}/LICENSE.pytorch
     DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/pytorch
   )
+
+  if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
+    install(
+      FILES
+        ${CMAKE_CURRENT_BINARY_DIR}/torchtrtc
+      DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/pytorch
+    )
+  endif()
 
   FOREACH(plib ${PT_LIBS} ${OPENCV_LIBS})
     install(
