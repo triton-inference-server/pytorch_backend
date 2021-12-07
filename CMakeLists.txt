@@ -45,6 +45,7 @@ project(tritonpytorchbackend LANGUAGES C CXX)
 option(TRITON_ENABLE_GPU "Enable GPU support in backend" ON)
 option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
 option(TRITON_PYTORCH_ENABLE_TORCHTRT "Enable TorchTRT support" OFF)
+option(TRITON_PYTORCH_ENABLE_TORCHVISION "Enable Torchvision support" ON)
 
 set(TRITON_PYTORCH_DOCKER_IMAGE "" CACHE STRING "Docker image containing the PyTorch build required by backend.")
 set(TRITON_PYTORCH_INCLUDE_PATHS "" CACHE PATH "Paths to Torch includes")
@@ -70,8 +71,12 @@ else()
   if(TRITON_PYTORCH_ENABLE_TORCHTRT AND NOT EXISTS "${TRITON_PYTORCH_LIB_PATHS}/libtorchtrt_runtime.so")
     message(WARNING "TRITON_PYTORCH_ENABLE_TORCHTRT is on, but TRITON_PYTORCH_LIB_PATHS does not contain Torch-TRT package")
   endif()
+
+    # Look for installed Torchvision package in lib paths
+  if(TRITON_PYTORCH_ENABLE_TORCHVISION AND NOT EXISTS "${TRITON_PYTORCH_LIB_PATHS}/libtorchvision.so")
+    message(WARNING "TRITON_PYTORCH_ENABLE_TORCHVISION is on, but TRITON_PYTORCH_LIB_PATHS does not contain Torchvision package")
+  endif()
 endif()
-message(STATUS "Using PyTorch docker: ${TRITON_PYTORCH_DOCKER_IMAGE}")
 
 # Python.h needed by torch headers.
 find_package(Python3 REQUIRED COMPONENTS Development)
@@ -303,10 +308,15 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
   )
 endif() # TRITON_PYTORCH_DOCKER_BUILD
 
-set (TRITON_PYTORCH_LIBS
-	"-ltorch"
-	"-ltorchvision"
-)
+set (TRITON_PYTORCH_LIBS "-ltorch")
+
+message(STATUS "Torchvision support is ${TRITON_PYTORCH_ENABLE_TORCHVISION}")
+if (${TRITON_PYTORCH_ENABLE_TORCHVISION})
+   set(TRITON_PYTORCH_LIBS
+       ${TRITON_PYTORCH_LIBS}
+       "-ltorchvision"
+   )
+endif() # TRITON_PYTORCH_ENABLE_TORCHVISION
 
 message(STATUS "Torch-TRT support is ${TRITON_PYTORCH_ENABLE_TORCHTRT}")
 if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
