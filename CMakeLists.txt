@@ -64,10 +64,11 @@ if(TRITON_PYTORCH_LIB_PATHS STREQUAL "")
     message(FATAL_ERROR "Using the PyTorch docker based build requires TRITON_PYTORCH_DOCKER_IMAGE")
   endif()
   set(TRITON_PYTORCH_DOCKER_BUILD ON)
+  message(STATUS "Using PyTorch docker: ${TRITON_PYTORCH_DOCKER_IMAGE}")
 else()
   # Look for installed Torch-TRT package in lib paths
-  if(TRITON_PYTORCH_ENABLE_TORCHTRT AND NOT TRITON_PYTORCH_LIB_PATHS MATCHES "torch_tensorrt")
-    message(WARNING "TRITON_PYTORCH_ENABLE_TORCHTRT is on, but TRITON_PYTORCH_LIB_PATHS does not contain Torch-TRT package install path!")
+  if(TRITON_PYTORCH_ENABLE_TORCHTRT AND NOT EXISTS "${TRITON_PYTORCH_LIB_PATHS}/libtorchtrt_runtime.so")
+    message(WARNING "TRITON_PYTORCH_ENABLE_TORCHTRT is on, but TRITON_PYTORCH_LIB_PATHS does not contain Torch-TRT package")
   endif()
 endif()
 message(STATUS "Using PyTorch docker: ${TRITON_PYTORCH_DOCKER_IMAGE}")
@@ -168,7 +169,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
         ${PT_LIBS}
         "libtorchtrt_runtime.so"
     )
-  endif() # ${TRITON_PYTORCH_ENABLE_TORCHTRT}
+  endif() # TRITON_PYTORCH_ENABLE_TORCHTRT
 
   add_custom_command(
     OUTPUT
@@ -313,7 +314,7 @@ if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
        ${TRITON_PYTORCH_LIBS}
        "-ltorchtrt_runtime"
    )
-endif() #TRITON_PYTORCH_ENABLE_TORCHTRT
+endif() # TRITON_PYTORCH_ENABLE_TORCHTRT
 
 set(TRITON_PYTORCH_LDFLAGS "")
 FOREACH(p ${TRITON_PYTORCH_LIB_PATHS})
