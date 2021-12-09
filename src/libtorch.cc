@@ -35,6 +35,7 @@
 #include "triton/backend/backend_output_responder.h"
 #include "triton/core/tritonbackend.h"
 
+#ifdef TRITON_PYTORCH_ENABLE_TORCHVISION
 // Suppress warnings in torch headers
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-compare"
@@ -43,6 +44,7 @@
 #include <torchvision/vision.h>  // Torchvision header
 #pragma warning(pop)
 #pragma GCC diagnostic pop
+#endif  // TRITON_PYTORCH_ENABLE_TORCHVISION
 
 #ifdef TRITON_ENABLE_GPU
 #include <c10/cuda/CUDACachingAllocator.h>
