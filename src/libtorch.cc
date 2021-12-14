@@ -1104,8 +1104,8 @@ ModelInstanceState::ReadOutputTensors(
     std::vector<TRITONBACKEND_Response*>* responses, uint64_t* compute_end_ns)
 {
   BackendOutputResponder responder(
-      requests, request_count, responses, model_state_->MaxBatchSize(),
-      model_state_->TritonMemoryManager(), model_state_->EnablePinnedInput(),
+      requests, request_count, responses, model_state_->TritonMemoryManager(),
+      model_state_->MaxBatchSize() > 0, model_state_->EnablePinnedInput(),
       CudaStream());
 
   bool cuda_copy = false;
