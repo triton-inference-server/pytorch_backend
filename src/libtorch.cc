@@ -808,17 +808,19 @@ ModelInstanceState::ProcessRequests(
   std::vector<torch::jit::IValue> input_tensors;
   std::vector<BackendMemory*> input_memories;
   bool cuda_copy = false;
+  std::unique_ptr<BackendInputCollector> collector;
 
   if (!all_response_failed) {
-    BackendInputCollector collector(
+    collector.reset(new BackendInputCollector(
         requests, request_count, &responses,
         model_state_->TritonMemoryManager(), model_state_->EnablePinnedInput(),
-        CudaStream(), nullptr, nullptr, 0, HostPolicyName().c_str());
+        CudaStream(), nullptr, nullptr, 0, HostPolicyName().c_str()));
     RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
         responses, request_count, all_response_failed,
         SetInputTensors(
-            total_batch_size, requests, request_count, &responses, &collector,
-            &input_names, &input_tensors, &input_memories, &cuda_copy));
+            total_batch_size, requests, request_count, &responses,
+            collector.get(), &input_names, &input_tensors, &input_memories,
+            &cuda_copy));
   }
 
   // Request to retrieve all model outputs. 'output_names' and
@@ -1114,6 +1116,8 @@ ModelInstanceState::SetInputTensors(
 
   // Finalize...
   *cuda_copy |= collector->Finalize();
+
+  return nullptr;
 }
 
 TRITONSERVER_Error*
@@ -1205,6 +1209,8 @@ ModelInstanceState::ReadOutputTensors(
     cudaStreamSynchronize(stream_);
   }
 #endif  // TRITON_ENABLE_GPU
+
+  return nullptr;
 }
 
 /////////////
