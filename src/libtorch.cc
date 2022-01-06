@@ -400,14 +400,14 @@ class ModelInstanceState : public BackendModelInstance {
       const uint32_t response_count,
       std::vector<torch::jit::IValue>* input_tensors,
       std::vector<torch::Tensor>* output_tensors);
-  void SetInputTensors(
+  TRITONSERVER_Error* SetInputTensors(
       size_t total_batch_size, TRITONBACKEND_Request** requests,
       const uint32_t request_count,
       std::vector<TRITONBACKEND_Response*>* responses,
       BackendInputCollector* collector, std::vector<const char*>* input_names,
       std::vector<torch::jit::IValue>* input_tensors,
       std::vector<BackendMemory*>* input_memories, bool* cuda_copy);
-  void ReadOutputTensors(
+  TRITONSERVER_Error* ReadOutputTensors(
       size_t total_batch_size, const std::vector<const char*>& output_names,
       const std::vector<torch::Tensor>& output_tensors,
       TRITONBACKEND_Request** requests, const uint32_t request_count,
@@ -727,7 +727,37 @@ ModelInstanceState::ProcessRequests(
                   .c_str()));
       return;
     }
+  }
 
+  // At this point we are committed to running inference with all
+  // 'requests'. Create a response for each request. During input
+  // processing if there is an error with any request that error will
+  // be sent immediately with the corresponding response (and the
+  // response unique_ptr will then be nullptr). The request object
+  // itself will not be released until after all inferencing is done
+  // (below) as we may need to access the request object when
+  // determine how to process outputs (for example, even if we don't
+  // need the outputs for a request that has an error, we do need to
+  // know the size of those outputs associated with the request so we
+  // can skip them in the output tensors).
+  std::vector<TRITONBACKEND_Response*> responses;
+  responses.reserve(request_count);
+  bool all_response_failed = false;
+
+  for (size_t i = 0; i < request_count; i++) {
+    TRITONBACKEND_Response* response;
+    auto err = TRITONBACKEND_ResponseNew(&response, requests[i]);
+    if (err == nullptr) {
+      responses.emplace_back(response);
+    } else {
+      responses.emplace_back(nullptr);
+      LOG_MESSAGE(TRITONSERVER_LOG_ERROR, "Fail to create response");
+      TRITONSERVER_ErrorDelete(err);
+    }
+  }
+
+
+  for (size_t i = 0; i < request_count; i++) {
     if (max_batch_size > 0) {
       // Retrieve the batch size from one of the inputs, if the model
       // supports batching, the first dimension size is batch size
@@ -741,8 +771,8 @@ ModelInstanceState::ProcessRequests(
         total_batch_size += shape[0];
       }
       if (err != nullptr) {
-        RequestsRespondWithError(requests, request_count, err);
-        return;
+        RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+            responses, request_count, all_response_failed, err);
       }
     } else {
       total_batch_size += 1;
@@ -759,41 +789,18 @@ ModelInstanceState::ProcessRequests(
   // (i.e. max_batch_size == 0). If max_batch_size is exceeded then
   // scheduler has done something badly wrong so fail and release all
   // requests.
-  if ((total_batch_size != 1) && (total_batch_size > (size_t)max_batch_size)) {
-    RequestsRespondWithError(
-        requests, request_count,
-        TRITONSERVER_ErrorNew(
-            TRITONSERVER_ERROR_INTERNAL,
-            std::string(
-                "batch size " + std::to_string(total_batch_size) + " for '" +
-                Name() + "', max allowed is " + std::to_string(max_batch_size))
-                .c_str()));
-    return;
-  }
-
-  // At this point we are committed to running inference with all
-  // 'requests'. Create a response for each request. During input
-  // processing if there is an error with any request that error will
-  // be sent immediately with the corresponding response (and the
-  // response unique_ptr will then be nullptr). The request object
-  // itself will not be released until after all inferencing is done
-  // (below) as we may need to access the request object when
-  // determine how to process outputs (for example, even if we don't
-  // need the outputs for a request that has an error, we do need to
-  // know the size of those outputs associated with the request so we
-  // can skip them in the output tensors).
-  std::vector<TRITONBACKEND_Response*> responses;
-  responses.reserve(request_count);
-
-  for (size_t i = 0; i < request_count; i++) {
-    TRITONBACKEND_Response* response;
-    auto err = TRITONBACKEND_ResponseNew(&response, requests[i]);
-    if (err == nullptr) {
-      responses.emplace_back(response);
-    } else {
-      responses.emplace_back(nullptr);
-      LOG_MESSAGE(TRITONSERVER_LOG_ERROR, "Fail to create response");
-      TRITONSERVER_ErrorDelete(err);
+  if (!all_response_failed) {
+    if ((total_batch_size != 1) &&
+        (total_batch_size > (size_t)max_batch_size)) {
+      RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+          responses, request_count, all_response_failed,
+          TRITONSERVER_ErrorNew(
+              TRITONSERVER_ERROR_INTERNAL,
+              std::string(
+                  "batch size " + std::to_string(total_batch_size) + " for '" +
+                  Name() + "', max allowed is " +
+                  std::to_string(max_batch_size))
+                  .c_str()));
     }
   }
 
@@ -801,20 +808,27 @@ ModelInstanceState::ProcessRequests(
   std::vector<torch::jit::IValue> input_tensors;
   std::vector<BackendMemory*> input_memories;
   bool cuda_copy = false;
-  BackendInputCollector collector(
-      requests, request_count, &responses, model_state_->TritonMemoryManager(),
-      model_state_->EnablePinnedInput(), CudaStream(), nullptr, nullptr, 0,
-      HostPolicyName().c_str());
-  SetInputTensors(
-      total_batch_size, requests, request_count, &responses, &collector,
-      &input_names, &input_tensors, &input_memories, &cuda_copy);
+  std::unique_ptr<BackendInputCollector> collector;
+
+  if (!all_response_failed) {
+    collector.reset(new BackendInputCollector(
+        requests, request_count, &responses,
+        model_state_->TritonMemoryManager(), model_state_->EnablePinnedInput(),
+        CudaStream(), nullptr, nullptr, 0, HostPolicyName().c_str()));
+    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+        responses, request_count, all_response_failed,
+        SetInputTensors(
+            total_batch_size, requests, request_count, &responses,
+            collector.get(), &input_names, &input_tensors, &input_memories,
+            &cuda_copy));
+  }
 
   // Request to retrieve all model outputs. 'output_names' and
   // 'output_tensors' are parallel vectors and so must be kept in
   // sync.
   std::vector<const char*> output_names;
   std::vector<torch::Tensor> output_tensors;
-  {
+  if (!all_response_failed) {
     triton::common::TritonJson::Value ios;
     TRITONSERVER_Error* err =
         model_state_->ModelConfig().MemberAsArray("output", &ios);
@@ -840,12 +854,13 @@ ModelInstanceState::ProcessRequests(
     }
 
     if (err != nullptr) {
-      SendErrorForResponses(&responses, request_count, err);
+      RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+          responses, request_count, all_response_failed, err);
       output_names.clear();
     }
   }
 
-  // Wait for any in-flight input tensor copies to complete.
+// Wait for any in-flight input tensor copies to complete.
 #ifdef TRITON_ENABLE_GPU
   if (cuda_copy) {
     cudaStreamSynchronize(CudaStream());
@@ -856,41 +871,53 @@ ModelInstanceState::ProcessRequests(
   SET_TIMESTAMP(compute_start_ns);
 
   // Run...
-  Execute(&responses, request_count, &input_tensors, &output_tensors);
+  if (!all_response_failed) {
+    Execute(&responses, request_count, &input_tensors, &output_tensors);
+  }
 
   // Free BackendMemory used for inputs
   for (BackendMemory* mem : input_memories) {
-    delete mem;
+    if (mem != nullptr) {
+      delete mem;
+    }
   }
   input_memories.clear();
 
   // Verify output indices are valid with number of outputs after execution
   bool invalid_index = false;
   int max_index = output_tensors.size() - 1;
-  for (const auto& name : output_names) {
-    int op_index = output_index_map_[name];
-    if ((op_index < 0) || (op_index > max_index)) {
-      SendErrorForResponses(
-          &responses, request_count,
-          TRITONSERVER_ErrorNew(
-              TRITONSERVER_ERROR_INVALID_ARG,
-              std::string(
-                  "The output " + std::string(name) +
-                  " in the model configuration refers to an output index which"
-                  " doesn't exist. This model has " +
-                  std::to_string(max_index + 1) + " outputs")
-                  .c_str()));
-      invalid_index = true;
-      break;
+
+  if (!all_response_failed) {
+    for (const auto& name : output_names) {
+      int op_index = output_index_map_[name];
+      if ((op_index < 0) || (op_index > max_index)) {
+        RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+            responses, request_count, all_response_failed,
+            TRITONSERVER_ErrorNew(
+                TRITONSERVER_ERROR_INVALID_ARG,
+                std::string(
+                    "The output " + std::string(name) +
+                    " in the model configuration refers to an output index "
+                    "which"
+                    " doesn't exist. This model has " +
+                    std::to_string(max_index + 1) + " outputs")
+                    .c_str()));
+        invalid_index = true;
+        break;
+      }
     }
   }
 
   uint64_t compute_end_ns = 0;
 
-  if (!invalid_index) {
-    ReadOutputTensors(
-        total_batch_size, output_names, output_tensors, requests, request_count,
-        &responses, &compute_end_ns);
+  if (!all_response_failed) {
+    if (!invalid_index) {
+      RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+          responses, request_count, all_response_failed,
+          ReadOutputTensors(
+              total_batch_size, output_names, output_tensors, requests,
+              request_count, &responses, &compute_end_ns));
+    }
   }
 
   uint64_t exec_end_ns = 0;
@@ -924,12 +951,14 @@ ModelInstanceState::ProcessRequests(
         "failed releasing request");
   }
 
-  // Report the entire batch statistics.
-  LOG_IF_ERROR(
-      TRITONBACKEND_ModelInstanceReportBatchStatistics(
-          TritonModelInstance(), total_batch_size, exec_start_ns,
-          compute_start_ns, compute_end_ns, exec_end_ns),
-      "failed reporting batch request statistics");
+  if (!all_response_failed) {
+    // Report the entire batch statistics.
+    LOG_IF_ERROR(
+        TRITONBACKEND_ModelInstanceReportBatchStatistics(
+            TritonModelInstance(), total_batch_size, exec_start_ns,
+            compute_start_ns, compute_end_ns, exec_end_ns),
+        "failed reporting batch request statistics");
+  }
 }
 
 void
@@ -1014,7 +1043,7 @@ ModelInstanceState::Execute(
   }
 }
 
-void
+TRITONSERVER_Error*
 ModelInstanceState::SetInputTensors(
     size_t total_batch_size, TRITONBACKEND_Request** requests,
     const uint32_t request_count,
@@ -1031,25 +1060,20 @@ ModelInstanceState::SetInputTensors(
   // All requests must have equally-sized input tensors so use any
   // request as the representative for the input tensors.
   uint32_t input_count;
-  RESPOND_ALL_AND_RETURN_IF_ERROR(
-      responses, request_count,
-      TRITONBACKEND_RequestInputCount(requests[0], &input_count));
+  RETURN_IF_ERROR(TRITONBACKEND_RequestInputCount(requests[0], &input_count));
   input_tensors->resize(input_count);
   for (uint32_t input_idx = 0; input_idx < input_count; input_idx++) {
     TRITONBACKEND_Input* input;
-    RESPOND_ALL_AND_RETURN_IF_ERROR(
-        responses, request_count,
+    RETURN_IF_ERROR(
         TRITONBACKEND_RequestInputByIndex(requests[0], input_idx, &input));
 
     const char* input_name;
     TRITONSERVER_DataType input_datatype;
     const int64_t* input_shape;
     uint32_t input_dims_count;
-    RESPOND_ALL_AND_RETURN_IF_ERROR(
-        responses, request_count,
-        TRITONBACKEND_InputProperties(
-            input, &input_name, &input_datatype, &input_shape,
-            &input_dims_count, nullptr, nullptr));
+    RETURN_IF_ERROR(TRITONBACKEND_InputProperties(
+        input, &input_name, &input_datatype, &input_shape, &input_dims_count,
+        nullptr, nullptr));
 
     input_names->emplace_back(input_name);
 
@@ -1073,11 +1097,9 @@ ModelInstanceState::SetInputTensors(
     size_t batchn_byte_size;
     TRITONSERVER_MemoryType memory_type;
     int64_t memory_type_id;
-    RESPOND_ALL_AND_RETURN_IF_ERROR(
-        responses, request_count,
-        collector->ProcessTensor(
-            input_name, nullptr, 0, alloc_perference, &input_buffer,
-            &batchn_byte_size, &memory_type, &memory_type_id));
+    RETURN_IF_ERROR(collector->ProcessTensor(
+        input_name, nullptr, 0, alloc_perference, &input_buffer,
+        &batchn_byte_size, &memory_type, &memory_type_id));
 
     // Create Torch tenor
     const auto torch_dtype = ConvertDataTypeToTorchType(input_datatype);
@@ -1094,9 +1116,11 @@ ModelInstanceState::SetInputTensors(
 
   // Finalize...
   *cuda_copy |= collector->Finalize();
+
+  return nullptr;
 }
 
-void
+TRITONSERVER_Error*
 ModelInstanceState::ReadOutputTensors(
     size_t total_batch_size, const std::vector<const char*>& output_names,
     const std::vector<torch::Tensor>& output_tensors,
@@ -1119,12 +1143,9 @@ ModelInstanceState::ReadOutputTensors(
       output_flat = output_tensors[op_index].contiguous().flatten();
     }
     catch (std::exception& ex) {
-      RESPOND_ALL_AND_RETURN_IF_ERROR(
-          responses, request_count,
-          TRITONSERVER_ErrorNew(
-              TRITONSERVER_ERROR_INTERNAL,
-              (std::string("output tensor '") + name + "' is not found")
-                  .c_str()));
+      RETURN_IF_ERROR(TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INTERNAL,
+          (std::string("output tensor '") + name + "' is not found").c_str()));
     }
 
     // Verify output datatype matches datatype from model config
@@ -1132,15 +1153,13 @@ ModelInstanceState::ReadOutputTensors(
         ConvertTorchTypeToDataType(output_flat.scalar_type());
     TRITONSERVER_DataType config_datatype = output_dtype_map_[name];
     if (config_datatype != output_dtype) {
-      RESPOND_ALL_AND_RETURN_IF_ERROR(
-          responses, request_count,
-          TRITONSERVER_ErrorNew(
-              TRITONSERVER_ERROR_INVALID_ARG,
-              (std::string("configuration expects datatype TYPE_") +
-               TRITONSERVER_DataTypeString(config_datatype) + " for output '" +
-               name + "', model provides TYPE_" +
-               TRITONSERVER_DataTypeString(output_dtype))
-                  .c_str()));
+      RETURN_IF_ERROR(TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INVALID_ARG,
+          (std::string("configuration expects datatype TYPE_") +
+           TRITONSERVER_DataTypeString(config_datatype) + " for output '" +
+           name + "', model provides TYPE_" +
+           TRITONSERVER_DataTypeString(output_dtype))
+              .c_str()));
     }
 
     const char* output_buffer =
@@ -1154,13 +1173,11 @@ ModelInstanceState::ReadOutputTensors(
     }
 
     if (batchn_shape.size() == 0) {
-      RESPOND_ALL_AND_RETURN_IF_ERROR(
-          responses, request_count,
-          TRITONSERVER_ErrorNew(
-              TRITONSERVER_ERROR_INVALID_ARG,
-              (std::string("output '") + name +
-               "' is a scalar which is not supported.")
-                  .c_str()));
+      RETURN_IF_ERROR(TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INVALID_ARG,
+          (std::string("output '") + name +
+           "' is a scalar which is not supported.")
+              .c_str()));
     }
 
     responder.ProcessTensor(
@@ -1192,6 +1209,8 @@ ModelInstanceState::ReadOutputTensors(
     cudaStreamSynchronize(stream_);
   }
 #endif  // TRITON_ENABLE_GPU
+
+  return nullptr;
 }
 
 /////////////
