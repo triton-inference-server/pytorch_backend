@@ -619,6 +619,18 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
             "or one or more inputs of type Tensor.");
       }
     }
+
+    // If all inputs are tensors, match number of expected inputs between model
+    // and configuration
+    if ((arguments.size() - start_idx) != expected_input_cnt) {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INVALID_ARG,
+          (std::string("unable to load model '") + model_state_->Name() +
+           "', configuration expects " + std::to_string(expected_input_cnt) +
+           " inputs, model provides " +
+           std::to_string(arguments.size() - start_idx))
+              .c_str());
+    }
   }
 
   triton::common::TritonJson::Value ios;
@@ -626,14 +638,11 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
   std::string deliminator = "__";
   int ip_index = 0;
 
-  if ((arguments.size() - start_idx) != expected_input_cnt) {
+  if (ios.ArraySize() == 0) {
     return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_INVALID_ARG,
-        (std::string("unable to load model '") + model_state_->Name() +
-         "', configuration expects " + std::to_string(expected_input_cnt) +
-         " inputs, model provides " +
-         std::to_string(arguments.size() - start_idx))
-            .c_str());
+        TRITONSERVER_ERROR_INTERNAL,
+        "model configuration must contain at least one input, none were "
+        "specified.");
   }
 
   for (size_t i = 0; i < ios.ArraySize(); i++) {
