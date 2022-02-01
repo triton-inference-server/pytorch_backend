@@ -596,9 +596,9 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
   const auto& schema = method.function().getSchema();
   const std::vector<c10::Argument>& arguments = schema.arguments();
 
-  // Currently we only support input of type Dict[str, Tensor] when the
-  // model expects a single input. If the model expects more than one input then
-  // they must be all be of type Tensor.
+  // Currently, only models with a single input of type Dict(str, Tensor) are
+  // supported. If the model expects more than one input then they must be all
+  // be of type Tensor.
   //
   // Ignore the argument at idx 0 if it is of Class type (self param in forward
   // function)
@@ -615,8 +615,10 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
       if (arguments.at(i).type()->kind() != c10::TypeKind::TensorType) {
         return TRITONSERVER_ErrorNew(
             TRITONSERVER_ERROR_INTERNAL,
-            "The model must expect a single input of type Dict[str, Tensor] "
-            "or one or more inputs of type Tensor.");
+            (std::string("An input of type '") + arguments.at(i).type()->str() +
+             "' was detected in the model. Only a single input of type "
+             "Dict(str, Tensor) or input(s) of type Tensor are supported.")
+                .c_str());
       }
     }
 
