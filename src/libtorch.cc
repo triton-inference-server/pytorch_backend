@@ -1043,9 +1043,6 @@ ModelInstanceState::Execute(
       for (auto& input_index : input_index_map_) {
         torch::jit::IValue ival = (*input_tensors)[input_index.second];
         input_dict.insert(input_index.first, ival.toTensor());
-        LOG_MESSAGE(
-            TRITONSERVER_LOG_INFO,
-            (std::string("Input key: ") + input_index.first).c_str());
       }
       std::vector<torch::jit::IValue> input_dict_ivalue = {input_dict};
       model_outputs_ = torch_model_->forward(input_dict_ivalue);
