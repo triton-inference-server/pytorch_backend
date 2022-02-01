@@ -611,6 +611,17 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
       (arguments.at(start_idx).type()->kind() == c10::TypeKind::DictType)) {
     is_dict_input_ = true;
   } else if (arguments.size() > start_idx) {
+    // Return error if multiple inputs are of kind DictType
+    for (size_t i = start_idx + 1; i < arguments.size(); i++) {
+      if (arguments.at(i).type()->kind() == c10::TypeKind::DictType) {
+        return TRITONSERVER_ErrorNew(
+            TRITONSERVER_ERROR_INTERNAL,
+            "Multiple inputs of kind DictType were detected. Only a single "
+            "input of type Dict(str, Tensor) is supported.");
+      }
+    }
+
+    // Return error if all inputs are not of type Tensor
     for (size_t i = start_idx; i < arguments.size(); i++) {
       if (arguments.at(i).type()->kind() != c10::TypeKind::TensorType) {
         return TRITONSERVER_ErrorNew(
