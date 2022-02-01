@@ -1,4 +1,4 @@
-// Copyright 2019-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -393,7 +393,7 @@ class ModelInstanceState : public BackendModelInstance {
   TRITONSERVER_Error* ValidateTypedSequenceControl(
       triton::common::TritonJson::Value& sequence_batching,
       const std::string& control_kind, bool required, bool* have_control);
-  TRITONSERVER_Error* ValidateInputs();
+  TRITONSERVER_Error* ValidateInputs(const size_t expected_input_cnt);
   TRITONSERVER_Error* ValidateOutputs();
   void Execute(
       std::vector<TRITONBACKEND_Response*>* responses,
@@ -506,7 +506,7 @@ ModelInstanceState::ModelInstanceState(
     }
   }
 
-  THROW_IF_BACKEND_INSTANCE_ERROR(ValidateInputs());
+  THROW_IF_BACKEND_INSTANCE_ERROR(ValidateInputs(expected_input_cnt));
   THROW_IF_BACKEND_INSTANCE_ERROR(ValidateOutputs());
 }
 
@@ -590,18 +590,35 @@ ModelInstanceState::ValidateTypedSequenceControl(
 }
 
 TRITONSERVER_Error*
-ModelInstanceState::ValidateInputs()
+ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
 {
   const torch::jit::Method& method = torch_model_->get_method("forward");
   const auto& schema = method.function().getSchema();
   const std::vector<c10::Argument>& arguments = schema.arguments();
 
-  // Currently we only support Dict[str, Tensor] as input when there is a single
-  // input to the model. Ignore the argument at idx 0 since is class type (self
-  // param in forward function)
-  if (arguments.size() == 2 &&
-      (arguments.at(1).type()->kind() == c10::TypeKind::DictType)) {
+  // Currently we only support input of type Dict[str, Tensor] when the
+  // model expects a single input. If the model expects more than one input then
+  // they must be all be of type Tensor.
+  //
+  // Ignore the argument at idx 0 if it is of Class type (self param in forward
+  // function)
+  size_t start_idx = 0;
+  if ((arguments.size() > 0) &&
+      (arguments.at(0).type()->kind() == c10::TypeKind::ClassType)) {
+    start_idx = 1;
+  }
+  if ((arguments.size() == (1 + start_idx)) &&
+      (arguments.at(start_idx).type()->kind() == c10::TypeKind::DictType)) {
     is_dict_input_ = true;
+  } else if (arguments.size() > start_idx) {
+    for (size_t i = start_idx; i < arguments.size(); i++) {
+      if (arguments.at(i).type()->kind() != c10::TypeKind::TensorType) {
+        return TRITONSERVER_ErrorNew(
+            TRITONSERVER_ERROR_INTERNAL,
+            "The model must expect a single input of type Dict[str, Tensor] "
+            "or one or more inputs of type Tensor.");
+      }
+    }
   }
 
   triton::common::TritonJson::Value ios;
@@ -609,11 +626,14 @@ ModelInstanceState::ValidateInputs()
   std::string deliminator = "__";
   int ip_index = 0;
 
-  if (ios.ArraySize() == 0) {
+  if ((arguments.size() - start_idx) != expected_input_cnt) {
     return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_INTERNAL,
-        "model configuration must contain at least one input, none were "
-        "specified.");
+        TRITONSERVER_ERROR_INVALID_ARG,
+        (std::string("unable to load model '") + model_state_->Name() +
+         "', configuration expects " + std::to_string(expected_input_cnt) +
+         " inputs, model provides " +
+         std::to_string(arguments.size() - start_idx))
+            .c_str());
   }
 
   for (size_t i = 0; i < ios.ArraySize(); i++) {
