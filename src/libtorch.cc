@@ -456,7 +456,7 @@ ModelInstanceState::Create(
 ModelInstanceState::ModelInstanceState(
     ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
     : BackendModelInstance(model_state, triton_model_instance),
-      model_state_(model_state), device_(torch::kCPU)
+      model_state_(model_state), device_(torch::kCPU), is_dict_input_(false)
 {
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
     device_ = torch::Device(torch::kCUDA, DeviceId());
