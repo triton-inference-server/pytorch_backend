@@ -430,6 +430,9 @@ class ModelInstanceState : public BackendModelInstance {
   // that output in the model.
   std::unordered_map<std::string, int> output_index_map_;
   std::unordered_map<std::string, TRITONSERVER_DataType> output_dtype_map_;
+
+  // If the input to the tensor is a dictionary of tensors.
+  bool is_dict_input_;
 };
 
 TRITONSERVER_Error*
@@ -589,6 +592,18 @@ ModelInstanceState::ValidateTypedSequenceControl(
 TRITONSERVER_Error*
 ModelInstanceState::ValidateInputs()
 {
+  const torch::jit::Method& method = torch_model_->get_method("forward");
+  const auto& schema = method.function().getSchema();
+  const std::vector<c10::Argument>& arguments = schema.arguments();
+
+  // Currently we only support Dict[str, Tensor] as input when there is a single
+  // input to the model. Ignore the argument at idx 0 since is class type (self
+  // param in forward function)
+  if (arguments.size() == 2 &&
+      (arguments.at(1).type()->kind() == c10::TypeKind::DictType)) {
+    is_dict_input_ = true;
+  }
+
   triton::common::TritonJson::Value ios;
   RETURN_IF_ERROR(model_state_->ModelConfig().MemberAsArray("input", &ios));
   std::string deliminator = "__";
@@ -608,20 +623,26 @@ ModelInstanceState::ValidateInputs()
     // Validate name
     std::string io_name;
     RETURN_IF_ERROR(io.MemberAsString("name", &io_name));
-    try {
-      int start_pos = io_name.find(deliminator);
-      if (start_pos == -1) {
-        throw std::invalid_argument("input must follow naming convention");
+    if (is_dict_input_) {
+      // If dictionary, index is irrelevant but we use the map to store the
+      // input names since they are the keys for the dictionary
+      input_index_map_[io_name] = i;
+    } else {
+      try {
+        int start_pos = io_name.find(deliminator);
+        if (start_pos == -1) {
+          throw std::invalid_argument("input must follow naming convention");
+        }
+        ip_index = std::atoi(io_name.substr(start_pos + 2).c_str());
+        input_index_map_[io_name] = ip_index;
       }
-      ip_index = std::atoi(io_name.substr(start_pos + 2).c_str());
-      input_index_map_[io_name] = ip_index;
-    }
-    catch (std::exception& ex) {
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INTERNAL,
-          ("input '" + io_name +
-           "' does not follow naming convention i.e. <name>__<index>.")
-              .c_str());
+      catch (std::exception& ex) {
+        return TRITONSERVER_ErrorNew(
+            TRITONSERVER_ERROR_INTERNAL,
+            ("input '" + io_name +
+             "' does not follow naming convention i.e. <name>__<index>.")
+                .c_str());
+      }
     }
 
     // Validate data type
@@ -1015,7 +1036,23 @@ ModelInstanceState::Execute(
     }
 
     torch::NoGradGuard no_grad;
-    model_outputs_ = torch_model_->forward(*input_tensors);
+
+    // If input is a dictionary, prepare dictionary from 'input_tensors'.
+    if (is_dict_input_) {
+      torch::Dict<std::string, torch::Tensor> input_dict;
+      for (auto& input_index : input_index_map_) {
+        torch::jit::IValue ival = (*input_tensors)[input_index.second];
+        input_dict.insert(input_index.first, ival.toTensor());
+        LOG_MESSAGE(
+            TRITONSERVER_LOG_INFO,
+            (std::string("Input key: ") + input_index.first).c_str());
+      }
+      std::vector<torch::jit::IValue> input_dict_ivalue = {input_dict};
+      model_outputs_ = torch_model_->forward(input_dict_ivalue);
+    } else {
+      model_outputs_ = torch_model_->forward(*input_tensors);
+    }
+
     if (model_outputs_.isTuple()) {
       auto model_outputs_tuple = model_outputs_.toTuple();
       for (auto& m_op : model_outputs_tuple->elements()) {
