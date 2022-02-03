@@ -1165,6 +1165,9 @@ ModelInstanceState::ReadOutputTensors(
     const char* output_buffer =
         static_cast<const char*>(output_flat.data_ptr());
 
+    // Output tensors may not reside on the same device as model
+    torch::Device tensor_device = output_flat.device();
+
     //  Set output shape
     std::vector<int64_t> batchn_shape;
     auto shape = output_tensors[op_index].sizes();
@@ -1182,9 +1185,9 @@ ModelInstanceState::ReadOutputTensors(
 
     responder.ProcessTensor(
         name, output_dtype, batchn_shape, output_buffer,
-        (device_.type() == torch::kCPU) ? TRITONSERVER_MEMORY_CPU
-                                        : TRITONSERVER_MEMORY_GPU,
-        (device_.type() == torch::kCPU) ? 0 : device_.index());
+        (tensor_device.type() == torch::kCPU) ? TRITONSERVER_MEMORY_CPU
+                                              : TRITONSERVER_MEMORY_GPU,
+        (tensor_device.type() == torch::kCPU) ? 0 : tensor_device.index());
 
     // PyTorch uses asynchronous execution to run the model. Setting the compute
     // end timestamp immediately after Execute() does not capture the complete
