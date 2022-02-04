@@ -1,4 +1,4 @@
-// Copyright 2019-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -393,7 +393,7 @@ class ModelInstanceState : public BackendModelInstance {
   TRITONSERVER_Error* ValidateTypedSequenceControl(
       triton::common::TritonJson::Value& sequence_batching,
       const std::string& control_kind, bool required, bool* have_control);
-  TRITONSERVER_Error* ValidateInputs();
+  TRITONSERVER_Error* ValidateInputs(const size_t expected_input_cnt);
   TRITONSERVER_Error* ValidateOutputs();
   void Execute(
       std::vector<TRITONBACKEND_Response*>* responses,
@@ -430,6 +430,9 @@ class ModelInstanceState : public BackendModelInstance {
   // that output in the model.
   std::unordered_map<std::string, int> output_index_map_;
   std::unordered_map<std::string, TRITONSERVER_DataType> output_dtype_map_;
+
+  // If the input to the tensor is a dictionary of tensors.
+  bool is_dict_input_;
 };
 
 TRITONSERVER_Error*
@@ -453,7 +456,7 @@ ModelInstanceState::Create(
 ModelInstanceState::ModelInstanceState(
     ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
     : BackendModelInstance(model_state, triton_model_instance),
-      model_state_(model_state), device_(torch::kCPU)
+      model_state_(model_state), device_(torch::kCPU), is_dict_input_(false)
 {
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
     device_ = torch::Device(torch::kCUDA, DeviceId());
@@ -503,7 +506,7 @@ ModelInstanceState::ModelInstanceState(
     }
   }
 
-  THROW_IF_BACKEND_INSTANCE_ERROR(ValidateInputs());
+  THROW_IF_BACKEND_INSTANCE_ERROR(ValidateInputs(expected_input_cnt));
   THROW_IF_BACKEND_INSTANCE_ERROR(ValidateOutputs());
 }
 
@@ -587,8 +590,62 @@ ModelInstanceState::ValidateTypedSequenceControl(
 }
 
 TRITONSERVER_Error*
-ModelInstanceState::ValidateInputs()
+ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
 {
+  const torch::jit::Method& method = torch_model_->get_method("forward");
+  const auto& schema = method.function().getSchema();
+  const std::vector<c10::Argument>& arguments = schema.arguments();
+
+  // Currently, only models with a single input of type Dict(str, Tensor) are
+  // supported. If the model expects more than one input then they must be all
+  // be of type Tensor.
+  //
+  // Ignore the argument at idx 0 if it is of Class type (self param in forward
+  // function)
+  size_t start_idx = 0;
+  if ((arguments.size() > 0) &&
+      (arguments.at(0).type()->kind() == c10::TypeKind::ClassType)) {
+    start_idx = 1;
+  }
+  if ((arguments.size() == (1 + start_idx)) &&
+      (arguments.at(start_idx).type()->kind() == c10::TypeKind::DictType)) {
+    is_dict_input_ = true;
+  } else if (arguments.size() > start_idx) {
+    // Return error if multiple inputs are of kind DictType
+    for (size_t i = start_idx + 1; i < arguments.size(); i++) {
+      if (arguments.at(i).type()->kind() == c10::TypeKind::DictType) {
+        return TRITONSERVER_ErrorNew(
+            TRITONSERVER_ERROR_INTERNAL,
+            "Multiple inputs of kind DictType were detected. Only a single "
+            "input of type Dict(str, Tensor) is supported.");
+      }
+    }
+
+    // Return error if all inputs are not of type Tensor
+    for (size_t i = start_idx; i < arguments.size(); i++) {
+      if (arguments.at(i).type()->kind() != c10::TypeKind::TensorType) {
+        return TRITONSERVER_ErrorNew(
+            TRITONSERVER_ERROR_INTERNAL,
+            (std::string("An input of type '") + arguments.at(i).type()->str() +
+             "' was detected in the model. Only a single input of type "
+             "Dict(str, Tensor) or input(s) of type Tensor are supported.")
+                .c_str());
+      }
+    }
+
+    // If all inputs are tensors, match number of expected inputs between model
+    // and configuration
+    if ((arguments.size() - start_idx) != expected_input_cnt) {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INVALID_ARG,
+          (std::string("unable to load model '") + model_state_->Name() +
+           "', configuration expects " + std::to_string(expected_input_cnt) +
+           " inputs, model provides " +
+           std::to_string(arguments.size() - start_idx))
+              .c_str());
+    }
+  }
+
   triton::common::TritonJson::Value ios;
   RETURN_IF_ERROR(model_state_->ModelConfig().MemberAsArray("input", &ios));
   std::string deliminator = "__";
@@ -608,20 +665,26 @@ ModelInstanceState::ValidateInputs()
     // Validate name
     std::string io_name;
     RETURN_IF_ERROR(io.MemberAsString("name", &io_name));
-    try {
-      int start_pos = io_name.find(deliminator);
-      if (start_pos == -1) {
-        throw std::invalid_argument("input must follow naming convention");
+    if (is_dict_input_) {
+      // If dictionary, index is irrelevant but we use the map to store the
+      // input names since they are the keys for the dictionary
+      input_index_map_[io_name] = i;
+    } else {
+      try {
+        int start_pos = io_name.find(deliminator);
+        if (start_pos == -1) {
+          throw std::invalid_argument("input must follow naming convention");
+        }
+        ip_index = std::atoi(io_name.substr(start_pos + 2).c_str());
+        input_index_map_[io_name] = ip_index;
       }
-      ip_index = std::atoi(io_name.substr(start_pos + 2).c_str());
-      input_index_map_[io_name] = ip_index;
-    }
-    catch (std::exception& ex) {
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INTERNAL,
-          ("input '" + io_name +
-           "' does not follow naming convention i.e. <name>__<index>.")
-              .c_str());
+      catch (std::exception& ex) {
+        return TRITONSERVER_ErrorNew(
+            TRITONSERVER_ERROR_INTERNAL,
+            ("input '" + io_name +
+             "' does not follow naming convention i.e. <name>__<index>.")
+                .c_str());
+      }
     }
 
     // Validate data type
@@ -1015,7 +1078,20 @@ ModelInstanceState::Execute(
     }
 
     torch::NoGradGuard no_grad;
-    model_outputs_ = torch_model_->forward(*input_tensors);
+
+    // If input is a dictionary, prepare dictionary from 'input_tensors'.
+    if (is_dict_input_) {
+      torch::Dict<std::string, torch::Tensor> input_dict;
+      for (auto& input_index : input_index_map_) {
+        torch::jit::IValue ival = (*input_tensors)[input_index.second];
+        input_dict.insert(input_index.first, ival.toTensor());
+      }
+      std::vector<torch::jit::IValue> input_dict_ivalue = {input_dict};
+      model_outputs_ = torch_model_->forward(input_dict_ivalue);
+    } else {
+      model_outputs_ = torch_model_->forward(*input_tensors);
+    }
+
     if (model_outputs_.isTuple()) {
       auto model_outputs_tuple = model_outputs_.toTuple();
       for (auto& m_op : model_outputs_tuple->elements()) {
