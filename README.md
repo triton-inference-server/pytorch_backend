@@ -144,6 +144,27 @@ key: "INFERENCE_MODE"
 }
 ```
 
+* `ENABLE_AMP_AUTOCAST`: Boolean flag to enable the autocast for Automatic Mixed Precision
+of TorchScript models. By default the AMP autocast is disabled.
+
+[Automatic Mixed Precision](https://pytorch.org/cppdocs/notes/inference_mode.html) is a
+convenience methods for mixed precision, where some operations use the torch.float32 
+(float) datatype and other operations use torch.float16 (half). Some ops, like linear 
+layers and convolutions, are much faster in float16.
+
+https://github.com/pytorch/pytorch/blob/e7ed0b3fae816b5a39d94c4f67e345d7a784a7ef/torch/csrc/autograd/init.cpp#L84-L121
+
+The section of model config file specifying this parameters will look like:
+
+```
+parameters: {
+key: "ENABLE_AMP_AUTOCAST"
+    value: {
+    string_value:"true"
+    }
+}
+```
+
 * `ENABLE_NVFUSER`: Boolean flag to enable the NvFuser (CUDA Graph
 Fuser) optimization for TorchScript models. If not specified, the
 default pytorch fuser is used. If `ENABLE_NVFUSER` is specified, the
