@@ -77,7 +77,7 @@ class ModelState : public BackendModel {
   TRITONSERVER_Error* LoadModel(
       const std::string& artifact_name, const torch::Device device,
       std::string* model_path,
-      std::unique_ptr<torch::jit::script::Module>* torch_model);
+      std::shared_ptr<torch::jit::script::Module>* torch_model);
 
   bool EnabledOptimizedExecution() { return enable_optimized_execution_; }
   const std::pair<bool, bool>& EnabledTensorExprFuser() const
@@ -122,6 +122,9 @@ class ModelState : public BackendModel {
   // Flag pair to indicate whether nvfuser is set and enabled respectively.
   // Defaults to (false, false).
   std::pair<bool, bool> enable_nvfuser_pair_;
+
+  // Share torch module across instances on the same device. They key is a pair of isGPU, Device Index 
+  std::map<std::pair<bool, int64_t>, std::shared_ptr<torch::jit::script::Module>> torch_models_;
 };
 
 TRITONSERVER_Error*
@@ -172,7 +175,7 @@ TRITONSERVER_Error*
 ModelState::LoadModel(
     const std::string& artifact_name, const torch::Device device,
     std::string* model_path,
-    std::unique_ptr<torch::jit::script::Module>* torch_model)
+    std::shared_ptr<torch::jit::script::Module>* torch_model)
 {
   // Find the TorchScript file that describes the model. If the model
   // configuration doesn't have an explicit model file specified then
@@ -194,6 +197,17 @@ ModelState::LoadModel(
             "' for model instance '" + Name() + "'");
   }
 
+  // If torch model has already been been loaded on that device, skip loading that model 
+  // Else load the model as usual
+  auto device_pair = std::make_pair(!device.is_cpu(), device.index());
+  auto mit = torch_models_.find(device_pair);
+  if (mit != torch_models_.end()) {
+    *torch_model = mit->second;
+    LOG_MESSAGE(TRITONSERVER_LOG_INFO, (std::string("Re-using model for pytorch for model instance '") + Name() + "'").c_str());
+    return nullptr;  // success
+  }
+
+
   // Serialize the torch model to string
   std::string model_data_str;
   RETURN_IF_ERROR(ReadTextFile(*model_path, &model_data_str));
@@ -212,6 +226,8 @@ ModelState::LoadModel(
         TRITONSERVER_ERROR_INTERNAL,
         ("failed to load model '" + Name() + "': " + ex.what()).c_str());
   }
+
+  torch_models_.emplace(device_pair, *torch_model);
 
   return nullptr;  // success
 }
@@ -419,7 +435,7 @@ class ModelInstanceState : public BackendModelInstance {
   // The full path to the TorchScript model file.
   std::string model_path_;
 
-  std::unique_ptr<torch::jit::script::Module> torch_model_;
+  std::shared_ptr<torch::jit::script::Module> torch_model_;
   torch::Device device_;
 
   // Map from configuration name for an input to the index of
@@ -512,7 +528,8 @@ ModelInstanceState::ModelInstanceState(
 
 ModelInstanceState::~ModelInstanceState()
 {
-  torch_model_.reset();
+  // Need to unload all instances on a device type before reset is called for the corr. torch_model_
+  // torch_model_.reset();
 #ifdef TRITON_ENABLE_GPU
   if (device_.is_cuda()) {
     c10::cuda::CUDACachingAllocator::emptyCache();
