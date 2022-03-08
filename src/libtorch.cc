@@ -678,20 +678,21 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
       // input names since they are the keys for the dictionary
       input_index_map_[io_name] = i;
     } else {
-      try {
-        int start_pos = io_name.find(deliminator);
-        if (start_pos == -1) {
-          throw std::invalid_argument("input must follow naming convention");
+      // input tensor name must be in 'allowed_inputs' or must follow the naming
+      // convention
+      auto itr = allowed_inputs.find(io_name);
+      if (itr != allowed_inputs.end()) {
+        input_index_map_[io_name] = std::distance(allowed_inputs.begin(), itr);
+      } else {
+        try {
+          int start_pos = io_name.find(deliminator);
+          if (start_pos == -1) {
+            throw std::invalid_argument("input must follow naming convention");
+          }
+          ip_index = std::atoi(io_name.substr(start_pos + 2).c_str());
+          input_index_map_[io_name] = ip_index;
         }
-        ip_index = std::atoi(io_name.substr(start_pos + 2).c_str());
-        input_index_map_[io_name] = ip_index;
-      }
-      catch (std::exception& ex) {
-        auto itr = allowed_inputs.find(io_name);
-        if (itr != allowed_inputs.end()) {
-          input_index_map_[io_name] =
-              std::distance(allowed_inputs.begin(), itr);
-        } else {
+        catch (std::exception& ex) {
           return TRITONSERVER_ErrorNew(
               TRITONSERVER_ERROR_INTERNAL,
               ("input '" + io_name +
