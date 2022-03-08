@@ -592,6 +592,10 @@ ModelInstanceState::ValidateTypedSequenceControl(
 TRITONSERVER_Error*
 ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
 {
+  // Collect all the expected input tensor names and validate that the model
+  // configuration specifies only those.
+  std::set<std::string> allowed_inputs;
+
   const torch::jit::Method& method = torch_model_->get_method("forward");
   const auto& schema = method.function().getSchema();
   const std::vector<c10::Argument>& arguments = schema.arguments();
@@ -623,6 +627,9 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
 
     // Return error if all inputs are not of type Tensor
     for (size_t i = start_idx; i < arguments.size(); i++) {
+      LOG_MESSAGE(
+          TRITONSERVER_LOG_INFO,
+          (std::string("Arguement Name: ") + arguments.at(i).name()).c_str());
       if (arguments.at(i).type()->kind() != c10::TypeKind::TensorType) {
         return TRITONSERVER_ErrorNew(
             TRITONSERVER_ERROR_INTERNAL,
@@ -631,6 +638,7 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
              "Dict(str, Tensor) or input(s) of type Tensor are supported.")
                 .c_str());
       }
+      allowed_inputs.emplace(arguments.at(i).name());
     }
 
     // If all inputs are tensors, match number of expected inputs between model
@@ -679,11 +687,18 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
         input_index_map_[io_name] = ip_index;
       }
       catch (std::exception& ex) {
-        return TRITONSERVER_ErrorNew(
-            TRITONSERVER_ERROR_INTERNAL,
-            ("input '" + io_name +
-             "' does not follow naming convention i.e. <name>__<index>.")
-                .c_str());
+        auto itr = allowed_inputs.find(io_name);
+        if (itr != allowed_inputs.end()) {
+          input_index_map_[io_name] =
+              std::distance(allowed_inputs.begin(), itr);
+        } else {
+          return TRITONSERVER_ErrorNew(
+              TRITONSERVER_ERROR_INTERNAL,
+              ("input '" + io_name +
+               "' is neither an input argument to the model nor does it "
+               "follow the naming convention i.e. <name>__<index>.")
+                  .c_str());
+        }
       }
     }
 
