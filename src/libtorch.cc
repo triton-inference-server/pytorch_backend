@@ -627,9 +627,6 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
 
     // Return error if all inputs are not of type Tensor
     for (size_t i = start_idx; i < arguments.size(); i++) {
-      LOG_MESSAGE(
-          TRITONSERVER_LOG_INFO,
-          (std::string("Arguement Name: ") + arguments.at(i).name()).c_str());
       if (arguments.at(i).type()->kind() != c10::TypeKind::TensorType) {
         return TRITONSERVER_ErrorNew(
             TRITONSERVER_ERROR_INTERNAL,
@@ -1409,10 +1406,14 @@ TRITONBACKEND_ModelInstanceInitialize(TRITONBACKEND_ModelInstance* instance)
   int32_t device_id;
   RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceDeviceId(instance, &device_id));
 
+  TRITONSERVER_InstanceGroupKind kind;
+  RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceKind(instance, &kind));
+
   LOG_MESSAGE(
       TRITONSERVER_LOG_INFO,
-      (std::string("TRITONBACKEND_ModelInstanceInitialize: ") + name +
-       " (device " + std::to_string(device_id) + ")")
+      (std::string("TRITONBACKEND_ModelInstanceInitialize: ") + name + " (" +
+       TRITONSERVER_InstanceGroupKindString(kind) + " device " +
+       std::to_string(device_id) + ")")
           .c_str());
 
   // Get the model state associated with this instance's model.
