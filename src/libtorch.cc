@@ -352,7 +352,8 @@ ModelState::ParseParameters()
       }
     } else {
       // Override, disable NvFuser till fixed
-      enable_nvfuser_pair_ = {true, false /* enable_nvfuser */};
+      enable_nvfuser = false;
+      enable_nvfuser_pair_ = {true, enable_nvfuser};
       LOG_MESSAGE(
           TRITONSERVER_LOG_INFO, (std::string("NvFuser is ") +
                                   (enable_nvfuser ? "enabled" : "disabled") +
