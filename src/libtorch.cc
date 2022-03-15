@@ -355,7 +355,7 @@ ModelState::ParseParameters()
       enable_nvfuser = false;
       enable_nvfuser_pair_ = {true, enable_nvfuser};
       LOG_MESSAGE(
-          TRITONSERVER_LOG_INFO, (std::string("NvFuser is ") +
+          TRITONSERVER_LOG_WARN, (std::string("NvFuser is ") +
                                   (enable_nvfuser ? "enabled" : "disabled") +
                                   " for model instance '" + Name() + "'")
                                      .c_str());
