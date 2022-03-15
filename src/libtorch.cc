@@ -1061,21 +1061,36 @@ ModelInstanceState::Execute(
           std::get<1>(model_state_->EnabledTensorExprFuser()));
     }
 
+    LOG_MESSAGE(
+        TRITONSERVER_LOG_INFO,
+        (std::string("[Before] RegisterCudaFuseGraph::isRegistered() is ") +
+         (torch::jit::RegisterCudaFuseGraph::isRegistered() ? "true"
+                                                            : "false"))
+            .c_str());
     // NV-Fuser. No change is made unless parameter is explicitly set.
     if (std::get<0>(model_state_->EnabledNvfuserPair())) {
       if (std::get<1>(model_state_->EnabledNvfuserPair()) &&
-          (device_ != torch::kCPU)) {
+          (device_.type() != torch::kCPU)) {
         torch::jit::overrideCanFuseOnCPU(false);
         torch::jit::overrideCanFuseOnGPU(false);
         torch::jit::setTensorExprFuserEnabled(false);
         torch::jit::RegisterCudaFuseGraph::registerPass(true);
+        LOG_MESSAGE(TRITONSERVER_LOG_INFO, "Enabled NvFuser");
       } else {
         torch::jit::overrideCanFuseOnCPU(true);
         torch::jit::overrideCanFuseOnGPU(true);
         torch::jit::setTensorExprFuserEnabled(true);
         torch::jit::RegisterCudaFuseGraph::registerPass(false);
+        LOG_MESSAGE(TRITONSERVER_LOG_INFO, "Disabled NvFuser");
       }
     }
+
+    LOG_MESSAGE(
+        TRITONSERVER_LOG_INFO,
+        (std::string("[After] RegisterCudaFuseGraph::isRegistered() is ") +
+         (torch::jit::RegisterCudaFuseGraph::isRegistered() ? "true"
+                                                            : "false"))
+            .c_str());
 
     torch::NoGradGuard no_grad;
 
