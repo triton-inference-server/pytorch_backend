@@ -394,6 +394,7 @@ ModelState::ParseParameters()
               .c_str());
     }
 
+    // TODO Re-enable NvFuser once fixed
     // If 'ENABLE_NVFUSER' is not present in 'parameters' then no
     // update is made to 'enable_nvfuser'.
     bool enable_nvfuser = false;
@@ -409,9 +410,11 @@ ModelState::ParseParameters()
         TRITONSERVER_ErrorDelete(err);
       }
     } else {
+      // Override, disable NvFuser till fixed
+      enable_nvfuser = false;
       enable_nvfuser_pair_ = {true, enable_nvfuser};
       LOG_MESSAGE(
-          TRITONSERVER_LOG_INFO, (std::string("NvFuser is ") +
+          TRITONSERVER_LOG_WARN, (std::string("NvFuser is ") +
                                   (enable_nvfuser ? "enabled" : "disabled") +
                                   " for model instance '" + Name() + "'")
                                      .c_str());
@@ -1136,7 +1139,7 @@ ModelInstanceState::Execute(
     // NV-Fuser. No change is made unless parameter is explicitly set.
     if (std::get<0>(model_state_->EnabledNvfuserPair())) {
       if (std::get<1>(model_state_->EnabledNvfuserPair()) &&
-          (device_ != torch::kCPU)) {
+          (device_.type() != torch::kCPU)) {
         torch::jit::overrideCanFuseOnCPU(false);
         torch::jit::overrideCanFuseOnGPU(false);
         torch::jit::setTensorExprFuserEnabled(false);
