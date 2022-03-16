@@ -592,6 +592,10 @@ ModelInstanceState::ValidateTypedSequenceControl(
 TRITONSERVER_Error*
 ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
 {
+  // Collect all the expected input tensor names and validate that the model
+  // configuration specifies only those.
+  std::set<std::string> allowed_inputs;
+
   const torch::jit::Method& method = torch_model_->get_method("forward");
   const auto& schema = method.function().getSchema();
   const std::vector<c10::Argument>& arguments = schema.arguments();
@@ -631,6 +635,7 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
              "Dict(str, Tensor) or input(s) of type Tensor are supported.")
                 .c_str());
       }
+      allowed_inputs.emplace(arguments.at(i).name());
     }
 
     // If all inputs are tensors, match number of expected inputs between model
@@ -670,20 +675,28 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
       // input names since they are the keys for the dictionary
       input_index_map_[io_name] = i;
     } else {
-      try {
-        int start_pos = io_name.find(deliminator);
-        if (start_pos == -1) {
-          throw std::invalid_argument("input must follow naming convention");
+      // input tensor name must be in 'allowed_inputs' or must follow the naming
+      // convention
+      auto itr = allowed_inputs.find(io_name);
+      if (itr != allowed_inputs.end()) {
+        input_index_map_[io_name] = std::distance(allowed_inputs.begin(), itr);
+      } else {
+        try {
+          int start_pos = io_name.find(deliminator);
+          if (start_pos == -1) {
+            throw std::invalid_argument("input must follow naming convention");
+          }
+          ip_index = std::atoi(io_name.substr(start_pos + 2).c_str());
+          input_index_map_[io_name] = ip_index;
         }
-        ip_index = std::atoi(io_name.substr(start_pos + 2).c_str());
-        input_index_map_[io_name] = ip_index;
-      }
-      catch (std::exception& ex) {
-        return TRITONSERVER_ErrorNew(
-            TRITONSERVER_ERROR_INTERNAL,
-            ("input '" + io_name +
-             "' does not follow naming convention i.e. <name>__<index>.")
-                .c_str());
+        catch (std::exception& ex) {
+          return TRITONSERVER_ErrorNew(
+              TRITONSERVER_ERROR_INTERNAL,
+              ("input '" + io_name +
+               "' is neither an input argument to the model nor does it "
+               "follow the naming convention i.e. <name>__<index>.")
+                  .c_str());
+        }
       }
     }
 
@@ -1393,10 +1406,14 @@ TRITONBACKEND_ModelInstanceInitialize(TRITONBACKEND_ModelInstance* instance)
   int32_t device_id;
   RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceDeviceId(instance, &device_id));
 
+  TRITONSERVER_InstanceGroupKind kind;
+  RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceKind(instance, &kind));
+
   LOG_MESSAGE(
       TRITONSERVER_LOG_INFO,
-      (std::string("TRITONBACKEND_ModelInstanceInitialize: ") + name +
-       " (device " + std::to_string(device_id) + ")")
+      (std::string("TRITONBACKEND_ModelInstanceInitialize: ") + name + " (" +
+       TRITONSERVER_InstanceGroupKindString(kind) + " device " +
+       std::to_string(device_id) + ")")
           .c_str());
 
   // Get the model state associated with this instance's model.
