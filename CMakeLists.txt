@@ -1,4 +1,4 @@
-# Copyright 2019-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2019-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -195,7 +195,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libtorch_cuda.so libtorch_cuda.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libtorch_global_deps.so libtorch_global_deps.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/vision/build/libtorchvision.so libtorchvision.so
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch_tensorrt/lib/libtorchtrt_runtime.so libtorchtrt_runtime.so || echo "error ignored..." || true
+    COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHTRT} = 'ON' ]; then docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch_tensorrt/lib/libtorchtrt_runtime.so libtorchtrt_runtime.so; fi"
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch_tensorrt/bin/torchtrtc torchtrtc || echo "error ignored..." || true
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/pytorch/LICENSE LICENSE.pytorch
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/include include/torch
@@ -331,6 +331,9 @@ FOREACH(p ${TRITON_PYTORCH_LIB_PATHS})
   set(TRITON_PYTORCH_LDFLAGS ${TRITON_PYTORCH_LDFLAGS} "-L${p}")
 ENDFOREACH(p)
 
+message(WARNING "TRITON_PYTORCH_LDFLAGS is ${TRITON_PYTORCH_LDFLAGS}")
+message(WARNING "TRITON_PYTORCH_LIBS is ${TRITON_PYTORCH_LIBS}")
+
 target_link_libraries(
   triton-pytorch-backend
   PRIVATE
@@ -384,7 +387,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
         ${CMAKE_CURRENT_BINARY_DIR}/torchtrtc
       DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/pytorch
     )
-  endif()
+  endif() # TRITON_PYTORCH_ENABLE_TORCHTRT
 
   FOREACH(plib ${PT_LIBS} ${OPENCV_LIBS})
     install(
