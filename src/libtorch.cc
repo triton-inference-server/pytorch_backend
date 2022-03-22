@@ -545,8 +545,7 @@ ModelInstanceState::ModelInstanceState(
 
 ModelInstanceState::~ModelInstanceState()
 {
-  // If this is the last instance, remove the pointer from the map too to
-  // deallocate memory
+  // If this is the last instance, remove the pointer from the model map
   if (torch_model_.use_count() == 2) {
     if (StateForModel()->UnloadModel(
             std::make_pair(!device_.is_cpu(), device_.index())) != 1) {
