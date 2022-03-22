@@ -326,26 +326,26 @@ if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
    )
 endif() # TRITON_PYTORCH_ENABLE_TORCHTRT
 
-if(TRITON_PYTORCH_LIB_PATHS STREQUAL "")
-  set(TRITON_PYTORCH_LDFLAGS "-L${CMAKE_CURRENT_BINARY_DIR}/libtorch.so")
+if (${TRITON_PYTORCH_DOCKER_BUILD})
+  set(TRITON_PYTORCH_LIBS "${CMAKE_CURRENT_BINARY_DIR}/libtorch.so")
 
   if (${TRITON_PYTORCH_ENABLE_TORCHVISION})
-    set(TRITON_PYTORCH_LDFLAGS
-        ${TRITON_PYTORCH_LDFLAGS}
-        "-L${CMAKE_CURRENT_BINARY_DIR}/libtorchvision.so")
+    set(TRITON_PYTORCH_LIBS
+        ${TRITON_PYTORCH_LIBS}
+        "${CMAKE_CURRENT_BINARY_DIR}/libtorchvision.so")
   endif() # TRITON_PYTORCH_ENABLE_TORCHVISION
 
   if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
-    set(TRITON_PYTORCH_LDFLAGS
-        ${TRITON_PYTORCH_LDFLAGS}
-        "-L${CMAKE_CURRENT_BINARY_DIR}/libtorchtrt_runtime.so")
+    set(TRITON_PYTORCH_LIBS
+        ${TRITON_PYTORCH_LIBS}
+        "${CMAKE_CURRENT_BINARY_DIR}/libtorchtrt_runtime.so")
   endif() # TRITON_PYTORCH_ENABLE_TORCHTRT
 else()
-  set(TRITON_PYTORCH_LDFLAGS "")
+  set(TRITON_PYTORCH_LIBS "")
   FOREACH(p ${TRITON_PYTORCH_LIB_PATHS})
-    set(TRITON_PYTORCH_LDFLAGS ${TRITON_PYTORCH_LDFLAGS} "-L${p}")
+    set(TRITON_PYTORCH_LIBS ${TRITON_PYTORCH_LIBS} "${p}")
   ENDFOREACH(p)
-endif() # TRITON_PYTORCH_LIB_PATHS
+endif() # TRITON_PYTORCH_DOCKER_BUILD
 
 target_link_libraries(
   triton-pytorch-backend
@@ -354,7 +354,6 @@ target_link_libraries(
     triton-core-backendapi # from repo-core
     triton-core-serverstub # from repo-core
     triton-backend-utils   # from repo-backend
-    ${TRITON_PYTORCH_LDFLAGS}
     ${TRITON_PYTORCH_LIBS}
 )
 
