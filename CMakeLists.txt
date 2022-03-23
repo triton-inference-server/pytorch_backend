@@ -1,4 +1,4 @@
-# Copyright 2019-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2019-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -195,7 +195,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libtorch_cuda.so libtorch_cuda.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/lib/libtorch_global_deps.so libtorch_global_deps.so
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/vision/build/libtorchvision.so libtorchvision.so
-    COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch_tensorrt/lib/libtorchtrt_runtime.so libtorchtrt_runtime.so || echo "error ignored..." || true
+    COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHTRT} = 'ON' ]; then docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch_tensorrt/lib/libtorchtrt_runtime.so libtorchtrt_runtime.so; fi"
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch_tensorrt/bin/torchtrtc torchtrtc || echo "error ignored..." || true
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/pytorch/LICENSE LICENSE.pytorch
     COMMAND docker cp pytorch_backend_ptlib:/opt/conda/lib/python3.8/site-packages/torch/include include/torch
@@ -308,28 +308,45 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
   )
 endif() # TRITON_PYTORCH_DOCKER_BUILD
 
-set (TRITON_PYTORCH_LIBS "-ltorch")
-
 message(STATUS "Torchvision support is ${TRITON_PYTORCH_ENABLE_TORCHVISION}")
-if (${TRITON_PYTORCH_ENABLE_TORCHVISION})
-   set(TRITON_PYTORCH_LIBS
-       ${TRITON_PYTORCH_LIBS}
-       "-ltorchvision"
-   )
-endif() # TRITON_PYTORCH_ENABLE_TORCHVISION
-
 message(STATUS "Torch-TRT support is ${TRITON_PYTORCH_ENABLE_TORCHTRT}")
-if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
-   set(TRITON_PYTORCH_LIBS
-       ${TRITON_PYTORCH_LIBS}
-       "-ltorchtrt_runtime"
-   )
-endif() # TRITON_PYTORCH_ENABLE_TORCHTRT
 
 set(TRITON_PYTORCH_LDFLAGS "")
-FOREACH(p ${TRITON_PYTORCH_LIB_PATHS})
-  set(TRITON_PYTORCH_LDFLAGS ${TRITON_PYTORCH_LDFLAGS} "-L${p}")
-ENDFOREACH(p)
+if (${TRITON_PYTORCH_DOCKER_BUILD})
+  set(TRITON_PYTORCH_LIBS "${CMAKE_CURRENT_BINARY_DIR}/libtorch.so")
+
+  if (${TRITON_PYTORCH_ENABLE_TORCHVISION})
+    set(TRITON_PYTORCH_LIBS
+        ${TRITON_PYTORCH_LIBS}
+        "${CMAKE_CURRENT_BINARY_DIR}/libtorchvision.so")
+  endif() # TRITON_PYTORCH_ENABLE_TORCHVISION
+
+  if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
+    set(TRITON_PYTORCH_LIBS
+        ${TRITON_PYTORCH_LIBS}
+        "${CMAKE_CURRENT_BINARY_DIR}/libtorchtrt_runtime.so")
+  endif() # TRITON_PYTORCH_ENABLE_TORCHTRT
+else()
+  set (TRITON_PYTORCH_LIBS "-ltorch")
+
+  if (${TRITON_PYTORCH_ENABLE_TORCHVISION})
+    set(TRITON_PYTORCH_LIBS
+        ${TRITON_PYTORCH_LIBS}
+        "-ltorchvision"
+    )
+  endif() # TRITON_PYTORCH_ENABLE_TORCHVISION
+
+  if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
+    set(TRITON_PYTORCH_LIBS
+        ${TRITON_PYTORCH_LIBS}
+        "-ltorchtrt_runtime"
+    )
+  endif() # TRITON_PYTORCH_ENABLE_TORCHTRT
+
+  FOREACH(p ${TRITON_PYTORCH_LIB_PATHS})
+    set(TRITON_PYTORCH_LDFLAGS ${TRITON_PYTORCH_LDFLAGS} "-L${p}")
+  ENDFOREACH(p)
+endif() # TRITON_PYTORCH_DOCKER_BUILD
 
 target_link_libraries(
   triton-pytorch-backend
@@ -384,7 +401,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
         ${CMAKE_CURRENT_BINARY_DIR}/torchtrtc
       DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/pytorch
     )
-  endif()
+  endif() # TRITON_PYTORCH_ENABLE_TORCHTRT
 
   FOREACH(plib ${PT_LIBS} ${OPENCV_LIBS})
     install(
