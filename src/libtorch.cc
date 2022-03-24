@@ -204,8 +204,7 @@ ModelState::LoadModel(
             "' for model instance '" + Name() + "'");
   }
 
-  // If torch model has already been been loaded on that device, skip loading
-  // that model Else load the model as usual
+  // Skip loading model if it is already available on the target device
   auto device_pair = std::make_pair(!device.is_cpu(), device.index());
   auto mit = torch_models_.find(device_pair);
   if (mit != torch_models_.end()) {
