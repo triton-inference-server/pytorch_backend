@@ -79,7 +79,7 @@ class ModelState : public BackendModel {
       std::string* model_path,
       std::shared_ptr<torch::jit::script::Module>* torch_model);
 
-  // Remove model from model map using its key
+  // Remove model from shared-weight model map using its key
   // Returns whether the model was unloaded
   bool UnloadModel(std::pair<bool, int64_t> key);
 
@@ -102,6 +102,8 @@ class ModelState : public BackendModel {
     return enable_nvfuser_pair_;
   }
 
+  bool EnabledWeightSharing() { return enable_weight_sharing_; }
+
  private:
   ModelState(TRITONBACKEND_Model* triton_model);
   TRITONSERVER_Error* AutoCompleteConfig();
@@ -114,6 +116,9 @@ class ModelState : public BackendModel {
 
   // Flag to indicate whether inference mode is enabled. Defaults to false.
   bool enable_inference_mode_;
+
+  // Flag to indicate whether weight sharing is enabled. Defaults to false.
+  bool enable_weight_sharing_;
 
   // Flag pairs to indicate if various JIT settings are set and
   // enabled respectively. Defaults to (false, true). Default behavior
@@ -171,7 +176,8 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     : BackendModel(triton_model), enable_optimized_execution_(true),
-      enable_inference_mode_(false), enable_tensor_fuser_pair_({false, true}),
+      enable_inference_mode_(false), enable_weight_sharing_(false),
+      enable_tensor_fuser_pair_({false, true}),
       enable_jit_profiling_pair_({false, true}),
       enable_jit_executor_pair_({false, true}),
       enable_nvfuser_pair_({false, false})
@@ -204,17 +210,21 @@ ModelState::LoadModel(
             "' for model instance '" + Name() + "'");
   }
 
-  // Skip loading model if it is already available on the target device
-  auto device_pair = std::make_pair(!device.is_cpu(), device.index());
-  auto mit = torch_models_.find(device_pair);
-  if (mit != torch_models_.end()) {
-    *torch_model = mit->second;
-    LOG_MESSAGE(
-        TRITONSERVER_LOG_INFO,
-        (std::string("Re-using TorchScript model for instance '") + Name() +
-         "'")
-            .c_str());
-    return nullptr;  // success
+  // If weight sharing is enabled, skip loading model if
+  // it is already available on the target device
+  std::pair<bool, int> device_pair;
+  if (enable_weight_sharing_) {
+    device_pair = std::make_pair(!device.is_cpu(), device.index());
+    auto mit = torch_models_.find(device_pair);
+    if (mit != torch_models_.end()) {
+      *torch_model = mit->second;
+      LOG_MESSAGE(
+          TRITONSERVER_LOG_INFO,
+          (std::string("Re-using TorchScript model for instance '") + Name() +
+           "'")
+              .c_str());
+      return nullptr;  // success
+    }
   }
 
 
@@ -236,8 +246,16 @@ ModelState::LoadModel(
         TRITONSERVER_ERROR_INTERNAL,
         ("failed to load model '" + Name() + "': " + ex.what()).c_str());
   }
-
-  torch_models_.emplace(device_pair, *torch_model);
+  if (enable_weight_sharing_) {
+    if (!((torch_models_.emplace(device_pair, *torch_model)).second)) {
+      std::string type = device.is_cpu() ? "CPU" : "GPU";
+      LOG_MESSAGE(
+          TRITONSERVER_LOG_WARN,
+          (std::string("Model already found on target ") + type + " device " +
+           "(id " + std::to_string(device.index()) + ") for '" + Name() + "'")
+              .c_str());
+    }
+  }
 
   return nullptr;  // success
 }
@@ -323,6 +341,25 @@ ModelState::ParseParameters()
           TRITONSERVER_LOG_INFO,
           (std::string("Tensor fuser is ") +
            (enable_tensor_fuser ? "enabled" : "disabled") +
+           " for model instance '" + Name() + "'")
+              .c_str());
+    }
+
+    // If 'ENABLE_WEIGHT_SHARING' is not present in 'parameters' then no
+    // update is made to 'enable_weight_sharing'.
+    err = ParseParameter(
+        params, "ENABLE_WEIGHT_SHARING", &enable_weight_sharing_);
+    if (err != nullptr) {
+      if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
+        return err;
+      } else {
+        TRITONSERVER_ErrorDelete(err);
+      }
+    } else {
+      LOG_MESSAGE(
+          TRITONSERVER_LOG_INFO,
+          (std::string("Weight sharing is ") +
+           (enable_weight_sharing_ ? "enabled" : "disabled") +
            " for model instance '" + Name() + "'")
               .c_str());
     }
@@ -544,15 +581,17 @@ ModelInstanceState::ModelInstanceState(
 
 ModelInstanceState::~ModelInstanceState()
 {
-  // If this is the last instance, remove the pointer from the model map
+  // If weight sharing is enabled and this is the last model instance,
+  // remove the pointer from the model map
   if (torch_model_.use_count() == 2) {
     if (!StateForModel()->UnloadModel(
             std::make_pair(!device_.is_cpu(), device_.index()))) {
-      std::string type = device_is_cpu() ? "CPU" : "GPU";
+      std::string type = device_.is_cpu() ? "CPU" : "GPU";
       LOG_MESSAGE(
           TRITONSERVER_LOG_ERROR,
-          (std::to_string("No model found on target ") + type + " device " +
-           "(id " + device_index() + ") for '" + Name() + "'")
+          (std::string("No shared-weight model found on target ") + type +
+           " device " + "(id " + std::to_string(device_.index()) + ") for '" +
+           Name() + "'")
               .c_str());
     }
   }
