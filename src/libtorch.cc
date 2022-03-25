@@ -80,8 +80,8 @@ class ModelState : public BackendModel {
       std::shared_ptr<torch::jit::script::Module>* torch_model);
 
   // Remove model from model map using its key
-  // Returns the number of models removed (0 or 1)
-  size_t UnloadModel(std::pair<bool, int64_t> key);
+  // Returns whether the model was unloaded
+  bool UnloadModel(std::pair<bool, int64_t> key);
 
   bool EnabledOptimizedExecution() { return enable_optimized_execution_; }
   const std::pair<bool, bool>& EnabledTensorExprFuser() const
@@ -127,8 +127,8 @@ class ModelState : public BackendModel {
   // Defaults to (false, false).
   std::pair<bool, bool> enable_nvfuser_pair_;
 
-  // Share torch module across instances on the same device. They key is a pair
-  // of isGPU, Device Index
+  // Share TorchScript model across all instances on the same device. The key
+  // is a pair of isGPU and device index.
   std::map<
       std::pair<bool, int64_t>, std::shared_ptr<torch::jit::script::Module>>
       torch_models_;
@@ -211,8 +211,8 @@ ModelState::LoadModel(
     *torch_model = mit->second;
     LOG_MESSAGE(
         TRITONSERVER_LOG_INFO,
-        (std::string("Re-using model for pytorch for model instance '") +
-         Name() + "'")
+        (std::string("Re-using TorchScript model for instance '") + Name() +
+         "'")
             .c_str());
     return nullptr;  // success
   }
@@ -242,10 +242,10 @@ ModelState::LoadModel(
   return nullptr;  // success
 }
 
-size_t
+bool
 ModelState::UnloadModel(std::pair<bool, int64_t> key)
 {
-  return torch_models_.erase(key);
+  return (torch_models_.erase(key) > 0);
 }
 
 TRITONSERVER_Error*
@@ -546,11 +546,14 @@ ModelInstanceState::~ModelInstanceState()
 {
   // If this is the last instance, remove the pointer from the model map
   if (torch_model_.use_count() == 2) {
-    if (StateForModel()->UnloadModel(
-            std::make_pair(!device_.is_cpu(), device_.index())) != 1) {
+    if (!StateForModel()->UnloadModel(
+            std::make_pair(!device_.is_cpu(), device_.index()))) {
+      std::string type = device_is_cpu() ? "CPU" : "GPU";
       LOG_MESSAGE(
           TRITONSERVER_LOG_ERROR,
-          ("Model mapping not found for '" + Name() + "'").c_str());
+          (std::to_string("No model found on target ") + type + " device " +
+           "(id " + device_index() + ") for '" + Name() + "'")
+              .c_str());
     }
   }
   torch_model_.reset();
