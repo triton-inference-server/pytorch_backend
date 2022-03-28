@@ -111,7 +111,7 @@ execution of models without these optimizations. In some models, optimized execu
 does not benefit performance as seen [here](https://github.com/pytorch/pytorch/issues/19978)
 and in other cases impacts performance negatively, as seen [here](https://github.com/pytorch/pytorch/issues/53824).
 
-The section of model config file specifying this parameters will look like:
+The section of model config file specifying this parameter will look like:
 
 ```
 parameters: {
@@ -133,7 +133,7 @@ this mode gets better performance by disabling autograd.
 Please note that in some models, InferenceMode might not benefit performance
 and in fewer cases might impact performance negatively.
 
-The section of model config file specifying this parameters will look like:
+The section of model config file specifying this parameter will look like:
 
 ```
 parameters: {
@@ -153,7 +153,7 @@ Please note that in some models generated using trace in old PyTorch versions mi
 correctly with NvFuser. We recommend using scripting and a recent version of PyTorch
 to generate these models.
 
-The section of model config file specifying this parameters will look like:
+The section of model config file specifying this parameter will look like:
 
 ```
 parameters: {
