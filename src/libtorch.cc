@@ -220,7 +220,7 @@ ModelState::LoadModel(
       *torch_model = mit->second;
       LOG_MESSAGE(
           TRITONSERVER_LOG_INFO,
-          (std::string("Re-using TorchScript model for instance '") + Name() +
+          (std::string("Reusing TorchScript model for instance '") + Name() +
            "'")
               .c_str());
       return nullptr;  // success
