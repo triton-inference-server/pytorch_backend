@@ -227,7 +227,6 @@ ModelState::LoadModel(
     }
   }
 
-
   // Serialize the torch model to string
   std::string model_data_str;
   RETURN_IF_ERROR(ReadTextFile(*model_path, &model_data_str));
@@ -246,6 +245,7 @@ ModelState::LoadModel(
         TRITONSERVER_ERROR_INTERNAL,
         ("failed to load model '" + Name() + "': " + ex.what()).c_str());
   }
+
   if (enable_weight_sharing_) {
     if (!((torch_models_.emplace(device_pair, *torch_model)).second)) {
       std::string type = device.is_cpu() ? "CPU" : "GPU";
