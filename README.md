@@ -164,6 +164,21 @@ key: "ENABLE_NVFUSER"
 }
 ```
 
+* `ENABLE_WEIGHT_SHARING`: Boolean flag to enable model instances on the same device to
+share weights. This optimization should not be used with stateful models. If not specified,
+weight sharing is disabled.
+
+The section of model config file specifying this parameter will look like:
+
+```
+parameters: {
+key: "ENABLE_WEIGHT_SHARING"
+    value: {
+    string_value:"true"
+    }
+}
+```
+
 * Additional Optimizations: Three additional boolean parameters are available to disable
 certain Torch optimizations that can sometimes cause latency regressions in models with
 complex execution modes and dynamic shapes. If not specified, all are enabled by default.
