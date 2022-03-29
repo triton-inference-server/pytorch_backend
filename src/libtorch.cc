@@ -79,10 +79,6 @@ class ModelState : public BackendModel {
       std::string* model_path,
       std::shared_ptr<torch::jit::script::Module>* torch_model);
 
-  // Remove model from shared-weight model map using its key
-  // Returns whether the model was unloaded
-  bool UnloadModel(std::pair<bool, int64_t> key);
-
   bool EnabledOptimizedExecution() { return enable_optimized_execution_; }
   const std::pair<bool, bool>& EnabledTensorExprFuser() const
   {
@@ -258,12 +254,6 @@ ModelState::LoadModel(
   }
 
   return nullptr;  // success
-}
-
-bool
-ModelState::UnloadModel(std::pair<bool, int64_t> key)
-{
-  return (torch_models_.erase(key) > 0);
 }
 
 TRITONSERVER_Error*
@@ -581,20 +571,6 @@ ModelInstanceState::ModelInstanceState(
 
 ModelInstanceState::~ModelInstanceState()
 {
-  // If weight sharing is enabled and this is the last model instance,
-  // remove the pointer from the model map
-  if (torch_model_.use_count() == 2) {
-    if (!StateForModel()->UnloadModel(
-            std::make_pair(!device_.is_cpu(), device_.index()))) {
-      std::string type = device_.is_cpu() ? "CPU" : "GPU";
-      LOG_MESSAGE(
-          TRITONSERVER_LOG_ERROR,
-          (std::string("No shared-weight model found on target ") + type +
-           " device " + "(id " + std::to_string(device_.index()) + ") for '" +
-           Name() + "'")
-              .c_str());
-    }
-  }
   torch_model_.reset();
 #ifdef TRITON_ENABLE_GPU
   if (device_.is_cuda()) {
