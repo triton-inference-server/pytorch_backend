@@ -132,8 +132,8 @@ class ModelState : public BackendModel {
   // Defaults to (false, false).
   std::pair<bool, bool> enable_nvfuser_pair_;
 
-  // Share TorchScript model across all instances on the same device. The key
-  // is a pair of isGPU and device index.
+  // Model mapping for shared TorchScript model across all instances on the
+  // same device. The key is a pair of isGPU and device index.
   std::map<
       std::pair<bool, int64_t>, std::shared_ptr<torch::jit::script::Module>>
       torch_models_;
