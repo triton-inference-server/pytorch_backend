@@ -1,4 +1,4 @@
-# Copyright 2019-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2019-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -125,60 +125,67 @@ endif() # TRITON_ENABLE_GPU
 #
 configure_file(src/libtriton_pytorch.ldscript libtriton_pytorch.ldscript COPYONLY)
 
-if (${TRITON_PYTORCH_DOCKER_BUILD})
-  if (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
-    set(LIBS_ARCH "aarch64")
-    set(CONDA_LIBS
-        "libopenblas.so.0"
-    )
-  else()
-    set(LIBS_ARCH "x86_64")
-    set(CONDA_LIBS
-        "libmkl_core.so"
-        "libmkl_gnu_thread.so"
-        "libmkl_intel_lp64.so"
-        "libmkl_intel_thread.so"
-        "libmkl_def.so"
-        "libmkl_vml_def.so"
-        "libmkl_rt.so"
-        "libmkl_avx2.so"
-        "libmkl_avx512.so"
-        "libmkl_sequential.so"
-        "libomp.so"
-    )
-  endif()
+set(PT_LIBS
+    "libc10.so"
+    "libc10_cuda.so"
+    "libtorch.so"
+    "libtorch_cpu.so"
+    "libtorch_cuda.so"
+    "libtorch_global_deps.so"
+)
+
+if (${TRITON_PYTORCH_ENABLE_TORCHVISION})
   set(PT_LIBS
-      ${CONDA_LIBS}
-      "libc10.so"
-      "libc10_cuda.so"
-      "libtorch.so"
-      "libtorch_cpu.so"
-      "libtorch_cuda.so"
-      "libtorch_global_deps.so"
+      ${PT_LIBS}
       "libtorchvision.so"
   )
-  set(OPENCV_LIBS
-      "libopencv_video.so"
-      "libopencv_videoio.so"
-      "libopencv_highgui.so"
-      "libopencv_imgcodecs.so"
-      "libopencv_imgproc.so"
-      "libopencv_core.so"
-      "libpng16.so"
+endif() # TRITON_PYTORCH_ENABLE_TORCHVISION
+
+if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
+  set(PT_LIBS
+      ${PT_LIBS}
+      "libtorchtrt_runtime.so"
   )
+endif() # TRITON_PYTORCH_ENABLE_TORCHTRT
 
+if (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
+  set(LIBS_ARCH "aarch64")
+  set(CONDA_LIBS
+      "libopenblas.so.0"
+  )
+else()
+  set(LIBS_ARCH "x86_64")
+  set(CONDA_LIBS
+      "libmkl_core.so"
+      "libmkl_gnu_thread.so"
+      "libmkl_intel_lp64.so"
+      "libmkl_intel_thread.so"
+      "libmkl_def.so"
+      "libmkl_vml_def.so"
+      "libmkl_rt.so"
+      "libmkl_avx2.so"
+      "libmkl_avx512.so"
+      "libmkl_sequential.so"
+      "libomp.so"
+  )
+endif()
+set(OPENCV_LIBS
+    "libopencv_video.so"
+    "libopencv_videoio.so"
+    "libopencv_highgui.so"
+    "libopencv_imgcodecs.so"
+    "libopencv_imgproc.so"
+    "libopencv_core.so"
+    "libpng16.so"
+)
+
+if (${TRITON_PYTORCH_DOCKER_BUILD})
   string(REPLACE ";" " " CONDA_LIBS_STR "${CONDA_LIBS}")
-
-  if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
-    set(PT_LIBS
-        ${PT_LIBS}
-        "libtorchtrt_runtime.so"
-    )
-  endif() # TRITON_PYTORCH_ENABLE_TORCHTRT
 
   add_custom_command(
     OUTPUT
       ${PT_LIBS}
+      ${CONDA_LIBS}
       ${OPENCV_LIBS}
       LICENSE.pytorch
       include/torch
@@ -218,7 +225,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMENT "Extracting pytorch and torchvision libraries and includes from ${TRITON_PYTORCH_DOCKER_IMAGE}"
     VERBATIM
   )
-  add_custom_target(ptlib_target DEPENDS ${PT_LIBS} ${OPENCV_LIBS})
+  add_custom_target(ptlib_target DEPENDS ${PT_LIBS} ${CONDA_LIBS} ${OPENCV_LIBS})
   add_library(ptlib SHARED IMPORTED GLOBAL)
   add_dependencies(ptlib ptlib_target)
 
@@ -367,7 +374,7 @@ install(
 
 if (${TRITON_PYTORCH_DOCKER_BUILD})
   set(PT_LIB_PATHS "")
-  FOREACH(plib ${PT_LIBS} ${OPENCV_LIBS})
+  FOREACH(plib ${PT_LIBS} ${CONDA_LIBS} ${OPENCV_LIBS})
     set(PT_LIB_PATHS ${PT_LIB_PATHS} "${CMAKE_CURRENT_BINARY_DIR}/${plib}")
   ENDFOREACH(plib)
 
@@ -386,7 +393,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     )
   endif()
 
-  FOREACH(plib ${PT_LIBS} ${OPENCV_LIBS})
+  FOREACH(plib ${PT_LIBS} ${CONDA_LIBS} ${OPENCV_LIBS})
     install(
       CODE
         "EXECUTE_PROCESS(
@@ -416,6 +423,29 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
         message(FATAL_ERROR \"FAILED: to create links\")
       endif()"
   )
+else()
+  FOREACH(plib ${PT_LIBS})
+    set(PT_LIB_PATHS ${PT_LIB_PATHS} "${TRITON_PYTORCH_LIB_PATHS}/${plib}")
+  ENDFOREACH(plib)
+
+  install(
+    FILES
+      ${PT_LIB_PATHS}
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/pytorch
+  )
+
+  FOREACH(plib ${PT_LIBS})
+    install(
+      CODE
+        "EXECUTE_PROCESS(
+          COMMAND patchelf --set-rpath \$ORIGIN ${plib}
+          RESULT_VARIABLE PATCHELF_STATUS
+          WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/backends/pytorch)
+        if(PATCHELF_STATUS AND NOT PATCHELF_STATUS EQUAL 0)
+          message(FATAL_ERROR \"FAILED: to run patchelf\")
+        endif()"
+    )
+  ENDFOREACH(plib)
 endif() # TRITON_PYTORCH_DOCKER_BUILD
 
 install(
