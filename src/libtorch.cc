@@ -77,7 +77,7 @@ class ModelState : public BackendModel {
   TRITONSERVER_Error* LoadModel(
       const std::string& artifact_name, const torch::Device device,
       std::string* model_path,
-      std::unique_ptr<torch::jit::script::Module>* torch_model);
+      std::shared_ptr<torch::jit::script::Module>* torch_model);
 
   bool EnabledOptimizedExecution() { return enable_optimized_execution_; }
   const std::pair<bool, bool>& EnabledTensorExprFuser() const
@@ -98,6 +98,8 @@ class ModelState : public BackendModel {
     return enable_nvfuser_pair_;
   }
 
+  bool EnabledWeightSharing() { return enable_weight_sharing_; }
+
  private:
   ModelState(TRITONBACKEND_Model* triton_model);
   TRITONSERVER_Error* AutoCompleteConfig();
@@ -111,6 +113,9 @@ class ModelState : public BackendModel {
   // Flag to indicate whether inference mode is enabled. Defaults to false.
   bool enable_inference_mode_;
 
+  // Flag to indicate whether weight sharing is enabled. Defaults to false.
+  bool enable_weight_sharing_;
+
   // Flag pairs to indicate if various JIT settings are set and
   // enabled respectively. Defaults to (false, true). Default behavior
   // is to do nothing if not explicitly set. Tensor fuser flag is
@@ -122,6 +127,12 @@ class ModelState : public BackendModel {
   // Flag pair to indicate whether nvfuser is set and enabled respectively.
   // Defaults to (false, false).
   std::pair<bool, bool> enable_nvfuser_pair_;
+
+  // Model mapping for shared TorchScript model across all instances on the
+  // same device. The key is a pair of isGPU and device index.
+  std::map<
+      std::pair<bool, int64_t>, std::shared_ptr<torch::jit::script::Module>>
+      torch_models_;
 };
 
 TRITONSERVER_Error*
@@ -161,7 +172,8 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     : BackendModel(triton_model), enable_optimized_execution_(true),
-      enable_inference_mode_(false), enable_tensor_fuser_pair_({false, true}),
+      enable_inference_mode_(false), enable_weight_sharing_(false),
+      enable_tensor_fuser_pair_({false, true}),
       enable_jit_profiling_pair_({false, true}),
       enable_jit_executor_pair_({false, true}),
       enable_nvfuser_pair_({false, false})
@@ -172,7 +184,7 @@ TRITONSERVER_Error*
 ModelState::LoadModel(
     const std::string& artifact_name, const torch::Device device,
     std::string* model_path,
-    std::unique_ptr<torch::jit::script::Module>* torch_model)
+    std::shared_ptr<torch::jit::script::Module>* torch_model)
 {
   // Find the TorchScript file that describes the model. If the model
   // configuration doesn't have an explicit model file specified then
@@ -194,6 +206,23 @@ ModelState::LoadModel(
             "' for model instance '" + Name() + "'");
   }
 
+  // If weight sharing is enabled, skip loading model if
+  // it is already available on the target device
+  std::pair<bool, int> device_pair;
+  if (enable_weight_sharing_) {
+    device_pair = std::make_pair(!device.is_cpu(), device.index());
+    auto mit = torch_models_.find(device_pair);
+    if (mit != torch_models_.end()) {
+      *torch_model = mit->second;
+      LOG_MESSAGE(
+          TRITONSERVER_LOG_INFO,
+          (std::string("Reusing TorchScript model for instance '") + Name() +
+           "'")
+              .c_str());
+      return nullptr;  // success
+    }
+  }
+
   // Serialize the torch model to string
   std::string model_data_str;
   RETURN_IF_ERROR(ReadTextFile(*model_path, &model_data_str));
@@ -211,6 +240,17 @@ ModelState::LoadModel(
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INTERNAL,
         ("failed to load model '" + Name() + "': " + ex.what()).c_str());
+  }
+
+  if (enable_weight_sharing_) {
+    if (!((torch_models_.emplace(device_pair, *torch_model)).second)) {
+      std::string type = device.is_cpu() ? "CPU" : "GPU";
+      LOG_MESSAGE(
+          TRITONSERVER_LOG_WARN,
+          (std::string("Model already found on target ") + type + " device " +
+           "(id " + std::to_string(device.index()) + ") for '" + Name() + "'")
+              .c_str());
+    }
   }
 
   return nullptr;  // success
@@ -291,6 +331,25 @@ ModelState::ParseParameters()
           TRITONSERVER_LOG_INFO,
           (std::string("Tensor fuser is ") +
            (enable_tensor_fuser ? "enabled" : "disabled") +
+           " for model instance '" + Name() + "'")
+              .c_str());
+    }
+
+    // If 'ENABLE_WEIGHT_SHARING' is not present in 'parameters' then no
+    // update is made to 'enable_weight_sharing'.
+    err = ParseParameter(
+        params, "ENABLE_WEIGHT_SHARING", &enable_weight_sharing_);
+    if (err != nullptr) {
+      if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
+        return err;
+      } else {
+        TRITONSERVER_ErrorDelete(err);
+      }
+    } else {
+      LOG_MESSAGE(
+          TRITONSERVER_LOG_INFO,
+          (std::string("Weight sharing is ") +
+           (enable_weight_sharing_ ? "enabled" : "disabled") +
            " for model instance '" + Name() + "'")
               .c_str());
     }
@@ -419,7 +478,7 @@ class ModelInstanceState : public BackendModelInstance {
   // The full path to the TorchScript model file.
   std::string model_path_;
 
-  std::unique_ptr<torch::jit::script::Module> torch_model_;
+  std::shared_ptr<torch::jit::script::Module> torch_model_;
   torch::Device device_;
 
   // Map from configuration name for an input to the index of
