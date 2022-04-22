@@ -1159,7 +1159,14 @@ ModelInstanceState::Execute(
       torch::Dict<std::string, torch::Tensor> input_dict;
       for (auto& input_index : input_index_map_) {
         torch::jit::IValue ival = (*input_tensors)[input_index.second];
-        input_dict.insert(input_index.first, ival.toTensor());
+        std::string tensor_name = input_index.first;
+        std::string deliminator = "__";
+        int start_pos = tensor_name.find(deliminator);
+        if (start_pos == -1) {
+          input_dict.insert(tensor_name, ival.toTensor());
+        } else {
+          input_dict.insert(tensor_name.substr(0, start_pos), ival.toTensor());
+        }
       }
       std::vector<torch::jit::IValue> input_dict_ivalue = {input_dict};
       model_outputs_ = torch_model_->forward(input_dict_ivalue);
