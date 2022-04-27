@@ -1277,7 +1277,8 @@ FillStringTensor(
     torch::List<std::string>* input_list, const size_t idx, const size_t cnt)
 {
   for (size_t c = 0; c < cnt; ++c) {
-    (*input_list)[idx + c] = std::string(nullptr, 0);
+    input_list->push_back("");
+    // (*input_list)[idx + c] = "";
   }
 }
 
@@ -1362,8 +1363,24 @@ SetStringInputTensor(
       return cuda_copy;
     }
 
+    LOG_MESSAGE(
+        TRITONSERVER_LOG_INFO,
+        (std::string("len: ") + std::to_string(len)).c_str());
+    LOG_MESSAGE(
+        TRITONSERVER_LOG_INFO,
+        (std::string("tensor_offset: ") + std::to_string(tensor_offset))
+            .c_str());
+    LOG_MESSAGE(
+        TRITONSERVER_LOG_INFO,
+        (std::string("element_idx: ") + std::to_string(element_idx)).c_str());
+    LOG_MESSAGE(
+        TRITONSERVER_LOG_INFO, (std::string("std::string(content, len): '") +
+                                std::string(content, len) + "'")
+                                   .c_str());
+
     // Set string value
-    (*input_list)[tensor_offset + element_idx] = std::string(content, len);
+    input_list->push_back(std::string(content, len));
+    // (*input_list)[tensor_offset + element_idx] = std::string(content, len);
 
     content += len;
     content_byte_size -= len;
