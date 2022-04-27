@@ -1405,6 +1405,59 @@ SetStringInputTensor(
   return cuda_copy;
 }
 
+bool
+SetStringOutputBuffer(
+    torch::List<torch::jit::IValue>* tensor, TRITONBACKEND_Response** response,
+    TRITONBACKEND_Output* response_output, const size_t tensor_element_count,
+    const size_t tensor_offset, cudaStream_t stream, std::string* serialized)
+{
+  bool cuda_copy = false;
+
+  // Serialize the output tensor strings. Each string is serialized as
+  // a 4-byte length followed by the string itself with no
+  // null-terminator.
+  serialized->clear();
+  for (size_t e = 0; e < tensor_element_count; ++e) {
+    // size_t len;
+    std::string str = tensor->get(e).to<std::string>();
+    const char* cstr = str.c_str();
+    size_t len = str.length();
+    serialized->append(reinterpret_cast<const char*>(&len), sizeof(uint32_t));
+    if (len > 0) {
+      serialized->append(cstr, len);
+    }
+  }
+
+  // Allocate a buffer large enough to hold the serialized tensor.
+  TRITONSERVER_MemoryType actual_memory_type = TRITONSERVER_MEMORY_CPU;
+  int64_t actual_memory_type_id = 0;
+
+  void* buffer;
+  auto err = TRITONBACKEND_OutputBuffer(
+      response_output, &buffer, serialized->size(), &actual_memory_type,
+      &actual_memory_type_id);
+  if (err != nullptr) {
+    RESPOND_AND_SET_NULL_IF_ERROR(response, err);
+    return cuda_copy;
+  }
+
+  // Copy the serialized tensor into the allocated buffer.
+  bool cuda_used = false;
+  err = CopyBuffer(
+      "String output", TRITONSERVER_MEMORY_CPU /* src_memory_type */,
+      0 /* src_memory_type_id */, actual_memory_type, actual_memory_type_id,
+      serialized->size(), reinterpret_cast<const void*>(serialized->c_str()),
+      buffer, stream, &cuda_used);
+  cuda_copy |= cuda_used;
+
+  if (err != nullptr) {
+    RESPOND_AND_SET_NULL_IF_ERROR(response, err);
+    return cuda_copy;
+  }
+
+  return cuda_copy;
+}
+
 TRITONSERVER_Error*
 ModelInstanceState::SetInputTensors(
     size_t total_batch_size, TRITONBACKEND_Request** requests,
@@ -1538,7 +1591,8 @@ ModelInstanceState::ReadOutputTensors(
       CudaStream());
 
   bool cuda_copy = false;
-  std::vector<std::vector<char>> string_buffers;
+  // The serialized string buffer must be valid until output copies are done
+  std::vector<std::unique_ptr<std::string>> string_buffer;
   for (size_t idx = 0; idx < output_names.size(); idx++) {
     std::string name = output_names[idx];
     int op_index = output_index_map_[name];
@@ -1576,7 +1630,7 @@ ModelInstanceState::ReadOutputTensors(
       // Output tensors may not reside on the same device as model
       torch::Device tensor_device = output_flat.device();
 
-      // Set output shape
+      // Get output shape
       std::vector<int64_t> batchn_shape;
       auto shape = output_tensors[op_index].toTensor().sizes();
       for (auto itr = shape.begin(); itr != shape.end(); itr++) {
@@ -1598,14 +1652,13 @@ ModelInstanceState::ReadOutputTensors(
           (tensor_device.type() == torch::kCPU) ? 0 : tensor_device.index());
 
     } else if (output_tensors[op_index].isList()) {
-      torch::List<torch::jit::IValue> output_list =
-          output_tensors[op_index].toList();
-      // LOG_MESSAGE(
-      //     TRITONSERVER_LOG_INFO, ("output_list.elementType(): " +
-      //                             std::string(output_list.elementType()->str()))
-      //                                .c_str());
-      // auto output_list = output_tensors[op_index].toList();
+        // Custom handling for string/bytes tensor...
+
+      torch::List<torch::jit::IValue> output_list = output_tensors[op_index].toList();
+
+      // Get output shape
       size_t list_length = output_list.size();
+      std::vector<int64_t> batchn_shape{list_length};
       if (output_list.elementType()->kind() != c10::TypeKind::StringType) {
         return TRITONSERVER_ErrorNew(
             TRITONSERVER_ERROR_INVALID_ARG,
@@ -1615,46 +1668,28 @@ ModelInstanceState::ReadOutputTensors(
                 .c_str());
       }
 
-      std::string serialized = "";
-      // for (auto& list_elem : output_list) {
-      for (size_t idx = 0; idx < list_length; ++idx) {
-        // size_t len;
-        std::string str = output_list.get(idx).to<std::string>();
-        // std::string str = list_elem.to<std::string>();
-        size_t len = str.length();
-        serialized.append(
-            reinterpret_cast<const char*>(&len), sizeof(uint32_t));
-        if (len > 0) {
-          serialized.append(str);
+      size_t tensor_offset = 0;
+
+      for (size_t idx = 0; idx < responses->size(); idx++) {
+        auto& response = (*responses)[idx];
+
+        const size_t tensor_element_cnt = GetElementCount(batchn_shape);
+
+        // Only need an response tensor for requested outputs.
+        if (response != nullptr) {
+          TRITONBACKEND_Output* response_output;
+          RESPOND_AND_SET_NULL_IF_ERROR(
+              &response, TRITONBACKEND_ResponseOutput(
+                             response, &response_output, name.c_str(), TRITONSERVER_TYPE_BYTES,
+                             batchn_shape.data(), batchn_shape.size()));
+          string_buffer.emplace_back(new std::string());
+          cuda_copy |= SetStringOutputBuffer(
+              &output_list, &response, response_output, tensor_element_cnt,
+              tensor_offset, CudaStream(), string_buffer.back().get());
         }
+
+        tensor_offset += tensor_element_cnt;
       }
-
-      // TRITONBACKEND_Output* response_output;
-      // RESPOND_AND_SET_NULL_IF_ERROR(
-      //     &response, TRITONBACKEND_ResponseOutput(
-      //                    response, &response_output, name.c_str(),
-      //                    TRITONSERVER_TYPE_BYTES, {list_length}, 1));
-
-      // // Allocate a buffer large enough to hold the serialized tensor.
-      // TRITONSERVER_MemoryType actual_memory_type = TRITONSERVER_MEMORY_CPU;
-      // int64_t actual_memory_type_id = 0;
-
-      // void* buffer;
-      // auto err = TRITONBACKEND_OutputBuffer(
-      //     response_output, &buffer, serialized.size(), &actual_memory_type,
-      //     &actual_memory_type_id);
-      // if (err != nullptr) {
-      //   RESPOND_AND_SET_NULL_IF_ERROR(response, err);
-      //   return cuda_copy;
-      // }
-
-      std::vector<int64_t> batchn_shape;
-      batchn_shape.push_back(list_length);
-
-      responder.ProcessTensor(
-          name, TRITONSERVER_TYPE_BYTES, batchn_shape, serialized.c_str(),
-          TRITONSERVER_MEMORY_CPU, 0);
-
     } else {
       return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INVALID_ARG,
