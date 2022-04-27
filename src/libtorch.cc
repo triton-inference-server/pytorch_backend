@@ -1170,14 +1170,10 @@ ModelInstanceState::Execute(
     if (model_outputs_.isTuple()) {
       auto model_outputs_tuple = model_outputs_.toTuple();
       for (auto& m_op : model_outputs_tuple->elements()) {
-        // if (m_op.isList()) {
-        // }
         output_tensors->push_back(m_op);
-        // output_tensors->push_back(m_op.toTensor());
       }
     } else {
       try {
-        // auto model_output_tensor = model_outputs_.toTensor();
         output_tensors->push_back(model_outputs_);
       }
       catch (std::exception& exx) {
@@ -1278,7 +1274,6 @@ FillStringTensor(
 {
   for (size_t c = 0; c < cnt; ++c) {
     input_list->push_back("");
-    // (*input_list)[idx + c] = "";
   }
 }
 
@@ -1363,24 +1358,8 @@ SetStringInputTensor(
       return cuda_copy;
     }
 
-    LOG_MESSAGE(
-        TRITONSERVER_LOG_INFO,
-        (std::string("len: ") + std::to_string(len)).c_str());
-    LOG_MESSAGE(
-        TRITONSERVER_LOG_INFO,
-        (std::string("tensor_offset: ") + std::to_string(tensor_offset))
-            .c_str());
-    LOG_MESSAGE(
-        TRITONSERVER_LOG_INFO,
-        (std::string("element_idx: ") + std::to_string(element_idx)).c_str());
-    LOG_MESSAGE(
-        TRITONSERVER_LOG_INFO, (std::string("std::string(content, len): '") +
-                                std::string(content, len) + "'")
-                                   .c_str());
-
     // Set string value
     input_list->push_back(std::string(content, len));
-    // (*input_list)[tensor_offset + element_idx] = std::string(content, len);
 
     content += len;
     content_byte_size -= len;
@@ -1418,7 +1397,6 @@ SetStringOutputBuffer(
   // null-terminator.
   serialized->clear();
   for (size_t e = 0; e < tensor_element_count; ++e) {
-    // size_t len;
     std::string str = tensor->get(e).to<std::string>();
     const char* cstr = str.c_str();
     size_t len = str.length();
