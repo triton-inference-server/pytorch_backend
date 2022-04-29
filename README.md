@@ -208,3 +208,8 @@ complex execution modes and dynamic shapes. If not specified, all are enabled by
   Setting the parameter `DISABLE_OPTIMIZED_EXECUTION` to "true" in the model
   configuration may help in some cases to avoid these negative interactions
   due to model specific caching and increase multiple instance performance.
+
+* Since PyTorch does not support Tensor of Strings, Triton allows users to pass
+string input/recieve string output using a List of Strings. Because of using List
+instead of Tensor, string I/O only is supported only for 1 dimension. This means
+that the `shape` must a single dimension and batching must be disabled as well.
