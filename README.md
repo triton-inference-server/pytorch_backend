@@ -179,6 +179,20 @@ key: "ENABLE_WEIGHT_SHARING"
 }
 ```
 
+* `ENABLE_CACHE_CLEANING`: Boolean flag to enable CUDA cache cleaning after each model execution.
+If not specified, cache cleaning is disabled. This flag has no effect if model is on CPU.
+
+The section of model config file specifying this parameter will look like:
+
+```
+parameters: {
+key: "ENABLE_CACHE_CLEANING"
+    value: {
+    string_value:"true"
+    }
+}
+```
+
 * Additional Optimizations: Three additional boolean parameters are available to disable
 certain Torch optimizations that can sometimes cause latency regressions in models with
 complex execution modes and dynamic shapes. If not specified, all are enabled by default.
