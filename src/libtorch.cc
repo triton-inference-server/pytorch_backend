@@ -726,6 +726,8 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
         "specified.");
   }
 
+  bool supports_batching = model_state_->MaxBatchSize() > 0;
+
   for (size_t i = 0; i < ios.ArraySize(); i++) {
     triton::common::TritonJson::Value io;
     RETURN_IF_ERROR(ios.IndexAsObject(i, &io));
@@ -774,6 +776,30 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
            "' for model '" + model_state_->Name() + "'")
               .c_str());
     }
+
+    // Validate shape for String inputs. Only allow 1 dimension and no
+    // batching.
+    if (io_dtype != "TYPE_STRING") {
+      // If a reshape is provided for the input then use that when
+      // validating the model shapes.
+      std::vector<int64_t> dims;
+      triton::common::TritonJson::Value reshape;
+      if (io.Find("reshape", &reshape)) {
+        RETURN_IF_ERROR(ParseShape(reshape, "shape", &dims));
+      } else {
+        RETURN_IF_ERROR(ParseShape(io, "dims", &dims));
+      }
+
+      if ((dims.size() + (supports_batching ? 1 : 0)) > 1) {
+        return TRITONSERVER_ErrorNew(
+            TRITONSERVER_ERROR_INTERNAL,
+            ("Triton only supports 1 dimensional List of String as input for "
+             "'" +
+             std::string(io_name) + "' for model '" + model_state_->Name() +
+             "'")
+                .c_str());
+      }
+    }
   }
 
   return nullptr;  // success
@@ -793,6 +819,8 @@ ModelInstanceState::ValidateOutputs()
         "model configuration must contain at least one output, none were "
         "specified.");
   }
+
+  bool supports_batching = model_state_->MaxBatchSize() > 0;
 
   for (size_t i = 0; i < ios.ArraySize(); i++) {
     triton::common::TritonJson::Value io;
@@ -827,6 +855,31 @@ ModelInstanceState::ValidateOutputs()
            "' for model '" + model_state_->Name() + "'")
               .c_str());
     }
+
+    // Validate shape for String outputs. Only allow 1 dimension and no
+    // batching.
+    if (io_dtype != "TYPE_STRING") {
+      // If a reshape is provided for the output then use that when
+      // validating the model shapes.
+      std::vector<int64_t> dims;
+      triton::common::TritonJson::Value reshape;
+      if (io.Find("reshape", &reshape)) {
+        RETURN_IF_ERROR(ParseShape(reshape, "shape", &dims));
+      } else {
+        RETURN_IF_ERROR(ParseShape(io, "dims", &dims));
+      }
+
+      if ((dims.size() + (supports_batching ? 1 : 0)) > 1) {
+        return TRITONSERVER_ErrorNew(
+            TRITONSERVER_ERROR_INTERNAL,
+            ("Triton only supports 1 dimensional List of String as output for "
+             "'" +
+             std::string(io_name) + "' for model '" + model_state_->Name() +
+             "'")
+                .c_str());
+      }
+    }
+
     output_index_map_[io_name] = op_index;
     output_dtype_map_[io_name] = ConvertTorchTypeToDataType(pr.second);
   }
@@ -1505,11 +1558,10 @@ ModelInstanceState::SetInputTensors(
     if (input_datatype == TRITONSERVER_TYPE_BYTES) {
       if (batchn_shape.size() != 1) {
         return TRITONSERVER_ErrorNew(
-            TRITONSERVER_ERROR_INTERNAL,
-            ("Triton does not support greater than 1D List of string as input "
-             "for '" +
-             std::string(input_name) + "'")
-                .c_str());
+            TRITONSERVER_ERROR_INTERNAL, ("Triton only supports 1 dimensional "
+                                          "List of string as input for '" +
+                                          std::string(input_name) + "'")
+                                             .c_str());
       }
 
       // Create the PyTorch list to hold the strings.
@@ -1630,13 +1682,13 @@ ModelInstanceState::ReadOutputTensors(
           (tensor_device.type() == torch::kCPU) ? 0 : tensor_device.index());
 
     } else if (output_tensors[op_index].isList()) {
-        // Custom handling for string/bytes tensor...
+      // Custom handling for string/bytes tensor...
 
-      torch::List<torch::jit::IValue> output_list = output_tensors[op_index].toList();
+      torch::List<torch::jit::IValue> output_list =
+          output_tensors[op_index].toList();
 
       // Get output shape
-      size_t list_length = output_list.size();
-      std::vector<int64_t> batchn_shape{list_length};
+      std::vector<int64_t> batchn_shape{(int64_t)output_list.size()};
       if (output_list.elementType()->kind() != c10::TypeKind::StringType) {
         return TRITONSERVER_ErrorNew(
             TRITONSERVER_ERROR_INVALID_ARG,
@@ -1658,8 +1710,9 @@ ModelInstanceState::ReadOutputTensors(
           TRITONBACKEND_Output* response_output;
           RESPOND_AND_SET_NULL_IF_ERROR(
               &response, TRITONBACKEND_ResponseOutput(
-                             response, &response_output, name.c_str(), TRITONSERVER_TYPE_BYTES,
-                             batchn_shape.data(), batchn_shape.size()));
+                             response, &response_output, name.c_str(),
+                             TRITONSERVER_TYPE_BYTES, batchn_shape.data(),
+                             batchn_shape.size()));
           string_buffer.emplace_back(new std::string());
           cuda_copy |= SetStringOutputBuffer(
               &output_list, &response, response_output, tensor_element_cnt,
