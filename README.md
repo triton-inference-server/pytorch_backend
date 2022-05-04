@@ -67,7 +67,7 @@ $ make install
 ```
 
 The following required Triton repositories will be pulled and used in
-the build. By default the "main" branch/tag will be used for each repo
+the build. By default, the "main" branch/tag will be used for each repo
 but the listed CMake argument can be used to override.
 
 * triton-inference-server/backend: -DTRITON_BACKEND_REPO_TAG=[tag]
@@ -100,10 +100,10 @@ $ make install
 ### Parameters
 
 Triton exposes some flags to control the execution mode of the TorchScript models through
-the Parameters section of the model's 'config.pbtxt' file.
+the Parameters section of the model's `config.pbtxt` file.
 
 * `DISABLE_OPTIMIZED_EXECUTION`: Boolean flag to disable the optimized execution
-of TorchScript models. By default the optimized execuiton is always enabled.
+of TorchScript models. By default, the optimized execution is always enabled.
 
 The initial calls to a loaded TorchScript model take extremely long. Due to this longer
 model warmup [issue](https://github.com/pytorch/pytorch/issues/57894), Triton also allows
@@ -117,13 +117,13 @@ The section of model config file specifying this parameter will look like:
 parameters: {
 key: "DISABLE_OPTIMIZED_EXECUTION"
     value: {
-    string_value:"true"
+    string_value: "true"
     }
 }
 ```
 
 * `INFERENCE_MODE`: Boolean flag to enable the Inference Mode execution
-of TorchScript models. By default the inference mode is disabled.
+of TorchScript models. By default, the inference mode is disabled.
 
 [InferenceMode](https://pytorch.org/cppdocs/notes/inference_mode.html) is a new
 RAII guard analogous to NoGradMode to be used when you are certain your operations
@@ -139,14 +139,14 @@ The section of model config file specifying this parameter will look like:
 parameters: {
 key: "INFERENCE_MODE"
     value: {
-    string_value:"true"
+    string_value: "true"
     }
 }
 ```
 
 * `ENABLE_NVFUSER`: Boolean flag to enable the NvFuser (CUDA Graph
 Fuser) optimization for TorchScript models. If not specified, the
-default pytorch fuser is used. If `ENABLE_NVFUSER` is specified, the
+default PyTorch fuser is used. If `ENABLE_NVFUSER` is specified, the
 `ENABLE_TENSOR_FUSER` configuration (see below) is ignored.
 
 Please note that in some models generated using trace in old PyTorch versions might not work
@@ -159,7 +159,7 @@ The section of model config file specifying this parameter will look like:
 parameters: {
 key: "ENABLE_NVFUSER"
     value: {
-    string_value:"true"
+    string_value: "true"
     }
 }
 ```
@@ -174,7 +174,7 @@ The section of model config file specifying this parameter will look like:
 parameters: {
 key: "ENABLE_WEIGHT_SHARING"
     value: {
-    string_value:"true"
+    string_value: "true"
     }
 }
 ```
@@ -191,9 +191,9 @@ complex execution modes and dynamic shapes. If not specified, all are enabled by
 
 ### Important Note
 
-* The execution of pytorch model on GPU is asynchronous in nature. See
+* The execution of PyTorch model on GPU is asynchronous in nature. See
   [here](https://pytorch.org/docs/stable/notes/cuda.html#asynchronous-execution)
-  for more details. Consequently, an error in pytorch model execution may
+  for more details. Consequently, an error in PyTorch model execution may
   be raised during the next few inference requests to the server. Setting
   environment variable `CUDA_LAUNCH_BLOCKING=1` when launching server will
   help in correctly debugging failing cases by forcing synchronous execution.
@@ -201,8 +201,8 @@ complex execution modes and dynamic shapes. If not specified, all are enabled by
     state and a restart of the server may be required to continue serving
     successfully.
 
-* Multiple instances of the pytorch model on GPU do not always
-  increase performance. Due to thread specific caching in pytorch, using
+* Multiple instances of the PyTorch model on GPU do not always
+  increase performance. Due to thread specific caching in PyTorch, using
   multiple instances of the model interact negatively. See
   [here](https://github.com/pytorch/pytorch/issues/27902) for more details.
   Setting the parameter `DISABLE_OPTIMIZED_EXECUTION` to "true" in the model
