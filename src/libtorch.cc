@@ -1222,19 +1222,37 @@ ModelInstanceState::Execute(
 
     if (model_outputs_.isTuple()) {
       auto model_outputs_tuple = model_outputs_.toTuple();
+      size_t op_index = 0;
       for (auto& m_op : model_outputs_tuple->elements()) {
+        if (m_op.isList()) {
+          auto list_output = m_op.toList();
+          if (list_output.elementType()->kind() != c10::TypeKind::StringType) {
+            throw std::invalid_argument(
+                "output at index " + std::to_string(op_index) +
+                " must be of type Tensor or List[str], recieved List[" +
+                output_list.elementType()->str() + "]");
+          }
+          output_tensors->push_back(m_op);
+        } else
+          auto tensor_output = m_op.isTensor();
         output_tensors->push_back(m_op);
+        op_index++;
       }
-    } else {
-      try {
-        output_tensors->push_back(model_outputs_);
-      }
-      catch (std::exception& exx) {
+    } else if (model_outputs_.isTensor()) {
+      output_tensors->push_back(model_outputs_);
+    } else if (model_outputs_.isList()) {
+      auto list_output = model_outputs_.toList();
+      if (list_output.elementType()->kind() != c10::TypeKind::StringType) {
         throw std::invalid_argument(
-            "Output of torch model should be tensor or a tuple of tensors, not "
-            "a list / dictionary of tensors or a scalar: " +
-            std::string(exx.what()));
+            "output must be of type Tensor or List[str], recieved List[" +
+            output_list.elementType()->str() + "]");
       }
+      output_tensors->push_back(model_outputs_);
+    } else {
+      throw std::invalid_argument(
+          "output must be of type Tensor, List[str] or Tuple "
+          "containing one of these two types. It should not be a List / "
+          "Dictionary of Tensors or a Scalar");
     }
   }
   catch (std::exception& ex) {
@@ -1689,14 +1707,6 @@ ModelInstanceState::ReadOutputTensors(
 
       // Get output shape
       std::vector<int64_t> batchn_shape{(int64_t)output_list.size()};
-      if (output_list.elementType()->kind() != c10::TypeKind::StringType) {
-        return TRITONSERVER_ErrorNew(
-            TRITONSERVER_ERROR_INVALID_ARG,
-            (std::string("output '") + name +
-             "' must be of type Tensor or List[str], recieved List[" +
-             output_list.elementType()->str() + "]")
-                .c_str());
-      }
 
       size_t tensor_offset = 0;
 
