@@ -1275,8 +1275,9 @@ ModelInstanceState::Execute(
 TRITONSERVER_Error*
 GetContiguousInputContent(
     TRITONBACKEND_Input* rinput, const uint32_t buffer_count,
-    const char** content, size_t* content_byte_size, char** contiguous_buffer,
-    cudaStream_t stream, bool* cuda_copy)
+    const char** content, size_t* content_byte_size,
+    std::unique_ptr<char>* contiguous_buffer, cudaStream_t stream,
+    bool* cuda_copy)
 {
   *cuda_copy = false;
   *contiguous_buffer = nullptr;
@@ -1312,7 +1313,7 @@ GetContiguousInputContent(
         rinput, 0, (const void**)content, content_byte_size, &src_memory_type,
         &src_memory_type_id));
   } else {
-    *contiguous_buffer = (char*)malloc(total_byte_size);
+    contiguous_buffer->reset((char*)malloc(total_byte_size));
 
     size_t offset = 0;
     for (size_t i = 0; i < chunk_count; i++) {
@@ -1328,12 +1329,12 @@ GetContiguousInputContent(
       RETURN_IF_ERROR(CopyBuffer(
           "Contiguous input", src_memory_type, src_memory_type_id,
           TRITONSERVER_MEMORY_CPU, 0, src_byte_size, src_ptr,
-          *contiguous_buffer + offset, stream, &cuda_used));
+          contiguous_buffer->get() + offset, stream, &cuda_used));
       *cuda_copy |= cuda_used;
       offset += src_byte_size;
     }
 
-    *content = *contiguous_buffer;
+    *content = contiguous_buffer->get();
     *content_byte_size = total_byte_size;
   }
 
@@ -1367,7 +1368,7 @@ SetStringInputTensor(
   const char* content = nullptr;
   size_t content_byte_size = 0;
 
-  char* contiguous_buffer = nullptr;
+  std::unique_ptr<char> contiguous_buffer;
   auto err = GetContiguousInputContent(
       input, buffer_count, &content, &content_byte_size, &contiguous_buffer,
       stream, &cuda_copy);
@@ -1376,7 +1377,6 @@ SetStringInputTensor(
     FillStringTensor(
         input_list, tensor_offset + element_idx,
         request_element_cnt - element_idx);
-    free(contiguous_buffer);
     return cuda_copy;
   }
 
@@ -1404,7 +1404,6 @@ SetStringInputTensor(
       FillStringTensor(
           input_list, tensor_offset + element_idx,
           request_element_cnt - element_idx);
-      free(contiguous_buffer);
       return cuda_copy;
     }
 
@@ -1426,7 +1425,6 @@ SetStringInputTensor(
       FillStringTensor(
           input_list, tensor_offset + element_idx,
           request_element_cnt - element_idx);
-      free(contiguous_buffer);
       return cuda_copy;
     }
 
@@ -1452,7 +1450,6 @@ SetStringInputTensor(
         request_element_cnt - element_idx);
   }
 
-  free(contiguous_buffer);
   return cuda_copy;
 }
 
