@@ -1230,12 +1230,13 @@ ModelInstanceState::Execute(
             throw std::invalid_argument(
                 "output at index " + std::to_string(op_index) +
                 " must be of type Tensor or List[str], recieved List[" +
-                output_list.elementType()->str() + "]");
+                list_output.elementType()->str() + "]");
           }
           output_tensors->push_back(m_op);
-        } else
-          auto tensor_output = m_op.isTensor();
-        output_tensors->push_back(m_op);
+        } else {
+          auto tensor_output = m_op.toTensor();
+          output_tensors->push_back(m_op);
+        }
         op_index++;
       }
     } else if (model_outputs_.isTensor()) {
@@ -1245,7 +1246,7 @@ ModelInstanceState::Execute(
       if (list_output.elementType()->kind() != c10::TypeKind::StringType) {
         throw std::invalid_argument(
             "output must be of type Tensor or List[str], recieved List[" +
-            output_list.elementType()->str() + "]");
+            list_output.elementType()->str() + "]");
       }
       output_tensors->push_back(model_outputs_);
     } else {
