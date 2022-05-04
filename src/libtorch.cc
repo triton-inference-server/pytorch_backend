@@ -779,7 +779,7 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
 
     // Validate shape for String inputs. Only allow 1 dimension and no
     // batching.
-    if (io_dtype != "TYPE_STRING") {
+    if (io_dtype == "TYPE_STRING") {
       // If a reshape is provided for the input then use that when
       // validating the model shapes.
       std::vector<int64_t> dims;
@@ -820,7 +820,7 @@ ModelInstanceState::ValidateOutputs()
         "specified.");
   }
 
-  bool supports_batching = model_state_->MaxBatchSize() > 0;
+  const bool supports_batching = model_state_->MaxBatchSize() > 0;
 
   for (size_t i = 0; i < ios.ArraySize(); i++) {
     triton::common::TritonJson::Value io;
@@ -858,7 +858,7 @@ ModelInstanceState::ValidateOutputs()
 
     // Validate shape for String outputs. Only allow 1 dimension and no
     // batching.
-    if (io_dtype != "TYPE_STRING") {
+    if (io_dtype == "TYPE_STRING") {
       // If a reshape is provided for the output then use that when
       // validating the model shapes.
       std::vector<int64_t> dims;
