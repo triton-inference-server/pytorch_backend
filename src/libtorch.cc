@@ -790,7 +790,7 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
         RETURN_IF_ERROR(ParseShape(io, "dims", &dims));
       }
 
-      if ((dims.size() + (supports_batching ? 1 : 0)) > 1) {
+      if ((dims.size() > 1) || supports_batching) {
         return TRITONSERVER_ErrorNew(
             TRITONSERVER_ERROR_INTERNAL,
             ("Triton only supports 1 dimensional List of String as input for "
@@ -869,7 +869,7 @@ ModelInstanceState::ValidateOutputs()
         RETURN_IF_ERROR(ParseShape(io, "dims", &dims));
       }
 
-      if ((dims.size() + (supports_batching ? 1 : 0)) > 1) {
+      if ((dims.size() > 1) || supports_batching) {
         return TRITONSERVER_ErrorNew(
             TRITONSERVER_ERROR_INTERNAL,
             ("Triton only supports 1 dimensional List of String as output for "
@@ -1276,11 +1276,9 @@ TRITONSERVER_Error*
 GetContiguousInputContent(
     TRITONBACKEND_Input* rinput, const uint32_t buffer_count,
     const char** content, size_t* content_byte_size,
-    std::unique_ptr<char>* contiguous_buffer, cudaStream_t stream,
-    bool* cuda_copy)
+    std::vector<char>* contiguous_buffer, cudaStream_t stream, bool* cuda_copy)
 {
   *cuda_copy = false;
-  *contiguous_buffer = nullptr;
 
   // Check input buffers to see if data copy is necessary
   size_t chunk_count = 0;
@@ -1313,7 +1311,7 @@ GetContiguousInputContent(
         rinput, 0, (const void**)content, content_byte_size, &src_memory_type,
         &src_memory_type_id));
   } else {
-    contiguous_buffer->reset((char*)malloc(total_byte_size));
+    contiguous_buffer->resize(total_byte_size);
 
     size_t offset = 0;
     for (size_t i = 0; i < chunk_count; i++) {
@@ -1329,12 +1327,12 @@ GetContiguousInputContent(
       RETURN_IF_ERROR(CopyBuffer(
           "Contiguous input", src_memory_type, src_memory_type_id,
           TRITONSERVER_MEMORY_CPU, 0, src_byte_size, src_ptr,
-          contiguous_buffer->get() + offset, stream, &cuda_used));
+          contiguous_buffer->data() + offset, stream, &cuda_used));
       *cuda_copy |= cuda_used;
       offset += src_byte_size;
     }
 
-    *content = contiguous_buffer->get();
+    *content = contiguous_buffer->data();
     *content_byte_size = total_byte_size;
   }
 
@@ -1368,7 +1366,7 @@ SetStringInputTensor(
   const char* content = nullptr;
   size_t content_byte_size = 0;
 
-  std::unique_ptr<char> contiguous_buffer;
+  std::vector<char> contiguous_buffer;
   auto err = GetContiguousInputContent(
       input, buffer_count, &content, &content_byte_size, &contiguous_buffer,
       stream, &cuda_copy);
