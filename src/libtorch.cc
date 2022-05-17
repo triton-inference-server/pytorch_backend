@@ -651,6 +651,10 @@ ModelInstanceState::ValidateTypedSequenceControl(
   return nullptr;  // success
 }
 
+// The naming convention followed for inputs/outputs in the model configuration.
+// Outputs don't support ARGUEMENT.
+typedef enum { INDEX, ARGUEMENT, STRICT_ORDERING } NamingConvention;
+
 TRITONSERVER_Error*
 ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
 {
@@ -728,6 +732,59 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
 
   bool supports_batching = model_state_->MaxBatchSize() > 0;
 
+  NamingConvention naming_convention = NamingConvention::ARGUEMENT;
+
+  // Rules for (non-Dictionary) input tensor names:
+  // 1. Must be in 'allowed_inputs' (arguments in the forward function)
+  // 2. Must follow the naming convention i.e. <name>__<index>
+  // 3. If neither of the above conditions are satisfied, enforce strict
+  // ordering of model inputs.
+  for (size_t i = 0; i < ios.ArraySize(); i++) {
+    triton::common::TritonJson::Value io;
+    RETURN_IF_ERROR(ios.IndexAsObject(i, &io));
+
+    // Validate name
+    std::string io_name;
+    RETURN_IF_ERROR(io.MemberAsString("name", &io_name));
+    auto itr = allowed_inputs.find(io_name);
+    if (itr == allowed_inputs.end()) {
+      naming_convention = NamingConvention::STRICT_ORDERING;
+      break;
+    }
+  }
+
+  // If not, check if inputs follow INDEX
+  if (naming_convention == NamingConvention::STRICT_ORDERING) {
+    for (size_t i = 0; i < ios.ArraySize(); i++) {
+      triton::common::TritonJson::Value io;
+      RETURN_IF_ERROR(ios.IndexAsObject(i, &io));
+
+      // Validate name
+      std::string io_name;
+      RETURN_IF_ERROR(io.MemberAsString("name", &io_name));
+      try {
+        int start_pos = io_name.find(deliminator);
+        if (start_pos == -1) {
+          throw std::invalid_argument("input must follow naming convention");
+        }
+        ip_index = std::atoi(io_name.substr(start_pos + 2).c_str());
+        naming_convention = NamingConvention::INDEX;
+      }
+      catch (std::exception& ex) {
+        LOG_MESSAGE(
+            TRITONSERVER_LOG_WARN,
+            ("input '" + io_name + "' is neither an input argument to the " +
+             "model '" + model_state_->Name() +
+             "' nor does it follow the naming convention i.e. "
+             "<name>__<index>. Falling back to enforcing ordering from model "
+             "configuration.")
+                .c_str());
+        naming_convention = NamingConvention::STRICT_ORDERING;
+        break;
+      }
+    }
+  }
+
   for (size_t i = 0; i < ios.ArraySize(); i++) {
     triton::common::TritonJson::Value io;
     RETURN_IF_ERROR(ios.IndexAsObject(i, &io));
@@ -739,36 +796,27 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
       // If dictionary, index is irrelevant but we use the map to store the
       // input names since they are the keys for the dictionary
       input_index_map_[io_name] = i;
-    } else {
-      // Rules for (non-Dictionary) input tensor names:
-      // 1. Must be in 'allowed_inputs' (arguments in the forward function)
-      // 2. Must follow the naming convention i.e. <name>__<index>
-      // 3. If neither of the above conditions are satisfied, enforce strict
-      // ordering of model inputs.
+    } else if (naming_convention == NamingConvention::ARGUEMENT) {
       auto itr = allowed_inputs.find(io_name);
       if (itr != allowed_inputs.end()) {
         input_index_map_[io_name] = std::distance(allowed_inputs.begin(), itr);
-      } else {
-        try {
-          int start_pos = io_name.find(deliminator);
-          if (start_pos == -1) {
-            throw std::invalid_argument("input must follow naming convention");
-          }
-          ip_index = std::atoi(io_name.substr(start_pos + 2).c_str());
-          input_index_map_[io_name] = ip_index;
-        }
-        catch (std::exception& ex) {
-          LOG_MESSAGE(
-              TRITONSERVER_LOG_WARN,
-              ("input '" + io_name + "' is neither an input argument to the " +
-               "model '" + model_state_->Name() +
-               "' nor does it follow the naming convention i.e. "
-               "<name>__<index>. Falling back to enforcing ordering from model "
-               "configuration.")
-                  .c_str());
-          input_index_map_[io_name] = i;
-        }
       }
+    } else if (naming_convention == NamingConvention::INDEX) {
+      try {
+        int start_pos = io_name.find(deliminator);
+        if (start_pos == -1) {
+          throw std::invalid_argument("input must follow naming convention");
+        }
+        ip_index = std::atoi(io_name.substr(start_pos + 2).c_str());
+        input_index_map_[io_name] = ip_index;
+      }
+      catch (std::exception& ex) {
+        // Already ran through this logic earlier. Try block will not catch an
+        // exception.
+      }
+    } else {
+      // 'naming_convention' is STRICT_ORDERING
+      input_index_map_[io_name] = i;
     }
 
     // Validate data type
@@ -828,6 +876,11 @@ ModelInstanceState::ValidateOutputs()
 
   const bool supports_batching = model_state_->MaxBatchSize() > 0;
 
+  NamingConvention naming_convention = NamingConvention::INDEX;
+
+  // Rules for output tensor names:
+  // 1. Must follow the naming convention i.e. <name>__<index>
+  // 2. If not, we enforce strict ordering of model outputs.
   for (size_t i = 0; i < ios.ArraySize(); i++) {
     triton::common::TritonJson::Value io;
     RETURN_IF_ERROR(ios.IndexAsObject(i, &io));
@@ -850,6 +903,32 @@ ModelInstanceState::ValidateOutputs()
            "Falling back to enforcing ordering from model "
            "configuration.")
               .c_str());
+      naming_convention = NamingConvention::STRICT_ORDERING;
+      break;
+    }
+  }
+
+  for (size_t i = 0; i < ios.ArraySize(); i++) {
+    triton::common::TritonJson::Value io;
+    RETURN_IF_ERROR(ios.IndexAsObject(i, &io));
+
+    // Validate name
+    std::string io_name;
+    RETURN_IF_ERROR(io.MemberAsString("name", &io_name));
+    if (naming_convention == NamingConvention::INDEX) {
+      try {
+        int start_pos = io_name.find(deliminator);
+        if (start_pos == -1) {
+          throw std::invalid_argument("output must follow naming convention");
+        }
+        op_index = std::atoi(io_name.substr(start_pos + 2).c_str());
+      }
+      catch (std::exception& ex) {
+        // Already ran through this logic earlier. Try block will not catch an
+        // exception.
+      }
+    } else {
+      // 'naming_convention' is STRICT_ORDERING
       op_index = i;
     }
 
