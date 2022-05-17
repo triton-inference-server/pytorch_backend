@@ -740,8 +740,11 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
       // input names since they are the keys for the dictionary
       input_index_map_[io_name] = i;
     } else {
-      // input tensor name must be in 'allowed_inputs' or must follow the naming
-      // convention
+      // Rules for (non-Dictionary) input tensor names:
+      // 1. Must be in 'allowed_inputs' (arguments in the forward function)
+      // 2. Must follow the naming convention i.e. <name>__<index>
+      // 3. If neither of the above conditions are satisfied, enforce strict
+      // ordering of model inputs.
       auto itr = allowed_inputs.find(io_name);
       if (itr != allowed_inputs.end()) {
         input_index_map_[io_name] = std::distance(allowed_inputs.begin(), itr);
@@ -755,12 +758,15 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
           input_index_map_[io_name] = ip_index;
         }
         catch (std::exception& ex) {
-          return TRITONSERVER_ErrorNew(
-              TRITONSERVER_ERROR_INTERNAL,
-              ("input '" + io_name +
-               "' is neither an input argument to the model nor does it "
-               "follow the naming convention i.e. <name>__<index>.")
+          LOG_MESSAGE(
+              TRITONSERVER_LOG_WARN,
+              ("input '" + io_name + "' is neither an input argument to the " +
+               "model '" + model_state_->Name() +
+               "' nor does it follow the naming convention i.e. "
+               "<name>__<index>. Falling back to enforcing ordering from model "
+               "configuration.")
                   .c_str());
+          input_index_map_[io_name] = i;
         }
       }
     }
@@ -837,11 +843,14 @@ ModelInstanceState::ValidateOutputs()
       op_index = std::atoi(io_name.substr(start_pos + 2).c_str());
     }
     catch (std::exception& ex) {
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INTERNAL,
-          ("output '" + io_name +
-           "' does not follow naming convention i.e. <name>__<index>.")
+      LOG_MESSAGE(
+          TRITONSERVER_LOG_WARN,
+          ("output '" + io_name + "' of the model '" + model_state_->Name() +
+           "' does not follow the naming convention i.e. <name>__<index>. "
+           "Falling back to enforcing ordering from model "
+           "configuration.")
               .c_str());
+      op_index = i;
     }
 
     // Validate data type
