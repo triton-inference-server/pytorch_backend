@@ -1343,7 +1343,8 @@ ModelInstanceState::GetNamingConvention(
           throw std::invalid_argument(
               "input/output must follow naming convention");
         }
-        io_index = std::atoi(io_name.substr(start_pos + 2).c_str());
+        // Use atoi to check if the index part of the name is an integer
+        std::atoi(io_name.substr(start_pos + 2).c_str());
       }
       catch (std::exception& ex) {
         if (io_kind == "input") {
