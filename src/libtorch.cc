@@ -426,7 +426,7 @@ ModelState::ParseParameters()
 
 // The naming convention followed for inputs/outputs in the model configuration.
 // Outputs don't support ARGUEMENT.
-enum NamingConvention {
+enum class NamingConvention {
   NAMED_INDEX,
   FORWARD_ARGUEMENT,
   STRICT_CONFIG_ORDERING
@@ -484,7 +484,7 @@ class ModelInstanceState : public BackendModelInstance {
       std::vector<TRITONBACKEND_Response*>* responses,
       uint64_t* compute_end_ns);
 
-  // Validate naming convention for inputs and outputs in config
+  // Get the naming convention for inputs/outputs from the model configuration
   TRITONSERVER_Error* GetNamingConvention(
       NamingConvention* naming_convention,
       const std::set<std::string>& allowed_io);
@@ -740,7 +740,6 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
   }
 
   bool supports_batching = model_state_->MaxBatchSize() > 0;
-
   NamingConvention naming_convention;
   RETURN_IF_ERROR(GetNamingConvention(&naming_convention, allowed_inputs));
 
@@ -757,7 +756,7 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
       input_index_map_[io_name] = i;
     } else {
       switch (naming_convention) {
-        case FORWARD_ARGUEMENT: {
+        case NamingConvention::FORWARD_ARGUEMENT: {
           auto itr = allowed_inputs.find(io_name);
           if (itr != allowed_inputs.end()) {
             input_index_map_[io_name] =
@@ -765,23 +764,16 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
           }
           break;
         }
-        case NAMED_INDEX: {
-          try {
-            int start_pos = io_name.find(deliminator);
-            if (start_pos == -1) {
-              throw std::invalid_argument(
-                  "input must follow naming convention");
-            }
-            ip_index = std::atoi(io_name.substr(start_pos + 2).c_str());
-            input_index_map_[io_name] = ip_index;
+        case NamingConvention::NAMED_INDEX: {
+          int start_pos = io_name.find(deliminator);
+          if (start_pos == -1) {
+            throw std::invalid_argument("input must follow naming convention");
           }
-          catch (std::exception& ex) {
-            // Already ran through this logic earlier. Try block will not catch
-            // an exception.
-          }
+          ip_index = std::atoi(io_name.substr(start_pos + 2).c_str());
+          input_index_map_[io_name] = ip_index;
           break;
         }
-        case STRICT_CONFIG_ORDERING: {
+        case NamingConvention::STRICT_CONFIG_ORDERING: {
           input_index_map_[io_name] = i;
           break;
         }
@@ -844,7 +836,6 @@ ModelInstanceState::ValidateOutputs()
   }
 
   const bool supports_batching = model_state_->MaxBatchSize() > 0;
-
   NamingConvention naming_convention;
   RETURN_IF_ERROR(GetNamingConvention(&naming_convention, {}));
 
@@ -856,21 +847,15 @@ ModelInstanceState::ValidateOutputs()
     std::string io_name;
     RETURN_IF_ERROR(io.MemberAsString("name", &io_name));
     switch (naming_convention) {
-      case NAMED_INDEX: {
-        try {
-          int start_pos = io_name.find(deliminator);
-          if (start_pos == -1) {
-            throw std::invalid_argument("output must follow naming convention");
-          }
-          op_index = std::atoi(io_name.substr(start_pos + 2).c_str());
+      case NamingConvention::NAMED_INDEX: {
+        int start_pos = io_name.find(deliminator);
+        if (start_pos == -1) {
+          throw std::invalid_argument("output must follow naming convention");
         }
-        catch (std::exception& ex) {
-          // Already ran through this logic earlier. Try block will not catch an
-          // exception.
-        }
+        op_index = std::atoi(io_name.substr(start_pos + 2).c_str());
         break;
       }
-      case STRICT_CONFIG_ORDERING: {
+      case NamingConvention::STRICT_CONFIG_ORDERING: {
         op_index = i;
         break;
       }
@@ -1324,7 +1309,8 @@ ModelInstanceState::GetNamingConvention(
   }
 
   triton::common::TritonJson::Value ios;
-  RETURN_IF_ERROR(model_state_->ModelConfig().MemberAsArray("io_kind", &ios));
+  RETURN_IF_ERROR(
+      model_state_->ModelConfig().MemberAsArray(io_kind.c_str(), &ios));
 
   if (io_kind == "input") {
     for (size_t i = 0; i < ios.ArraySize(); i++) {
