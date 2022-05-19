@@ -425,10 +425,10 @@ ModelState::ParseParameters()
 }
 
 // The naming convention followed for inputs/outputs in the model configuration.
-// Outputs don't support ARGUEMENT.
+// Outputs don't support FORWARD_ARGUMENT.
 enum class NamingConvention {
   NAMED_INDEX,
-  FORWARD_ARGUEMENT,
+  FORWARD_ARGUMENT,
   STRICT_CONFIG_ORDERING
 };
 
@@ -756,7 +756,7 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
       input_index_map_[io_name] = i;
     } else {
       switch (naming_convention) {
-        case NamingConvention::FORWARD_ARGUEMENT: {
+        case NamingConvention::FORWARD_ARGUMENT: {
           auto itr = allowed_inputs.find(io_name);
           if (itr != allowed_inputs.end()) {
             input_index_map_[io_name] =
@@ -1301,7 +1301,7 @@ ModelInstanceState::GetNamingConvention(
   std::string deliminator = "__";
   size_t io_index = 0;
   std::string io_kind = "input";
-  *naming_convention = NamingConvention::FORWARD_ARGUEMENT;
+  *naming_convention = NamingConvention::FORWARD_ARGUMENT;
   if (allowed_ios.size() == 0) {
     // symbolizes output
     io_kind = "output";
