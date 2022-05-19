@@ -610,21 +610,29 @@ ModelInstanceState::ValidateBooleanSequenceControl(
   if (*have_control) {
     std::string deliminator = "__";
     int ip_index = 0;
-    try {
-      int start_pos = tensor_name.find(deliminator);
-      if (start_pos == -1) {
-        throw std::invalid_argument("input must follow naming convention");
-      }
-      ip_index = std::atoi(tensor_name.substr(start_pos + 2).c_str());
-      input_index_map_[tensor_name] = ip_index;
-    }
-    catch (std::exception& ex) {
+    int start_pos = tensor_name.find(deliminator);
+    if (start_pos == -1) {
       return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INTERNAL,
           ("input '" + tensor_name +
-           "' does not follow naming convention i.e. <name>__<index>.")
+           "' does not follow <name>__<index> naming convention.")
               .c_str());
     }
+
+    // check if the index part of the name is not an integer
+    std::string index_str = tensor_name.substr(start_pos + 2);
+    for (auto itr = index_str.begin(); itr != index_str.end(); itr++) {
+      if (std::isdigit(*itr) == 0) {
+        return TRITONSERVER_ErrorNew(
+            TRITONSERVER_ERROR_INTERNAL,
+            ("input '" + tensor_name +
+             "' does not follow <name>__<index> naming convention.")
+                .c_str());
+      }
+    }
+
+    ip_index = std::atoi(tensor_name.substr(start_pos + 2).c_str());
+    input_index_map_[tensor_name] = ip_index;
   }
 
   return nullptr;  // success
@@ -644,21 +652,29 @@ ModelInstanceState::ValidateTypedSequenceControl(
   if (*have_control) {
     std::string deliminator = "__";
     int ip_index = 0;
-    try {
-      int start_pos = tensor_name.find(deliminator);
-      if (start_pos == -1) {
-        throw std::invalid_argument("input must follow naming convention");
-      }
-      ip_index = std::atoi(tensor_name.substr(start_pos + 2).c_str());
-      input_index_map_[tensor_name] = ip_index;
-    }
-    catch (std::exception& ex) {
+    int start_pos = tensor_name.find(deliminator);
+    if (start_pos == -1) {
       return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INTERNAL,
           ("input '" + tensor_name +
-           "' does not follow naming convention i.e. <name>__<index>.")
+           "' does not follow <name>__<index> naming convention.")
               .c_str());
     }
+
+    // check if the index part of the name is not an integer
+    std::string index_str = tensor_name.substr(start_pos + 2);
+    for (auto itr = index_str.begin(); itr != index_str.end(); itr++) {
+      if (std::isdigit(*itr) == 0) {
+        return TRITONSERVER_ErrorNew(
+            TRITONSERVER_ERROR_INTERNAL,
+            ("input '" + tensor_name +
+             "' does not follow <name>__<index> naming convention.")
+                .c_str());
+      }
+    }
+
+    ip_index = std::atoi(tensor_name.substr(start_pos + 2).c_str());
+    input_index_map_[tensor_name] = ip_index;
   }
 
   return nullptr;  // success
@@ -766,9 +782,6 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
         }
         case NamingConvention::NAMED_INDEX: {
           int start_pos = io_name.find(deliminator);
-          if (start_pos == -1) {
-            throw std::invalid_argument("input must follow naming convention");
-          }
           ip_index = std::atoi(io_name.substr(start_pos + 2).c_str());
           input_index_map_[io_name] = ip_index;
           break;
@@ -849,9 +862,6 @@ ModelInstanceState::ValidateOutputs()
     switch (naming_convention) {
       case NamingConvention::NAMED_INDEX: {
         int start_pos = io_name.find(deliminator);
-        if (start_pos == -1) {
-          throw std::invalid_argument("output must follow naming convention");
-        }
         op_index = std::atoi(io_name.substr(start_pos + 2).c_str());
         break;
       }
@@ -1270,9 +1280,9 @@ ModelInstanceState::Execute(
       output_tensors->push_back(model_outputs_);
     } else {
       throw std::invalid_argument(
-          "output must be of type Tensor, List[str] or Tuple "
-          "containing one of these two types. It should not be a List / "
-          "Dictionary of Tensors or a Scalar");
+          "output must be of type Tensor, List[str] or Tuple containing one of "
+          "these two types. It should not be a List / Dictionary of Tensors or "
+          "a Scalar");
     }
   }
   catch (std::exception& ex) {
@@ -1299,11 +1309,11 @@ ModelInstanceState::GetNamingConvention(
   // 1. Must follow the naming convention i.e. <name>__<index>
   // 2. If not, we enforce strict ordering of model outputs.
   std::string deliminator = "__";
-  size_t io_index = 0;
   std::string io_kind = "input";
   *naming_convention = NamingConvention::FORWARD_ARGUMENT;
+
+  // symbolizes output
   if (allowed_ios.size() == 0) {
-    // symbolizes output
     io_kind = "output";
     *naming_convention = NamingConvention::NAMED_INDEX;
   }
@@ -1337,36 +1347,46 @@ ModelInstanceState::GetNamingConvention(
       // Validate name
       std::string io_name;
       RETURN_IF_ERROR(io.MemberAsString("name", &io_name));
-      try {
-        int start_pos = io_name.find(deliminator);
-        if (start_pos == -1) {
-          throw std::invalid_argument(
-              "input/output must follow naming convention");
-        }
-        // Use atoi to check if the index part of the name is an integer
-        std::atoi(io_name.substr(start_pos + 2).c_str());
-      }
-      catch (std::exception& ex) {
-        if (io_kind == "input") {
-          LOG_MESSAGE(
-              TRITONSERVER_LOG_WARN,
-              ("input '" + io_name + "' is neither an input argument to the " +
-               "model '" + model_state_->Name() +
-               "' nor does it follow the naming convention i.e. "
-               "<name>__<index>. Falling back to enforcing ordering from model "
-               "configuration.")
-                  .c_str());
-        } else {
-          LOG_MESSAGE(
-              TRITONSERVER_LOG_WARN,
-              ("output '" + io_name + "' of the model '" +
-               model_state_->Name() +
-               "' does not follow the naming convention i.e. <name>__<index>. "
-               "Falling back to enforcing ordering from model configuration.")
-                  .c_str());
-        }
+      int start_pos = io_name.find(deliminator);
+      if (start_pos == -1) {
         *naming_convention = NamingConvention::STRICT_CONFIG_ORDERING;
         break;
+      } else {
+        // check if the index part of the name is not an integer
+        std::string index_str = io_name.substr(start_pos + 2);
+        bool is_int = true;
+        for (auto itr = index_str.begin(); itr != index_str.end(); itr++) {
+          if (std::isdigit(*itr) == 0) {
+            is_int = false;
+          }
+        }
+
+        if (!is_int) {
+          if (io_kind == "input") {
+            LOG_MESSAGE(
+                TRITONSERVER_LOG_WARN,
+                ("input '" + io_name +
+                 "' or previous input(s) are neither an input argument to the "
+                 "model '" +
+                 model_state_->Name() +
+                 "' nor do they follow the <name>__<index> naming convention. "
+                 "Falling back to enforcing strict ordering from model "
+                 "configuration.")
+                    .c_str());
+          } else {
+            LOG_MESSAGE(
+                TRITONSERVER_LOG_WARN,
+                ("output '" + io_name +
+                 "' or previous output(s) of the model '" +
+                 model_state_->Name() +
+                 "' do not follow the <name>__<index> naming convention. "
+                 "Falling back to enforcing strict ordering from model "
+                 "configuration.")
+                    .c_str());
+          }
+          *naming_convention = NamingConvention::STRICT_CONFIG_ORDERING;
+          break;
+        }
       }
     }
   }
