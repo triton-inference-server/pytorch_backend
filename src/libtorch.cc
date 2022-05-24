@@ -33,6 +33,7 @@
 #include "triton/backend/backend_model.h"
 #include "triton/backend/backend_model_instance.h"
 #include "triton/backend/backend_output_responder.h"
+#include "triton/common/nvtx.h"
 #include "triton/core/tritonbackend.h"
 
 #ifdef TRITON_PYTORCH_ENABLE_TORCHVISION
@@ -307,7 +308,6 @@ ModelState::ParseParameters()
         TRITONSERVER_ErrorDelete(err);
       }
     }
-
     LOG_MESSAGE(
         TRITONSERVER_LOG_INFO,
         (std::string("Inference Mode is ") +
@@ -926,6 +926,8 @@ ModelInstanceState::ProcessRequests(
        std::to_string(request_count) + " requests")
           .c_str());
 
+  NVTX_RANGE(nvtx_, "ProcessRequests " + Name());
+
   uint64_t exec_start_ns = 0;
   SET_TIMESTAMP(exec_start_ns);
 
@@ -1188,6 +1190,8 @@ ModelInstanceState::Execute(
     std::vector<torch::jit::IValue>* input_tensors,
     std::vector<torch::jit::IValue>* output_tensors)
 {
+  NVTX_RANGE(nvtx_, "Execute " + Name());
+
   torch::jit::IValue model_outputs_;
 
   try {
@@ -1758,6 +1762,8 @@ ModelInstanceState::ReadOutputTensors(
     TRITONBACKEND_Request** requests, const uint32_t request_count,
     std::vector<TRITONBACKEND_Response*>* responses, uint64_t* compute_end_ns)
 {
+  NVTX_RANGE(nvtx_, "ReadOutputTensors " + Name());
+
   BackendOutputResponder responder(
       requests, request_count, responses, model_state_->TritonMemoryManager(),
       model_state_->MaxBatchSize() > 0, model_state_->EnablePinnedInput(),
