@@ -182,6 +182,7 @@ set(OPENCV_LIBS
     "libopencv_imgproc.so"
     "libopencv_core.so"
     "libpng16.so"
+    "libjpeg.so"
 )
 
 if (${TRITON_PYTORCH_DOCKER_BUILD})
@@ -220,6 +221,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libopencv_imgproc.so.3.4.11 libopencv_imgproc.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libopencv_core.so.3.4.11 libopencv_core.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libpng16.so.16.37.0 libpng16.so
+    COMMAND docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libjpeg.so.8.2.2 libjpeg.so
     COMMAND /bin/sh -c "if [ -f libmkl_def.so ]; then patchelf --add-needed libmkl_gnu_thread.so libmkl_def.so; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_def.so ]; then patchelf --add-needed libmkl_core.so libmkl_def.so; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_avx2.so ]; then patchelf --add-needed libmkl_gnu_thread.so libmkl_avx2.so; fi"
@@ -439,6 +441,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
         COMMAND ln -sf libopencv_imgproc.so libopencv_imgproc.so.${OPENCV_VERSION}
         COMMAND ln -sf libopencv_core.so libopencv_core.so.${OPENCV_VERSION}
         COMMAND ln -sf libpng16.so libpng16.so.16
+        COMMAND ln -sf libjpeg.so libjpeg.so.8
         RESULT_VARIABLE LINK_STATUS
         WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/backends/pytorch)
       if(LINK_STATUS AND NOT LINK_STATUS EQUAL 0)
