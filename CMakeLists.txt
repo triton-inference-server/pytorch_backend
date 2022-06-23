@@ -185,6 +185,9 @@ set(OPENCV_LIBS
     "libjpeg.so"
 )
 
+# The patchelf commands ensure the MKL libraries are loaded correctly during runtime
+# Without these, the framework/backend complains of missing libraries / symbols and 
+# in some cases leads to segmentation faults.
 if (${TRITON_PYTORCH_DOCKER_BUILD})
   string(REPLACE ";" " " CONDA_LIBS_STR "${CONDA_LIBS}")
 
