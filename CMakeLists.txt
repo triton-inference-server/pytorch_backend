@@ -185,6 +185,9 @@ set(OPENCV_LIBS
     "libjpeg.so"
 )
 
+# The patchelf commands ensure the MKL libraries are loaded correctly during runtime
+# Without these, the framework/backend complains of missing libraries / symbols and 
+# in some cases leads to segmentation faults.
 if (${TRITON_PYTORCH_DOCKER_BUILD})
   string(REPLACE ";" " " CONDA_LIBS_STR "${CONDA_LIBS}")
 
@@ -228,6 +231,10 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND /bin/sh -c "if [ -f libmkl_avx2.so ]; then patchelf --add-needed libmkl_core.so libmkl_avx2.so; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_avx512.so ]; then patchelf --add-needed libmkl_gnu_thread.so libmkl_avx512.so; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_avx512.so ]; then patchelf --add-needed libmkl_core.so libmkl_avx512.so; fi"
+    COMMAND /bin/sh -c "if [ -f libmkl_vml_def.so ]; then patchelf --add-needed libmkl_gnu_thread.so libmkl_vml_def.so; fi"
+    COMMAND /bin/sh -c "if [ -f libmkl_vml_def.so ]; then patchelf --add-needed libmkl_intel_thread.so libmkl_vml_def.so; fi"
+    COMMAND /bin/sh -c "if [ -f libmkl_vml_def.so ]; then patchelf --add-needed libmkl_core.so libmkl_vml_def.so; fi"
+    COMMAND /bin/sh -c "patchelf --add-needed libmkl_intel_lp64.so libmkl_intel_thread.so"
     COMMAND docker rm pytorch_backend_ptlib
     COMMENT "Extracting pytorch and torchvision libraries and includes from ${TRITON_PYTORCH_DOCKER_IMAGE}"
     VERBATIM
