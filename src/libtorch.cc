@@ -837,8 +837,7 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
               .c_str());
     }
 
-    // Validate shape for String inputs. Only allow 1 dimension and no
-    // batching.
+    // Validate shape for String inputs. Only allow 1 dimension.
     if (io_dtype == "TYPE_STRING") {
       // If a reshape is provided for the input then use that when
       // validating the model shapes.
@@ -850,7 +849,7 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
         RETURN_IF_ERROR(ParseShape(io, "dims", &dims));
       }
 
-      if ((dims.size() > 1) || supports_batching) {
+      if ((dims.size() + (supports_batching ? 1 : 0)) > 1) {
         return TRITONSERVER_ErrorNew(
             TRITONSERVER_ERROR_INTERNAL,
             ("Triton only supports 1 dimensional List of String as input for "
@@ -917,8 +916,7 @@ ModelInstanceState::ValidateOutputs()
               .c_str());
     }
 
-    // Validate shape for String outputs. Only allow 1 dimension and no
-    // batching.
+    // Validate shape for String outputs. Only allow 1 dimension.
     if (io_dtype == "TYPE_STRING") {
       // If a reshape is provided for the output then use that when
       // validating the model shapes.
@@ -930,7 +928,7 @@ ModelInstanceState::ValidateOutputs()
         RETURN_IF_ERROR(ParseShape(io, "dims", &dims));
       }
 
-      if ((dims.size() > 1) || supports_batching) {
+      if ((dims.size() + (supports_batching ? 1 : 0)) > 1) {
         return TRITONSERVER_ErrorNew(
             TRITONSERVER_ERROR_INTERNAL,
             ("Triton only supports 1 dimensional List of String as output for "
@@ -1015,7 +1013,7 @@ ModelInstanceState::ProcessRequests(
   for (size_t i = 0; i < request_count; i++) {
     if (max_batch_size > 0) {
       // Retrieve the batch size from one of the inputs, if the model
-      // supports batching, the first dimension size is batch size
+      // supports batching, the first dimension size is batch size.
       TRITONBACKEND_Input* input;
       TRITONSERVER_Error* err =
           TRITONBACKEND_RequestInputByIndex(requests[i], 0 /* index */, &input);
@@ -1294,7 +1292,7 @@ ModelInstanceState::Execute(
           if (list_output.elementType()->kind() != c10::TypeKind::StringType) {
             throw std::invalid_argument(
                 "output at index " + std::to_string(op_index) +
-                " must be of type Tensor or List[str], recieved List[" +
+                " must be of type Tensor or List[str], received List[" +
                 list_output.elementType()->str() + "]");
           }
           output_tensors->push_back(m_op);
@@ -1310,7 +1308,7 @@ ModelInstanceState::Execute(
       auto list_output = model_outputs_.toList();
       if (list_output.elementType()->kind() != c10::TypeKind::StringType) {
         throw std::invalid_argument(
-            "output must be of type Tensor or List[str], recieved List[" +
+            "output must be of type Tensor or List[str], received List[" +
             list_output.elementType()->str() + "]");
       }
       output_tensors->push_back(model_outputs_);
@@ -1505,8 +1503,7 @@ GetContiguousInputContent(
 }
 
 void
-FillStringTensor(
-    torch::List<std::string>* input_list, const size_t idx, const size_t cnt)
+FillStringTensor(torch::List<std::string>* input_list, const size_t cnt)
 {
   for (size_t c = 0; c < cnt; ++c) {
     input_list->push_back("");
@@ -1537,9 +1534,7 @@ SetStringInputTensor(
       stream, &cuda_copy);
   if (err != nullptr) {
     RESPOND_AND_SET_NULL_IF_ERROR(response, err);
-    FillStringTensor(
-        input_list, tensor_offset + element_idx,
-        request_element_cnt - element_idx);
+    FillStringTensor(input_list, request_element_cnt - element_idx);
     return cuda_copy;
   }
 
@@ -1564,9 +1559,7 @@ SetStringInputTensor(
                   std::to_string(element_idx + 1) + " for inference input '" +
                   name + "', expecting " + std::to_string(request_element_cnt))
                   .c_str()));
-      FillStringTensor(
-          input_list, tensor_offset + element_idx,
-          request_element_cnt - element_idx);
+      FillStringTensor(input_list, request_element_cnt - element_idx);
       return cuda_copy;
     }
 
@@ -1585,9 +1578,7 @@ SetStringInputTensor(
                   std::to_string(len) + " but only " +
                   std::to_string(content_byte_size) + " bytes available")
                   .c_str()));
-      FillStringTensor(
-          input_list, tensor_offset + element_idx,
-          request_element_cnt - element_idx);
+      FillStringTensor(input_list, request_element_cnt - element_idx);
       return cuda_copy;
     }
 
@@ -1608,9 +1599,7 @@ SetStringInputTensor(
                           " strings for inference input '" + name + "', got " +
                           std::to_string(element_idx))
                           .c_str()));
-    FillStringTensor(
-        input_list, tensor_offset + element_idx,
-        request_element_cnt - element_idx);
+    FillStringTensor(input_list, request_element_cnt - element_idx);
   }
 
   return cuda_copy;
@@ -1735,14 +1724,6 @@ ModelInstanceState::SetInputTensors(
 
 
     if (input_datatype == TRITONSERVER_TYPE_BYTES) {
-      if (batchn_shape.size() != 1) {
-        return TRITONSERVER_ErrorNew(
-            TRITONSERVER_ERROR_INTERNAL, ("Triton only supports 1 dimensional "
-                                          "List of string as input for '" +
-                                          std::string(input_name) + "'")
-                                             .c_str());
-      }
-
       // Create the PyTorch list to hold the strings.
       torch::List<std::string> input_list;
       input_list.reserve(batchn_shape[0]);
@@ -1864,6 +1845,7 @@ ModelInstanceState::ReadOutputTensors(
 
     } else if (output_tensors[op_index].isList()) {
       // Custom handling for string/bytes tensor...
+      const int max_batch_size = model_state_->MaxBatchSize();
 
       torch::List<torch::jit::IValue> output_list =
           output_tensors[op_index].toList();
@@ -1874,7 +1856,17 @@ ModelInstanceState::ReadOutputTensors(
       size_t tensor_offset = 0;
 
       for (size_t idx = 0; idx < responses->size(); idx++) {
+        auto& request = requests[idx];
         auto& response = (*responses)[idx];
+
+        if (max_batch_size != 0) {
+          TRITONBACKEND_Input* input;
+          TRITONBACKEND_RequestInputByIndex(request, 0 /* index*/, &input);
+          const int64_t* shape;
+          TRITONBACKEND_InputProperties(
+              input, nullptr, nullptr, &shape, nullptr, nullptr, nullptr);
+          batchn_shape[0] = shape[0];
+        }
 
         const size_t tensor_element_cnt = GetElementCount(batchn_shape);
 
