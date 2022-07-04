@@ -469,7 +469,7 @@ class ModelInstanceState : public BackendModelInstance {
   void ProcessRequests(
       TRITONBACKEND_Request** requests, const uint32_t request_count);
 
-  // Clear cache
+  // Clear CUDA cache
   void ClearCache();
 
  private:
@@ -1583,7 +1583,9 @@ TRITONBACKEND_ModelInstanceExecute(
   // specific request.
   instance_state->ProcessRequests(requests, request_count);
 
-  if(model_state->EnabledCacheCleaning()) instance_state->ClearCache();
+  if(model_state->EnabledCacheCleaning()) {
+    instance_state->ClearCache();
+  }
 
   return nullptr;  // success
 }
