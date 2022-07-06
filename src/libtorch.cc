@@ -98,6 +98,7 @@ class ModelState : public BackendModel {
   {
     return enable_nvfuser_pair_;
   }
+  bool EnabledCacheCleaning(){ return enable_cache_cleaning_; }
 
   bool EnabledWeightSharing() { return enable_weight_sharing_; }
 
@@ -113,6 +114,9 @@ class ModelState : public BackendModel {
 
   // Flag to indicate whether inference mode is enabled. Defaults to false.
   bool enable_inference_mode_;
+
+  // Flag to indicate whether cache clearning after each run is enabled. Defaults to false.
+  bool enable_cache_cleaning_;
 
   // Flag to indicate whether weight sharing is enabled. Defaults to false.
   bool enable_weight_sharing_;
@@ -173,7 +177,8 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     : BackendModel(triton_model), enable_optimized_execution_(true),
-      enable_inference_mode_(false), enable_weight_sharing_(false),
+      enable_inference_mode_(false), enable_cache_cleaning_(false),
+      enable_weight_sharing_(false),
       enable_tensor_fuser_pair_({false, true}),
       enable_jit_profiling_pair_({false, true}),
       enable_jit_executor_pair_({false, true}),
@@ -295,6 +300,25 @@ ModelState::ParseParameters()
         TRITONSERVER_LOG_INFO,
         (std::string("Optimized execution is ") +
          (enable_optimized_execution_ ? "enabled" : "disabled") +
+         " for model instance '" + Name() + "'")
+            .c_str());
+
+    // If 'ENABLE_CACHE_CLEANING' is not present in 'parameters' then
+    // no update is made to 'enable_cache_cleaning_'.
+    err = ParseParameter(
+        params, "ENABLE_CACHE_CLEANING", &enable_cache_cleaning_);
+    if (err != nullptr) {
+      if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
+        return err;
+      } else {
+        TRITONSERVER_ErrorDelete(err);
+      }
+    }
+
+    LOG_MESSAGE(
+        TRITONSERVER_LOG_INFO,
+        (std::string("Cache Cleaning is ") +
+         (enable_cache_cleaning_ ? "enabled" : "disabled") +
          " for model instance '" + Name() + "'")
             .c_str());
 
@@ -453,6 +477,9 @@ class ModelInstanceState : public BackendModelInstance {
   void ProcessRequests(
       TRITONBACKEND_Request** requests, const uint32_t request_count);
 
+  // Clear CUDA cache
+  void ClearCache();
+
  private:
   ModelInstanceState(
       ModelState* model_state,
@@ -585,14 +612,19 @@ ModelInstanceState::ModelInstanceState(
   THROW_IF_BACKEND_INSTANCE_ERROR(ValidateOutputs());
 }
 
-ModelInstanceState::~ModelInstanceState()
+void ModelInstanceState::ClearCache()
 {
-  torch_model_.reset();
 #ifdef TRITON_ENABLE_GPU
   if (device_.is_cuda()) {
     c10::cuda::CUDACachingAllocator::emptyCache();
   }
 #endif  // TRITON_ENABLE_GPU
+}
+
+ModelInstanceState::~ModelInstanceState()
+{
+  torch_model_.reset();
+  ClearCache();
 }
 
 TRITONSERVER_Error*
@@ -2080,6 +2112,10 @@ TRITONBACKEND_ModelInstanceExecute(
   // particular request then we send an error response just for the
   // specific request.
   instance_state->ProcessRequests(requests, request_count);
+
+  if(model_state->EnabledCacheCleaning()) {
+    instance_state->ClearCache();
+  }
 
   return nullptr;  // success
 }

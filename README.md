@@ -179,6 +179,23 @@ key: "ENABLE_WEIGHT_SHARING"
 }
 ```
 
+* `ENABLE_CACHE_CLEANING`: Boolean flag to enable CUDA cache cleaning after each model execution.
+If not specified, cache cleaning is disabled. This flag has no effect if model is on CPU.
+Setting this flag to true will negatively impact the performance due to additional CUDA cache
+cleaning operation after each model execution. Therefore, you should only use this flag if you
+serve multiple models with Triton and encounter CUDA out of memory issue during model executions.
+
+The section of model config file specifying this parameter will look like:
+
+```
+parameters: {
+key: "ENABLE_CACHE_CLEANING"
+    value: {
+    string_value:"true"
+    }
+}
+```
+
 * Additional Optimizations: Three additional boolean parameters are available to disable
 certain Torch optimizations that can sometimes cause latency regressions in models with
 complex execution modes and dynamic shapes. If not specified, all are enabled by default.
