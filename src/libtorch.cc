@@ -1560,7 +1560,6 @@ SetStringInputTensor(
                   std::to_string(element_idx + 1) + " for inference input '" +
                   name + "', expecting " + std::to_string(request_element_cnt))
                   .c_str()));
-      FillStringTensor(input_list, request_element_cnt - element_idx);
       return cuda_copy;
     }
 
@@ -1600,7 +1599,9 @@ SetStringInputTensor(
                           " strings for inference input '" + name + "', got " +
                           std::to_string(element_idx))
                           .c_str()));
-    FillStringTensor(input_list, request_element_cnt - element_idx);
+    if (element_idx < request_element_cnt) {
+      FillStringTensor(input_list, request_element_cnt - element_idx);
+    }
   }
 
   return cuda_copy;
