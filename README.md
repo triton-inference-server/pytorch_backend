@@ -231,5 +231,3 @@ a List of Strings as input(s) / produces a List of String as output(s). For thes
 Triton allows users to pass String input(s)/recieve String output(s) using the String
 datatype. As a limitation of using List instead of Tensor for String I/O, only for
 1-dimensional input(s)/output(s) are supported for I/O of String type.
-Batching is not allowed for PyTorch models with String I/O. For these models,
-the user must specify `max_batch_size: 0` in the configuration.
