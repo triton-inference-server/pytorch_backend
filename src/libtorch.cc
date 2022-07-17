@@ -506,7 +506,7 @@ class ModelInstanceState : public BackendModelInstance {
   // Get the naming convention for inputs/outputs from the model configuration
   TRITONSERVER_Error* GetNamingConvention(
       NamingConvention* naming_convention,
-      const std::set<std::string>& allowed_io);
+      const std::vector<std::string>& allowed_io);
 
   ModelState* model_state_;
 
@@ -713,7 +713,7 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
 {
   // Collect all the expected input tensor names and validate that the model
   // configuration specifies only those.
-  std::set<std::string> allowed_inputs;
+  std::vector<std::string> allowed_inputs;
 
   const torch::jit::Method& method = torch_model_->get_method("forward");
   const auto& schema = method.function().getSchema();
@@ -755,7 +755,7 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
              "Dict(str, Tensor) or input(s) of type Tensor are supported.")
                 .c_str());
       }
-      allowed_inputs.emplace(arguments.at(i).name());
+      allowed_inputs.emplace_back(arguments.at(i).name());
     }
 
     // If all inputs are tensors, match number of expected inputs between model
@@ -800,7 +800,7 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
     } else {
       switch (naming_convention) {
         case NamingConvention::FORWARD_ARGUMENT: {
-          auto itr = allowed_inputs.find(io_name);
+          auto itr = std::find(allowed_inputs.begin(), allowed_inputs.end(), io_name);
           if (itr != allowed_inputs.end()) {
             input_index_map_[io_name] =
                 std::distance(allowed_inputs.begin(), itr);
@@ -1325,7 +1325,7 @@ ModelInstanceState::Execute(
 TRITONSERVER_Error*
 ModelInstanceState::GetNamingConvention(
     NamingConvention* naming_convention,
-    const std::set<std::string>& allowed_ios)
+    const std::vector<std::string>& allowed_ios)
 {
   // Rules for (non-Dictionary) input tensor names:
   // 1. Must be in 'allowed_inputs' (arguments in the forward function)
@@ -1358,7 +1358,7 @@ ModelInstanceState::GetNamingConvention(
       // Validate name
       std::string io_name;
       RETURN_IF_ERROR(io.MemberAsString("name", &io_name));
-      auto itr = allowed_ios.find(io_name);
+      auto itr = std::find(allowed_ios.begin(), allowed_ios.end(), io_name);
       if (itr == allowed_ios.end()) {
         *naming_convention = NamingConvention::NAMED_INDEX;
         break;
