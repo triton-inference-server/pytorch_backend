@@ -49,6 +49,7 @@
 
 #ifdef TRITON_ENABLE_GPU
 #include <c10/cuda/CUDACachingAllocator.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime_api.h>
 #endif  // TRITON_ENABLE_GPU
 
@@ -98,9 +99,10 @@ class ModelState : public BackendModel {
   {
     return enable_nvfuser_pair_;
   }
-  bool EnabledCacheCleaning(){ return enable_cache_cleaning_; }
+  bool EnabledCacheCleaning() { return enable_cache_cleaning_; }
 
   bool EnabledWeightSharing() { return enable_weight_sharing_; }
+  const std::vector<const char*>& ModelOutputs() { return output_names_; }
 
  private:
   ModelState(TRITONBACKEND_Model* triton_model);
@@ -115,7 +117,8 @@ class ModelState : public BackendModel {
   // Flag to indicate whether inference mode is enabled. Defaults to false.
   bool enable_inference_mode_;
 
-  // Flag to indicate whether cache clearning after each run is enabled. Defaults to false.
+  // Flag to indicate whether cache clearning after each run is enabled.
+  // Defaults to false.
   bool enable_cache_cleaning_;
 
   // Flag to indicate whether weight sharing is enabled. Defaults to false.
@@ -138,6 +141,10 @@ class ModelState : public BackendModel {
   std::map<
       std::pair<bool, int64_t>, std::shared_ptr<torch::jit::script::Module>>
       torch_models_;
+
+  // List of all the outputs specified in the output section of model
+  // configuration.
+  std::vector<const char*> output_names_;
 };
 
 TRITONSERVER_Error*
@@ -170,12 +177,27 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     : BackendModel(triton_model), enable_optimized_execution_(true),
       enable_inference_mode_(false), enable_cache_cleaning_(false),
-      enable_weight_sharing_(false),
-      enable_tensor_fuser_pair_({false, true}),
+      enable_weight_sharing_(false), enable_tensor_fuser_pair_({false, true}),
       enable_jit_profiling_pair_({false, true}),
       enable_jit_executor_pair_({false, true}),
       enable_nvfuser_pair_({false, false})
 {
+  output_names_.clear();
+
+  triton::common::TritonJson::Value ios;
+  THROW_IF_BACKEND_INSTANCE_ERROR(ModelConfig().MemberAsArray("output", &ios));
+  for (size_t i = 0; i < ios.ArraySize(); i++) {
+    triton::common::TritonJson::Value io;
+    THROW_IF_BACKEND_INSTANCE_ERROR(ios.IndexAsObject(i, &io));
+
+    // Use names from ModelConfig by reference since the model
+    // config will persist longer than this inference execution.
+    const char* io_name;
+    size_t io_name_len;
+    THROW_IF_BACKEND_INSTANCE_ERROR(
+        io.MemberAsString("name", &io_name, &io_name_len));
+    output_names_.emplace_back(io_name);
+  }
 }
 
 TRITONSERVER_Error*
@@ -497,11 +519,10 @@ class ModelInstanceState : public BackendModelInstance {
       std::vector<torch::jit::IValue>* input_tensors,
       std::vector<BackendMemory*>* input_memories, bool* cuda_copy);
   TRITONSERVER_Error* ReadOutputTensors(
-      size_t total_batch_size, const std::vector<const char*>& output_names,
+      size_t total_batch_size,
       const std::vector<torch::jit::IValue>& output_tensors,
       TRITONBACKEND_Request** requests, const uint32_t request_count,
-      std::vector<TRITONBACKEND_Response*>* responses,
-      uint64_t* compute_end_ns);
+      std::vector<TRITONBACKEND_Response*>* responses);
 
   // Get the naming convention for inputs/outputs from the model configuration
   TRITONSERVER_Error* GetNamingConvention(
@@ -530,6 +551,15 @@ class ModelInstanceState : public BackendModelInstance {
 
   // If the model supports batching.
   bool supports_batching_;
+
+#ifdef TRITON_ENABLE_GPU
+  // PyTorch stream used for execution of inferences.
+  at::cuda::CUDAStream pytorch_stream_;
+  cudaEvent_t compute_input_event_;
+  cudaEvent_t compute_infer_event_;
+  cudaEvent_t compute_output_event_;
+  cudaEvent_t compute_output_end_event_;
+#endif
 };
 
 TRITONSERVER_Error*
@@ -552,11 +582,48 @@ ModelInstanceState::Create(
 
 ModelInstanceState::ModelInstanceState(
     ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
+#ifdef TRITON_ENABLE_GPU
+    : BackendModelInstance(model_state, triton_model_instance),
+      model_state_(model_state), device_(torch::kCPU), is_dict_input_(false),
+      pytorch_stream_(at::cuda::getDefaultCUDAStream())
+#else
     : BackendModelInstance(model_state, triton_model_instance),
       model_state_(model_state), device_(torch::kCPU), is_dict_input_(false)
+#endif
 {
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
     device_ = torch::Device(torch::kCUDA, DeviceId());
+#ifdef TRITON_ENABLE_GPU
+    pytorch_stream_ =
+        at::cuda::getStreamFromPool(false /* is_high_priority */, DeviceId());
+    if (stream_ != nullptr) {
+      cudaError_t err = cudaStreamDestroy(stream_);
+      if (err != cudaSuccess) {
+        TRITONSERVER_LogMessage(
+            TRITONSERVER_LOG_ERROR, __FILE__, __LINE__,
+            (std::string("~BackendModelInstance: ") + name_ +
+             " failed to destroy cuda stream: " + cudaGetErrorString(err))
+                .c_str());
+      }
+      stream_ = pytorch_stream_.stream();
+    }
+    THROW_IF_BACKEND_INSTANCE_ERROR(ConvertCUDAStatusToTritonError(
+        cudaEventCreate(&compute_input_event_), TRITONSERVER_ERROR_INTERNAL,
+        "Failed to create cuda event"));
+    THROW_IF_BACKEND_INSTANCE_ERROR(ConvertCUDAStatusToTritonError(
+        cudaEventCreate(&compute_infer_event_), TRITONSERVER_ERROR_INTERNAL,
+        "Failed to create cuda event"));
+    THROW_IF_BACKEND_INSTANCE_ERROR(ConvertCUDAStatusToTritonError(
+        cudaEventCreate(&compute_output_event_), TRITONSERVER_ERROR_INTERNAL,
+        "Failed to create cuda event"));
+    THROW_IF_BACKEND_INSTANCE_ERROR(ConvertCUDAStatusToTritonError(
+        cudaEventCreate(&compute_output_end_event_),
+        TRITONSERVER_ERROR_INTERNAL, "Failed to create cuda event"));
+#endif
+  } else {
+#ifdef TRITON_ENABLE_GPU
+    pytorch_stream_ = at::cuda::getDefaultCUDAStream();
+#endif
   }
 
   THROW_IF_BACKEND_INSTANCE_ERROR(model_state->LoadModel(
@@ -608,7 +675,8 @@ ModelInstanceState::ModelInstanceState(
   THROW_IF_BACKEND_INSTANCE_ERROR(ValidateOutputs());
 }
 
-void ModelInstanceState::ClearCache()
+void
+ModelInstanceState::ClearCache()
 {
 #ifdef TRITON_ENABLE_GPU
   if (device_.is_cuda()) {
@@ -800,7 +868,8 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
     } else {
       switch (naming_convention) {
         case NamingConvention::FORWARD_ARGUMENT: {
-          auto itr = std::find(allowed_inputs.begin(), allowed_inputs.end(), io_name);
+          auto itr =
+              std::find(allowed_inputs.begin(), allowed_inputs.end(), io_name);
           if (itr != allowed_inputs.end()) {
             input_index_map_[io_name] =
                 std::distance(allowed_inputs.begin(), itr);
@@ -1056,6 +1125,15 @@ ModelInstanceState::ProcessRequests(
   std::vector<BackendMemory*> input_memories;
   bool cuda_copy = false;
   std::unique_ptr<BackendInputCollector> collector;
+  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
+#ifdef TRITON_ENABLE_GPU
+    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+        responses, request_count, all_response_failed,
+        ConvertCUDAStatusToTritonError(
+            cudaEventRecord(compute_input_event_, stream_),
+            TRITONSERVER_ERROR_INTERNAL, "Failed to record the event."));
+#endif
+  }
 
   if (!all_response_failed) {
     collector.reset(new BackendInputCollector(
@@ -1070,52 +1148,41 @@ ModelInstanceState::ProcessRequests(
             &cuda_copy));
   }
 
-  // Request to retrieve all model outputs. 'output_names' and
-  // 'output_tensors' are parallel vectors and so must be kept in
-  // sync.
-  std::vector<const char*> output_names;
+  // If the instance kind is not GPU, we need to synchronize the CUDA stream
+  if (Kind() != TRITONSERVER_INSTANCEGROUPKIND_GPU) {
+#ifdef TRITON_ENABLE_GPU
+    if (cuda_copy) {
+      cudaStreamSynchronize(stream_);
+      cuda_copy = false;
+    }
+#endif
+  } else {
+#ifdef TRITON_ENABLE_GPU
+    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+        responses, request_count, all_response_failed,
+        ConvertCUDAStatusToTritonError(
+            cudaEventRecord(compute_infer_event_, stream_),
+            TRITONSERVER_ERROR_INTERNAL, "Failed to record the event."));
+#endif
+  }
+
   std::vector<torch::jit::IValue> output_tensors;
   if (!all_response_failed) {
-    triton::common::TritonJson::Value ios;
-    TRITONSERVER_Error* err =
-        model_state_->ModelConfig().MemberAsArray("output", &ios);
-    if (err == nullptr) {
-      for (size_t i = 0; i < ios.ArraySize(); i++) {
-        triton::common::TritonJson::Value io;
-        err = ios.IndexAsObject(i, &io);
-        if (err != nullptr) {
-          break;
-        }
-
-        // Use names from ModelConfig by reference since the model
-        // config will persist longer than this inference execution.
-        const char* io_name;
-        size_t io_name_len;
-        err = io.MemberAsString("name", &io_name, &io_name_len);
-        if (err != nullptr) {
-          break;
-        }
-
-        output_names.emplace_back(io_name);
-      }
-    }
-
-    if (err != nullptr) {
-      RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
-          responses, request_count, all_response_failed, err);
-      output_names.clear();
-    }
   }
-
-// Wait for any in-flight input tensor copies to complete.
-#ifdef TRITON_ENABLE_GPU
-  if (cuda_copy) {
-    cudaStreamSynchronize(CudaStream());
-  }
-#endif
 
   uint64_t compute_start_ns = 0;
-  SET_TIMESTAMP(compute_start_ns);
+  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
+#ifdef TRITON_ENABLE_GPU
+    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+        responses, request_count, all_response_failed,
+        ConvertCUDAStatusToTritonError(
+            cudaEventRecord(compute_infer_event_, stream_),
+            TRITONSERVER_ERROR_INTERNAL, "Failed to record the event."));
+#endif
+  } else {
+    SET_TIMESTAMP(compute_start_ns);
+  }
+
 
   // Run...
   if (!all_response_failed) {
@@ -1135,7 +1202,7 @@ ModelInstanceState::ProcessRequests(
   int max_index = output_tensors.size() - 1;
 
   if (!all_response_failed) {
-    for (const auto& name : output_names) {
+    for (const auto& name : model_state_->ModelOutputs()) {
       int op_index = output_index_map_[name];
       if ((op_index < 0) || (op_index > max_index)) {
         RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
@@ -1155,19 +1222,75 @@ ModelInstanceState::ProcessRequests(
   }
 
   uint64_t compute_end_ns = 0;
+  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
+#ifdef TRITON_ENABLE_GPU
+    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+        responses, request_count, all_response_failed,
+        ConvertCUDAStatusToTritonError(
+            cudaEventRecord(compute_output_event_, stream_),
+            TRITONSERVER_ERROR_INTERNAL, "Failed to record the event."));
+#endif
+  } else {
+    SET_TIMESTAMP(compute_end_ns);
+  }
+
 
   if (!all_response_failed) {
     if (!invalid_index) {
       RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
           responses, request_count, all_response_failed,
           ReadOutputTensors(
-              total_batch_size, output_names, output_tensors, requests,
-              request_count, &responses, &compute_end_ns));
+              total_batch_size, output_tensors, requests, request_count,
+              &responses));
     }
   }
 
   uint64_t exec_end_ns = 0;
-  SET_TIMESTAMP(exec_end_ns);
+  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
+#ifdef TRITON_ENABLE_GPU
+    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+        responses, request_count, all_response_failed,
+        ConvertCUDAStatusToTritonError(
+            cudaEventRecord(compute_output_end_event_, stream_),
+            TRITONSERVER_ERROR_INTERNAL, "Failed to record the event"));
+    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+        responses, request_count, all_response_failed,
+        ConvertCUDAStatusToTritonError(
+            cudaEventSynchronize(compute_output_end_event_),
+            TRITONSERVER_ERROR_INTERNAL, "Failed to synchronize event"));
+    float compute_input_duration = 0;
+    float compute_infer_duration = 0;
+    float compute_output_duration = 0;
+    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+        responses, request_count, all_response_failed,
+        ConvertCUDAStatusToTritonError(
+            cudaEventElapsedTime(
+                &compute_input_duration, compute_input_event_,
+                compute_infer_event_),
+            TRITONSERVER_ERROR_INTERNAL, "Failed to capture elapsed time"));
+
+    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+        responses, request_count, all_response_failed,
+        ConvertCUDAStatusToTritonError(
+            cudaEventElapsedTime(
+                &compute_infer_duration, compute_infer_event_,
+                compute_output_event_),
+            TRITONSERVER_ERROR_INTERNAL, "Failed to capture elapsed time"));
+
+    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+        responses, request_count, all_response_failed,
+        ConvertCUDAStatusToTritonError(
+            cudaEventElapsedTime(
+                &compute_output_duration, compute_output_event_,
+                compute_output_end_event_),
+            TRITONSERVER_ERROR_INTERNAL, "Failed to capture elapsed time"));
+    compute_start_ns = exec_start_ns + (compute_input_duration * 1e6);
+    compute_end_ns = compute_start_ns + (compute_infer_duration * 1e6);
+    exec_end_ns = compute_end_ns + (compute_output_duration * 1e6);
+#endif
+  } else {
+    SET_TIMESTAMP(exec_end_ns);
+  }
 
   // Send all the responses that haven't already been sent because of
   // an earlier error. Note that the responses are not set to nullptr
@@ -1214,6 +1337,9 @@ ModelInstanceState::Execute(
     std::vector<torch::jit::IValue>* input_tensors,
     std::vector<torch::jit::IValue>* output_tensors)
 {
+#ifdef TRITON_ENABLE_GPU
+  at::cuda::CUDAStreamGuard device_guard{pytorch_stream_};
+#endif
   NVTX_RANGE(nvtx_, "Execute " + Name());
 
   torch::jit::IValue model_outputs_;
@@ -1714,7 +1840,6 @@ ModelInstanceState::SetInputTensors(
                                ? options.device(torch::kCUDA, device_.index())
                                : options.device(torch::kCPU);
 
-
     if (input_datatype == TRITONSERVER_TYPE_BYTES) {
       // Create the PyTorch list to hold the strings.
       torch::List<std::string> input_list;
@@ -1758,10 +1883,10 @@ ModelInstanceState::SetInputTensors(
 
 TRITONSERVER_Error*
 ModelInstanceState::ReadOutputTensors(
-    size_t total_batch_size, const std::vector<const char*>& output_names,
+    size_t total_batch_size,
     const std::vector<torch::jit::IValue>& output_tensors,
     TRITONBACKEND_Request** requests, const uint32_t request_count,
-    std::vector<TRITONBACKEND_Response*>* responses, uint64_t* compute_end_ns)
+    std::vector<TRITONBACKEND_Response*>* responses)
 {
   NVTX_RANGE(nvtx_, "ReadOutputTensors " + Name());
 
@@ -1773,8 +1898,8 @@ ModelInstanceState::ReadOutputTensors(
   bool cuda_copy = false;
   // The serialized string buffer must be valid until output copies are done
   std::vector<std::unique_ptr<std::string>> string_buffer;
-  for (size_t idx = 0; idx < output_names.size(); idx++) {
-    std::string name = output_names[idx];
+  for (size_t idx = 0; idx < model_state_->ModelOutputs().size(); idx++) {
+    std::string name = model_state_->ModelOutputs()[idx];
     int op_index = output_index_map_[name];
 
     if (output_tensors[op_index].isTensor()) {
@@ -1875,30 +2000,19 @@ ModelInstanceState::ReadOutputTensors(
            "' must be of type Tensor or List[str].")
               .c_str());
     }
-
-    // PyTorch uses asynchronous execution to run the model. Setting the compute
-    // end timestamp immediately after Execute() does not capture the complete
-    // model execution time. When the first output buffer is accessed/copied by
-    // ProcessTensor(), there is a synchronization that is done to ensure the
-    // data is correctly copied from the output tensor. To avoid overheads of
-    // additional synchronization, we continue to use the default cuda stream.
-    // However the drawback of this is that the compute infer time reported
-    // would be slightly later than it is in reality and the compute output time
-    // reported would be smaller than it is in reality. We allow this because
-    // synchronizing manually negatively impacts performance.
-    if (idx == 0) {
-      SET_TIMESTAMP(*compute_end_ns);
-    }
   }
 
   // Finalize and wait for any pending buffer copies.
   cuda_copy |= responder.Finalize();
 
+  if (Kind() != TRITONSERVER_INSTANCEGROUPKIND_GPU) {
 #ifdef TRITON_ENABLE_GPU
-  if (cuda_copy) {
-    cudaStreamSynchronize(stream_);
+    if (cuda_copy) {
+      cudaStreamSynchronize(stream_);
+      cuda_copy = false;
+    }
+#endif
   }
-#endif  // TRITON_ENABLE_GPU
 
   return nullptr;
 }
@@ -2087,7 +2201,7 @@ TRITONBACKEND_ModelInstanceExecute(
   // specific request.
   instance_state->ProcessRequests(requests, request_count);
 
-  if(model_state->EnabledCacheCleaning()) {
+  if (model_state->EnabledCacheCleaning()) {
     instance_state->ClearCache();
   }
 

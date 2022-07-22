@@ -149,4 +149,18 @@ ParseParameter(
   return nullptr;
 }
 
+#ifdef TRITON_ENABLE_GPU
+TRITONSERVER_Error*
+ConvertCUDAStatusToTritonError(
+   cudaError_t cuda_error,TRITONSERVER_Error_Code code, const char* msg)
+{
+  if (cuda_error != cudaSuccess) {
+    return TRITONSERVER_ErrorNew(
+        code,
+        (std::string(msg) + ": " + cudaGetErrorString(cuda_error)).c_str());
+  }
+  return nullptr;  // success
+}
+#endif
+
 }}}  // namespace triton::backend::pytorch
