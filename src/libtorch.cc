@@ -688,6 +688,9 @@ ModelInstanceState::ClearCache()
 ModelInstanceState::~ModelInstanceState()
 {
   torch_model_.reset();
+#ifdef TRITON_ENABLE_GPU
+  stream_ = nullptr;
+#endif
   ClearCache();
 }
 
