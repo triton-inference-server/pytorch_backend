@@ -523,6 +523,8 @@ class ModelInstanceState : public BackendModelInstance {
       const std::vector<torch::jit::IValue>& output_tensors,
       TRITONBACKEND_Request** requests, const uint32_t request_count,
       std::vector<TRITONBACKEND_Response*>* responses);
+  TRITONSERVER_Error* RecordBackendTimestamp(
+      uint64_t* timestamp, void* cuda_event);
 
   // Get the naming convention for inputs/outputs from the model configuration
   TRITONSERVER_Error* GetNamingConvention(
@@ -1132,45 +1134,28 @@ ModelInstanceState::ProcessRequests(
       cuda_copy = false;
     }
 #endif
-  } else {
-#ifdef TRITON_ENABLE_GPU
-    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
-        responses, request_count, all_response_failed,
-        ConvertCUDAStatusToTritonError(
-            cudaEventRecord(compute_infer_event_, stream_),
-            TRITONSERVER_ERROR_INTERNAL, "Failed to record the event."));
-#endif
   }
 
   std::vector<torch::jit::IValue> output_tensors;
-  if (!all_response_failed) {
-  }
-
   uint64_t compute_start_ns = 0;
-  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
-#ifdef TRITON_ENABLE_GPU
-    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
-        responses, request_count, all_response_failed,
-        ConvertCUDAStatusToTritonError(
-            cudaEventRecord(compute_infer_event_, stream_),
-            TRITONSERVER_ERROR_INTERNAL, "Failed to record the event."));
-#endif
-  } else {
-    SET_TIMESTAMP(compute_start_ns);
-  }
 
+  RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+      responses, request_count, all_response_failed,
+      RecordBackendTimestamp(
+          &compute_start_ns,
+          reinterpret_cast<cudaEvent_t*>(&compute_infer_event_)));
 
   // Run...
   if (!all_response_failed) {
     if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
 #ifdef TRITON_ENABLE_GPU
-      at::cuda::CUDAStream stream = at::cuda::getStreamFromExternal(stream_, DeviceId());
+      at::cuda::CUDAStream stream =
+          at::cuda::getStreamFromExternal(stream_, DeviceId());
       at::cuda::CUDAStreamGuard device_guard{stream};
 #endif
       Execute(&responses, request_count, &input_tensors, &output_tensors);
     } else {
       Execute(&responses, request_count, &input_tensors, &output_tensors);
-
     }
   }
 
@@ -1207,26 +1192,32 @@ ModelInstanceState::ProcessRequests(
   }
 
   uint64_t compute_end_ns = 0;
-  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
-#ifdef TRITON_ENABLE_GPU
-    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
-        responses, request_count, all_response_failed,
-        ConvertCUDAStatusToTritonError(
-            cudaEventRecord(compute_output_event_, stream_),
-            TRITONSERVER_ERROR_INTERNAL, "Failed to record the event."));
-#endif
-  } else {
-    SET_TIMESTAMP(compute_end_ns);
-  }
-
+  RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+      responses, request_count, all_response_failed,
+      RecordBackendTimestamp(
+          &compute_end_ns,
+          reinterpret_cast<cudaEvent_t*>(&compute_output_event_)));
 
   if (!all_response_failed) {
     if (!invalid_index) {
-      RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
-          responses, request_count, all_response_failed,
-          ReadOutputTensors(
-              total_batch_size, output_tensors, requests, request_count,
-              &responses));
+      if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
+#ifdef TRITON_ENABLE_GPU
+        at::cuda::CUDAStream stream =
+            at::cuda::getStreamFromExternal(stream_, DeviceId());
+        at::cuda::CUDAStreamGuard device_guard{stream};
+        RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+            responses, request_count, all_response_failed,
+            ReadOutputTensors(
+                total_batch_size, output_tensors, requests, request_count,
+                &responses));
+#endif
+      } else {
+        RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+            responses, request_count, all_response_failed,
+            ReadOutputTensors(
+                total_batch_size, output_tensors, requests, request_count,
+                &responses));
+      }
     }
   }
 
@@ -1996,6 +1987,23 @@ ModelInstanceState::ReadOutputTensors(
 #endif
   }
 
+  return nullptr;
+}
+
+TRITONSERVER_Error*
+ModelInstanceState::RecordBackendTimestamp(
+    uint64_t* timestamp, void* cuda_event)
+{
+  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
+#ifdef TRITON_ENABLE_GPU
+    cudaEvent_t* lcuda_event = reinterpret_cast<cudaEvent_t*>(cuda_event);
+    RETURN_IF_ERROR(ConvertCUDAStatusToTritonError(
+        cudaEventRecord(*lcuda_event, stream_), TRITONSERVER_ERROR_INTERNAL,
+        "Failed to record the event."));
+#endif
+  } else {
+    SET_TIMESTAMP(*timestamp);
+  }
   return nullptr;
 }
 
