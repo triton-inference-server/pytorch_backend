@@ -554,7 +554,6 @@ class ModelInstanceState : public BackendModelInstance {
 
 #ifdef TRITON_ENABLE_GPU
   // PyTorch stream used for execution of inferences.
-  at::cuda::CUDAStream pytorch_stream_;
   cudaEvent_t compute_input_event_;
   cudaEvent_t compute_infer_event_;
   cudaEvent_t compute_output_event_;
@@ -582,31 +581,12 @@ ModelInstanceState::Create(
 
 ModelInstanceState::ModelInstanceState(
     ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
-#ifdef TRITON_ENABLE_GPU
-    : BackendModelInstance(model_state, triton_model_instance),
-      model_state_(model_state), device_(torch::kCPU), is_dict_input_(false),
-      pytorch_stream_(at::cuda::getDefaultCUDAStream())
-#else
     : BackendModelInstance(model_state, triton_model_instance),
       model_state_(model_state), device_(torch::kCPU), is_dict_input_(false)
-#endif
 {
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
-    device_ = torch::Device(torch::kCUDA, DeviceId());
 #ifdef TRITON_ENABLE_GPU
-    pytorch_stream_ =
-        at::cuda::getStreamFromPool(false /* is_high_priority */, DeviceId());
-    if (stream_ != nullptr) {
-      cudaError_t err = cudaStreamDestroy(stream_);
-      if (err != cudaSuccess) {
-        TRITONSERVER_LogMessage(
-            TRITONSERVER_LOG_ERROR, __FILE__, __LINE__,
-            (std::string("~BackendModelInstance: ") + name_ +
-             " failed to destroy cuda stream: " + cudaGetErrorString(err))
-                .c_str());
-      }
-      stream_ = pytorch_stream_.stream();
-    }
+    device_ = torch::Device(torch::kCUDA, DeviceId());
     THROW_IF_BACKEND_INSTANCE_ERROR(ConvertCUDAStatusToTritonError(
         cudaEventCreate(&compute_input_event_), TRITONSERVER_ERROR_INTERNAL,
         "Failed to create cuda event"));
@@ -619,10 +599,6 @@ ModelInstanceState::ModelInstanceState(
     THROW_IF_BACKEND_INSTANCE_ERROR(ConvertCUDAStatusToTritonError(
         cudaEventCreate(&compute_output_end_event_),
         TRITONSERVER_ERROR_INTERNAL, "Failed to create cuda event"));
-#endif
-  } else {
-#ifdef TRITON_ENABLE_GPU
-    pytorch_stream_ = at::cuda::getDefaultCUDAStream();
 #endif
   }
 
@@ -688,9 +664,6 @@ ModelInstanceState::ClearCache()
 ModelInstanceState::~ModelInstanceState()
 {
   torch_model_.reset();
-#ifdef TRITON_ENABLE_GPU
-  stream_ = nullptr;
-#endif
   ClearCache();
 }
 
@@ -1189,7 +1162,16 @@ ModelInstanceState::ProcessRequests(
 
   // Run...
   if (!all_response_failed) {
-    Execute(&responses, request_count, &input_tensors, &output_tensors);
+    if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
+#ifdef TRITON_ENABLE_GPU
+      at::cuda::CUDAStream stream = at::cuda::getStreamFromExternal(stream_, DeviceId());
+      at::cuda::CUDAStreamGuard device_guard{stream};
+#endif
+      Execute(&responses, request_count, &input_tensors, &output_tensors);
+    } else {
+      Execute(&responses, request_count, &input_tensors, &output_tensors);
+
+    }
   }
 
   // Free BackendMemory used for inputs
@@ -1340,9 +1322,6 @@ ModelInstanceState::Execute(
     std::vector<torch::jit::IValue>* input_tensors,
     std::vector<torch::jit::IValue>* output_tensors)
 {
-#ifdef TRITON_ENABLE_GPU
-  at::cuda::CUDAStreamGuard device_guard{pytorch_stream_};
-#endif
   NVTX_RANGE(nvtx_, "Execute " + Name());
 
   torch::jit::IValue model_outputs_;
