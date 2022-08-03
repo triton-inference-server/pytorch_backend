@@ -102,7 +102,7 @@ class ModelState : public BackendModel {
   bool EnabledCacheCleaning() { return enable_cache_cleaning_; }
 
   bool EnabledWeightSharing() { return enable_weight_sharing_; }
-  const std::vector<const char*>& ModelOutputs() { return output_names_; }
+  const std::vector<std::string>& ModelOutputs() { return output_names_; }
 
  private:
   ModelState(TRITONBACKEND_Model* triton_model);
@@ -117,7 +117,7 @@ class ModelState : public BackendModel {
   // Flag to indicate whether inference mode is enabled. Defaults to false.
   bool enable_inference_mode_;
 
-  // Flag to indicate whether cache clearning after each run is enabled.
+  // Flag to indicate whether cache cleaning after each run is enabled.
   // Defaults to false.
   bool enable_cache_cleaning_;
 
@@ -144,7 +144,7 @@ class ModelState : public BackendModel {
 
   // List of all the outputs specified in the output section of model
   // configuration.
-  std::vector<const char*> output_names_;
+  std::vector<std::string> output_names_;
 };
 
 TRITONSERVER_Error*
@@ -556,10 +556,10 @@ class ModelInstanceState : public BackendModelInstance {
 
 #ifdef TRITON_ENABLE_GPU
   // PyTorch stream used for execution of inferences.
-  cudaEvent_t compute_input_event_;
-  cudaEvent_t compute_infer_event_;
-  cudaEvent_t compute_output_event_;
-  cudaEvent_t compute_output_end_event_;
+  cudaEvent_t compute_input_start_event_;
+  cudaEvent_t compute_infer_start_event_;
+  cudaEvent_t compute_output_start_event_;
+  at::cuda::CUDAStream torch_stream_ = at::cuda::getDefaultCUDAStream();
 #endif
 };
 
@@ -590,17 +590,15 @@ ModelInstanceState::ModelInstanceState(
 #ifdef TRITON_ENABLE_GPU
     device_ = torch::Device(torch::kCUDA, DeviceId());
     THROW_IF_BACKEND_INSTANCE_ERROR(ConvertCUDAStatusToTritonError(
-        cudaEventCreate(&compute_input_event_), TRITONSERVER_ERROR_INTERNAL,
-        "Failed to create cuda event"));
-    THROW_IF_BACKEND_INSTANCE_ERROR(ConvertCUDAStatusToTritonError(
-        cudaEventCreate(&compute_infer_event_), TRITONSERVER_ERROR_INTERNAL,
-        "Failed to create cuda event"));
-    THROW_IF_BACKEND_INSTANCE_ERROR(ConvertCUDAStatusToTritonError(
-        cudaEventCreate(&compute_output_event_), TRITONSERVER_ERROR_INTERNAL,
-        "Failed to create cuda event"));
-    THROW_IF_BACKEND_INSTANCE_ERROR(ConvertCUDAStatusToTritonError(
-        cudaEventCreate(&compute_output_end_event_),
+        cudaEventCreate(&compute_input_start_event_),
         TRITONSERVER_ERROR_INTERNAL, "Failed to create cuda event"));
+    THROW_IF_BACKEND_INSTANCE_ERROR(ConvertCUDAStatusToTritonError(
+        cudaEventCreate(&compute_infer_start_event_),
+        TRITONSERVER_ERROR_INTERNAL, "Failed to create cuda event"));
+    THROW_IF_BACKEND_INSTANCE_ERROR(ConvertCUDAStatusToTritonError(
+        cudaEventCreate(&compute_output_start_event_),
+        TRITONSERVER_ERROR_INTERNAL, "Failed to create cuda event"));
+    torch_stream_ = at::cuda::getStreamFromExternal(stream_, DeviceId());
 #endif
   }
 
@@ -614,6 +612,7 @@ ModelInstanceState::ModelInstanceState(
       expected_input_cnt = inputs.ArraySize();
     }
   }
+
 
   // If this is a sequence model then make sure that the required
   // inputs are present in the model and have the correct shape and
@@ -997,6 +996,12 @@ ModelInstanceState::ProcessRequests(
        std::to_string(request_count) + " requests")
           .c_str());
 
+  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
+#ifdef TRITON_ENABLE_GPU
+    at::cuda::setCurrentCUDAStream(torch_stream_);
+#endif
+  }
+
   NVTX_RANGE(nvtx_, "ProcessRequests " + Name());
 
   uint64_t exec_start_ns = 0;
@@ -1049,7 +1054,6 @@ ModelInstanceState::ProcessRequests(
       TRITONSERVER_ErrorDelete(err);
     }
   }
-
 
   for (size_t i = 0; i < request_count; i++) {
     if (max_batch_size > 0) {
@@ -1108,7 +1112,7 @@ ModelInstanceState::ProcessRequests(
     RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
         responses, request_count, all_response_failed,
         ConvertCUDAStatusToTritonError(
-            cudaEventRecord(compute_input_event_, stream_),
+            cudaEventRecord(compute_input_start_event_, stream_),
             TRITONSERVER_ERROR_INTERNAL, "Failed to record the event."));
 #endif
   }
@@ -1143,20 +1147,11 @@ ModelInstanceState::ProcessRequests(
       responses, request_count, all_response_failed,
       RecordBackendTimestamp(
           &compute_start_ns,
-          reinterpret_cast<cudaEvent_t*>(&compute_infer_event_)));
+          reinterpret_cast<void*>(&compute_infer_start_event_)));
 
   // Run...
   if (!all_response_failed) {
-    if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
-#ifdef TRITON_ENABLE_GPU
-      at::cuda::CUDAStream stream =
-          at::cuda::getStreamFromExternal(stream_, DeviceId());
-      at::cuda::CUDAStreamGuard device_guard{stream};
-#endif
-      Execute(&responses, request_count, &input_tensors, &output_tensors);
-    } else {
-      Execute(&responses, request_count, &input_tensors, &output_tensors);
-    }
+    Execute(&responses, request_count, &input_tensors, &output_tensors);
   }
 
   // Free BackendMemory used for inputs
@@ -1196,77 +1191,20 @@ ModelInstanceState::ProcessRequests(
       responses, request_count, all_response_failed,
       RecordBackendTimestamp(
           &compute_end_ns,
-          reinterpret_cast<cudaEvent_t*>(&compute_output_event_)));
+          reinterpret_cast<void*>(&compute_output_start_event_)));
 
   if (!all_response_failed) {
     if (!invalid_index) {
-      if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
-#ifdef TRITON_ENABLE_GPU
-        at::cuda::CUDAStream stream =
-            at::cuda::getStreamFromExternal(stream_, DeviceId());
-        at::cuda::CUDAStreamGuard device_guard{stream};
-        RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
-            responses, request_count, all_response_failed,
-            ReadOutputTensors(
-                total_batch_size, output_tensors, requests, request_count,
-                &responses));
-#endif
-      } else {
-        RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
-            responses, request_count, all_response_failed,
-            ReadOutputTensors(
-                total_batch_size, output_tensors, requests, request_count,
-                &responses));
-      }
+      RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+          responses, request_count, all_response_failed,
+          ReadOutputTensors(
+              total_batch_size, output_tensors, requests, request_count,
+              &responses));
     }
   }
 
   uint64_t exec_end_ns = 0;
-  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
-#ifdef TRITON_ENABLE_GPU
-    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
-        responses, request_count, all_response_failed,
-        ConvertCUDAStatusToTritonError(
-            cudaEventRecord(compute_output_end_event_, stream_),
-            TRITONSERVER_ERROR_INTERNAL, "Failed to record the event"));
-    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
-        responses, request_count, all_response_failed,
-        ConvertCUDAStatusToTritonError(
-            cudaEventSynchronize(compute_output_end_event_),
-            TRITONSERVER_ERROR_INTERNAL, "Failed to synchronize event"));
-    float compute_input_duration = 0;
-    float compute_infer_duration = 0;
-    float compute_output_duration = 0;
-    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
-        responses, request_count, all_response_failed,
-        ConvertCUDAStatusToTritonError(
-            cudaEventElapsedTime(
-                &compute_input_duration, compute_input_event_,
-                compute_infer_event_),
-            TRITONSERVER_ERROR_INTERNAL, "Failed to capture elapsed time"));
-
-    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
-        responses, request_count, all_response_failed,
-        ConvertCUDAStatusToTritonError(
-            cudaEventElapsedTime(
-                &compute_infer_duration, compute_infer_event_,
-                compute_output_event_),
-            TRITONSERVER_ERROR_INTERNAL, "Failed to capture elapsed time"));
-
-    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
-        responses, request_count, all_response_failed,
-        ConvertCUDAStatusToTritonError(
-            cudaEventElapsedTime(
-                &compute_output_duration, compute_output_event_,
-                compute_output_end_event_),
-            TRITONSERVER_ERROR_INTERNAL, "Failed to capture elapsed time"));
-    compute_start_ns = exec_start_ns + (compute_input_duration * 1e6);
-    compute_end_ns = compute_start_ns + (compute_infer_duration * 1e6);
-    exec_end_ns = compute_end_ns + (compute_output_duration * 1e6);
-#endif
-  } else {
-    SET_TIMESTAMP(exec_end_ns);
-  }
+  SET_TIMESTAMP(exec_end_ns);
 
   // Send all the responses that haven't already been sent because of
   // an earlier error. Note that the responses are not set to nullptr
@@ -1279,6 +1217,33 @@ ModelInstanceState::ProcessRequests(
               response, TRITONSERVER_RESPONSE_COMPLETE_FINAL, nullptr),
           "failed to send PyTorch backend response");
     }
+  }
+
+  // We don't need an explicit CUDA syncrhonization here since we have already
+  // synchronized the stream in the ReadOutputTensors function.
+  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
+#ifdef TRITON_ENABLE_GPU
+    float compute_input_duration = 0;
+    float compute_infer_duration = 0;
+    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+        responses, request_count, all_response_failed,
+        ConvertCUDAStatusToTritonError(
+            cudaEventElapsedTime(
+                &compute_input_duration, compute_input_start_event_,
+                compute_infer_start_event_),
+            TRITONSERVER_ERROR_INTERNAL, "Failed to capture elapsed time"));
+
+    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+        responses, request_count, all_response_failed,
+        ConvertCUDAStatusToTritonError(
+            cudaEventElapsedTime(
+                &compute_infer_duration, compute_infer_start_event_,
+                compute_output_start_event_),
+            TRITONSERVER_ERROR_INTERNAL, "Failed to capture elapsed time"));
+
+    compute_start_ns = exec_start_ns + (compute_input_duration * 1e6);
+    compute_end_ns = compute_start_ns + (compute_infer_duration * 1e6);
+#endif
   }
 
   // Report statistics for each request.
