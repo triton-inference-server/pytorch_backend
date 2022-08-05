@@ -559,7 +559,6 @@ class ModelInstanceState : public BackendModelInstance {
   cudaEvent_t compute_input_start_event_;
   cudaEvent_t compute_infer_start_event_;
   cudaEvent_t compute_output_start_event_;
-  at::cuda::CUDAStream torch_stream_ = at::cuda::getDefaultCUDAStream();
 #endif
 };
 
@@ -589,6 +588,11 @@ ModelInstanceState::ModelInstanceState(
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
 #ifdef TRITON_ENABLE_GPU
     device_ = torch::Device(torch::kCUDA, DeviceId());
+    // Need to set the CUDA context so that the context that events are
+    // created on match with contexts that events are recorded with.
+    THROW_IF_BACKEND_INSTANCE_ERROR(ConvertCUDAStatusToTritonError(
+        cudaSetDevice(DeviceId()), TRITONSERVER_ERROR_INTERNAL,
+        "Failed to set the device"));
     THROW_IF_BACKEND_INSTANCE_ERROR(ConvertCUDAStatusToTritonError(
         cudaEventCreate(&compute_input_start_event_),
         TRITONSERVER_ERROR_INTERNAL, "Failed to create cuda event"));
@@ -598,7 +602,6 @@ ModelInstanceState::ModelInstanceState(
     THROW_IF_BACKEND_INSTANCE_ERROR(ConvertCUDAStatusToTritonError(
         cudaEventCreate(&compute_output_start_event_),
         TRITONSERVER_ERROR_INTERNAL, "Failed to create cuda event"));
-    torch_stream_ = at::cuda::getStreamFromExternal(stream_, DeviceId());
 #endif
   }
 
@@ -998,7 +1001,9 @@ ModelInstanceState::ProcessRequests(
 
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
 #ifdef TRITON_ENABLE_GPU
-    at::cuda::setCurrentCUDAStream(torch_stream_);
+    at::cuda::CUDAStream torch_stream =
+        at::cuda::getStreamFromExternal(stream_, DeviceId());
+    at::cuda::setCurrentCUDAStream(torch_stream);
 #endif
   }
 
