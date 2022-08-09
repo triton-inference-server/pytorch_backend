@@ -554,12 +554,9 @@ class ModelInstanceState : public BackendModelInstance {
   // If the model supports batching.
   bool supports_batching_;
 
-#ifdef TRITON_ENABLE_GPU
-  // PyTorch stream used for execution of inferences.
   cudaEvent_t compute_input_start_event_;
   cudaEvent_t compute_infer_start_event_;
   cudaEvent_t compute_output_start_event_;
-#endif
 };
 
 TRITONSERVER_Error*
@@ -615,7 +612,6 @@ ModelInstanceState::ModelInstanceState(
       expected_input_cnt = inputs.ArraySize();
     }
   }
-
 
   // If this is a sequence model then make sure that the required
   // inputs are present in the model and have the correct shape and
