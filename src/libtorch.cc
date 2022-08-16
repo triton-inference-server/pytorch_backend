@@ -1131,15 +1131,12 @@ ModelInstanceState::ProcessRequests(
             &cuda_copy));
   }
 
-  // If the instance kind is not GPU, we need to synchronize the CUDA stream
-  if (Kind() != TRITONSERVER_INSTANCEGROUPKIND_GPU) {
 #ifdef TRITON_ENABLE_GPU
-    if (cuda_copy) {
-      cudaStreamSynchronize(stream_);
-      cuda_copy = false;
-    }
-#endif
+  if (cuda_copy) {
+    cudaStreamSynchronize(stream_);
+    cuda_copy = false;
   }
+#endif
 
   std::vector<torch::jit::IValue> output_tensors;
   uint64_t compute_start_ns = 0;
@@ -1944,14 +1941,13 @@ ModelInstanceState::ReadOutputTensors(
   // Finalize and wait for any pending buffer copies.
   cuda_copy |= responder.Finalize();
 
-  if (Kind() != TRITONSERVER_INSTANCEGROUPKIND_GPU) {
 #ifdef TRITON_ENABLE_GPU
-    if (cuda_copy) {
-      cudaStreamSynchronize(stream_);
-      cuda_copy = false;
-    }
+  // We have to always synchronize the stream. This is to make sure that
+  // the events on the cuda stream are synchronized. Otherwise, the events
+  // are only guaranteed to be synchronized if the model provides the output
+  // on GPU.
+  cudaStreamSynchronize(stream_);
 #endif
-  }
 
   return nullptr;
 }
