@@ -1221,23 +1221,25 @@ ModelInstanceState::ProcessRequests(
   // synchronized the stream in the ReadOutputTensors function.
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
 #ifdef TRITON_ENABLE_GPU
+    // [FIXME] in the case of cudaEventElapsedTime failure, should handle
+    // stats reporting more gracefully as the durations are inaccurate
     float compute_input_duration = 0;
     float compute_infer_duration = 0;
-    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
-        responses, request_count, all_response_failed,
+    LOG_IF_ERROR(
         ConvertCUDAStatusToTritonError(
             cudaEventElapsedTime(
                 &compute_input_duration, compute_input_start_event_,
                 compute_infer_start_event_),
-            TRITONSERVER_ERROR_INTERNAL, "Failed to capture elapsed time"));
+            TRITONSERVER_ERROR_INTERNAL, "Failed to capture elapsed time"),
+            "Failed to capture elapsed time");
 
-    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
-        responses, request_count, all_response_failed,
+    LOG_IF_ERROR(
         ConvertCUDAStatusToTritonError(
             cudaEventElapsedTime(
                 &compute_infer_duration, compute_infer_start_event_,
                 compute_output_start_event_),
-            TRITONSERVER_ERROR_INTERNAL, "Failed to capture elapsed time"));
+            TRITONSERVER_ERROR_INTERNAL, "Failed to capture elapsed time"),
+            "Failed to capture elapsed time");
 
     compute_start_ns = exec_start_ns + (compute_input_duration * 1e6);
     compute_end_ns = compute_start_ns + (compute_infer_duration * 1e6);
