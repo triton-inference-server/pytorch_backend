@@ -1221,6 +1221,8 @@ ModelInstanceState::ProcessRequests(
   // synchronized the stream in the ReadOutputTensors function.
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
 #ifdef TRITON_ENABLE_GPU
+    // [FIXME] in the case of cudaEventElapsedTime failure, should handle
+    // stats reporting more gracefully as the durations are inaccurate
     float compute_input_duration = 0;
     float compute_infer_duration = 0;
     LOG_IF_ERROR(
