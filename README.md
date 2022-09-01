@@ -218,14 +218,6 @@ complex execution modes and dynamic shapes. If not specified, all are enabled by
     state and a restart of the server may be required to continue serving
     successfully.
 
-* Multiple instances of the PyTorch model on GPU do not always
-  increase performance. Due to thread specific caching in PyTorch, using
-  multiple instances of the model interact negatively. See
-  [here](https://github.com/pytorch/pytorch/issues/27902) for more details.
-  Setting the parameter `DISABLE_OPTIMIZED_EXECUTION` to "true" in the model
-  configuration may help in some cases to avoid these negative interactions
-  due to model specific caching and increase multiple instance performance.
-
 * PyTorch does not support Tensor of Strings but it does support models that accept
 a List of Strings as input(s) / produces a List of String as output(s). For these models
 Triton allows users to pass String input(s)/recieve String output(s) using the String
