@@ -550,6 +550,8 @@ class ModelInstanceState : public BackendModelInstance {
 
   // If the input to the tensor is a dictionary of tensors.
   bool is_dict_input_;
+  // If the output is a dictionary of tensors.
+  bool is_dict_output_;
 
   // If the model supports batching.
   bool supports_batching_;
@@ -947,7 +949,7 @@ ModelInstanceState::ValidateOutputs()
     std::string io_dtype;
     RETURN_IF_ERROR(io.MemberAsString("data_type", &io_dtype));
     const auto pr = ModelConfigDataTypeToTorchType(io_dtype);
-    if (!pr.first && (io_dtype != "TYPE_STRING")) {
+    if (!pr.first && (io_dtype != "TYPE_STRING") && (io_dtype != "TYPE_COMPLEX_DICT")) {
       return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INTERNAL,
           ("unsupported datatype " + io_dtype + " for output '" + io_name +
@@ -975,6 +977,9 @@ ModelInstanceState::ValidateOutputs()
              std::string(io_name) + "' for model '" + model_state_->Name() +
              "'")
                 .c_str());
+      }
+      if (io_dtype == "TYPE_COMPLEX_DICT") {
+        is_dict_output_ = true;
       }
     }
 
@@ -1370,8 +1375,19 @@ ModelInstanceState::Execute(
             list_output.elementType()->str() + "]");
       }
       output_tensors->push_back(model_outputs_);
+    } else if (model_outputs_.isGenericDict()){
+      if (!is_dict_output_) {
+        throw std::invalid_argument("expected no complex outputs but recieved dictionary output");
+      for (auto it = model_outputs_.begin(); it != model_outputs_.end(); ++it) {
+        if (!it->keyType().isString() || ! it->valueType().isTensor() || !(it->valueType().isList() && it->value().elementType()->kind() != c10::TypeKind::StringType)){
+          throw std::invalid_argument(
+            "output must be of type Dict[str, Union[List[str], Tensor]], "
+            "recieved Dict[" + it->keyType()->str + ", [ " +  it->valueType().str + "]]");
+        }
+        output_tensors->push_back(model_outputs_);
+      }
     } else {
-      throw std::invalid_argument(
+        throw std::invalid_argument(
           "output must be of type Tensor, List[str] or Tuple containing one of "
           "these two types. It should not be a List / Dictionary of Tensors or "
           "a Scalar");
