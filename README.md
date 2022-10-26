@@ -220,6 +220,6 @@ complex execution modes and dynamic shapes. If not specified, all are enabled by
 
 * PyTorch does not support Tensor of Strings but it does support models that accept
 a List of Strings as input(s) / produces a List of String as output(s). For these models
-Triton allows users to pass String input(s)/recieve String output(s) using the String
+Triton allows users to pass String input(s)/receive String output(s) using the String
 datatype. As a limitation of using List instead of Tensor for String I/O, only for
 1-dimensional input(s)/output(s) are supported for I/O of String type.
