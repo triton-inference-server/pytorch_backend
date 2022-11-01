@@ -217,12 +217,12 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch/include include/torch
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/pytorch/torch/csrc/jit/codegen include/torch/torch/csrc/jit/.
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/vision/torchvision/csrc include/torchvision/torchvision
-    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/libopencv_videoio.so libopencv_videoio.so
-    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/libopencv_highgui.so libopencv_highgui.so
-    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/libopencv_video.so libopencv_video.so
-    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/libopencv_imgcodecs.so libopencv_imgcodecs.so
-    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/libopencv_imgproc.so libopencv_imgproc.so
-    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/libopencv_core.so libopencv_core.so
+    COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/lib/libopencv_videoio.so libopencv_videoio.so
+    COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/lib/libopencv_highgui.so libopencv_highgui.so
+    COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/lib/libopencv_video.so libopencv_video.so
+    COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/lib/libopencv_imgcodecs.so libopencv_imgcodecs.so
+    COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/lib/libopencv_imgproc.so libopencv_imgproc.so
+    COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/lib/libopencv_core.so libopencv_core.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libpng16.so.16.37.0 libpng16.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libjpeg.so.8.2.2 libjpeg.so
     COMMAND /bin/sh -c "if [ -f libmkl_def.so ]; then patchelf --add-needed libmkl_gnu_thread.so libmkl_def.so; fi"
