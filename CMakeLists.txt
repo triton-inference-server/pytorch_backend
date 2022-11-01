@@ -210,19 +210,19 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch/lib/libtorch_cpu.so libtorch_cpu.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch/lib/libtorch_cuda.so libtorch_cuda.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch/lib/libtorch_global_deps.so libtorch_global_deps.so
-    COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/vision/build/libtorchvision.so libtorchvision.so
-    COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHTRT} = 'ON' ]; then docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/site-packages/torch_tensorrt/lib/libtorchtrt_runtime.so libtorchtrt_runtime.so; fi"
-    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/site-packages/torch_tensorrt/bin/torchtrtc torchtrtc || echo "error ignored..." || true
+    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/libtorchvision.so libtorchvision.so
+    COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHTRT} = 'ON' ]; then docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch_tensorrt/lib/libtorchtrt_runtime.so libtorchtrt_runtime.so; fi"
+    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch_tensorrt/bin/torchtrtc torchtrtc || echo "error ignored..." || true
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/pytorch/LICENSE LICENSE.pytorch
-    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/site-packages/torch/include include/torch
+    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch/include include/torch
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/pytorch/torch/csrc/jit/codegen include/torch/torch/csrc/jit/.
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/vision/torchvision/csrc include/torchvision/torchvision
-    COMMAND docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libopencv_videoio.so.3.4.11 libopencv_videoio.so
-    COMMAND docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libopencv_highgui.so.3.4.11 libopencv_highgui.so
-    COMMAND docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libopencv_video.so.3.4.11 libopencv_video.so
-    COMMAND docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libopencv_imgcodecs.so.3.4.11 libopencv_imgcodecs.so
-    COMMAND docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libopencv_imgproc.so.3.4.11 libopencv_imgproc.so
-    COMMAND docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libopencv_core.so.3.4.11 libopencv_core.so
+    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/libopencv_videoio.so libopencv_videoio.so
+    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/libopencv_highgui.so libopencv_highgui.so
+    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/libopencv_video.so libopencv_video.so
+    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/libopencv_imgcodecs.so libopencv_imgcodecs.so
+    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/libopencv_imgproc.so libopencv_imgproc.so
+    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/libopencv_core.so libopencv_core.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libpng16.so.16.37.0 libpng16.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libjpeg.so.8.2.2 libjpeg.so
     COMMAND /bin/sh -c "if [ -f libmkl_def.so ]; then patchelf --add-needed libmkl_gnu_thread.so libmkl_def.so; fi"
