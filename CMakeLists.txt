@@ -171,7 +171,7 @@ else()
       "libmkl_avx2.so"
       "libmkl_avx512.so"
       "libmkl_sequential.so"
-      "libomp.so"
+      # "libomp.so"
   )
 endif()
 set(OPENCV_LIBS
