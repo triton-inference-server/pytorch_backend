@@ -164,8 +164,11 @@ else()
       "libmkl_core.so"
       "libmkl_gnu_thread.so"
       "libmkl_intel_lp64.so"
+      "libmkl_intel_lp64.so.2"
       "libmkl_intel_ilp64.so"
+      "libmkl_intel_ilp64.so.2"
       "libmkl_intel_thread.so"
+      "libmkl_intel_thread.so.2"
       "libmkl_def.so"
       "libmkl_vml_def.so"
       "libmkl_rt.so"
@@ -236,7 +239,9 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND /bin/sh -c "if [ -f libmkl_vml_def.so ]; then patchelf --add-needed libmkl_intel_thread.so libmkl_vml_def.so; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_vml_def.so ]; then patchelf --add-needed libmkl_core.so libmkl_vml_def.so; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_intel_thread.so ]; then patchelf --add-needed libmkl_intel_lp64.so libmkl_intel_thread.so; fi"
+    COMMAND /bin/sh -c "if [ -f libmkl_intel_thread.so.2 ]; then patchelf --add-needed libmkl_intel_lp64.so.2 libmkl_intel_thread.so.2; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_intel_thread.so ]; then patchelf --add-needed libmkl_intel_ilp64.so libmkl_intel_thread.so; fi"
+    COMMAND /bin/sh -c "if [ -f libmkl_intel_thread.so2 ]; then patchelf --add-needed libmkl_intel_ilp64.so.2 libmkl_intel_thread.so.2; fi"
     COMMAND docker rm pytorch_backend_ptlib
     COMMENT "Extracting pytorch and torchvision libraries and includes from ${TRITON_PYTORCH_DOCKER_IMAGE}"
     VERBATIM
