@@ -211,6 +211,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch/lib/libtorch_cpu.so libtorch_cpu.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch/lib/libtorch_cuda.so libtorch_cuda.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch/lib/libtorch_global_deps.so libtorch_global_deps.so
+    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch/lib/libcaffe2_nvrtc.so libcaffe2_nvrtc.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/libtorchvision.so libtorchvision.so
     COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHTRT} = 'ON' ]; then docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch_tensorrt/lib/libtorchtrt_runtime.so libtorchtrt_runtime.so; fi"
     COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch_tensorrt/bin/torchtrtc torchtrtc || echo "error ignored..." || true
@@ -224,6 +225,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/lib/libopencv_imgcodecs.so libopencv_imgcodecs.so
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/lib/libopencv_imgproc.so libopencv_imgproc.so
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/lib/libopencv_core.so libopencv_core.so
+    COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/lib/libopencv_calib3d.so libopencv_calib3d.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libpng16.so.16.37.0 libpng16.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libjpeg.so.8.2.2 libjpeg.so
     COMMAND /bin/sh -c "if [ -f libmkl_def.so.2 ]; then patchelf --add-needed libmkl_gnu_thread.so.2 libmkl_def.so.2; fi"
@@ -440,7 +442,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     )
   ENDFOREACH(plib)
 
-  set(OPENCV_VERSION "4.6.0")
+  set(OPENCV_VERSION "460")
   install(
     CODE
       "EXECUTE_PROCESS(
@@ -450,6 +452,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
         COMMAND ln -sf libopencv_imgcodecs.so libopencv_imgcodecs.so.${OPENCV_VERSION}
         COMMAND ln -sf libopencv_imgproc.so libopencv_imgproc.so.${OPENCV_VERSION}
         COMMAND ln -sf libopencv_core.so libopencv_core.so.${OPENCV_VERSION}
+        COMMAND ln -sf libopencv_calib3d.so libopencv_calib3d.so.${OPENCV_VERSION}
         COMMAND ln -sf libpng16.so libpng16.so.16
         COMMAND ln -sf libjpeg.so libjpeg.so.8
         RESULT_VARIABLE LINK_STATUS
