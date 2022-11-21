@@ -161,13 +161,11 @@ if (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
 else()
   set(LIBS_ARCH "x86_64")
   set(LIBTORCH_LIBS
-    "libiomp5.so"
     "libmkl_avx2.so.1"
     "libmkl_avx512.so.1"
     "libmkl_core.so.1"
     "libmkl_def.so.1"
     "libmkl_gnu_thread.so.1"
-    "libmkl_intel_ilp64.so.1"
     "libmkl_intel_lp64.so.1"
     "libmkl_intel_thread.so.1"
     "libmkl_rt.so.1"
@@ -241,9 +239,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND /bin/sh -c "if [ -f libmkl_vml_def.so.1 ]; then patchelf --add-needed libmkl_gnu_thread.so.1 libmkl_vml_def.so.1; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_vml_def.so.1 ]; then patchelf --add-needed libmkl_intel_thread.so.1 libmkl_vml_def.so.1; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_vml_def.so.1 ]; then patchelf --add-needed libmkl_core.so.1 libmkl_vml_def.so.1; fi"
-    COMMAND /bin/sh -c "if [ -f libmkl_intel_thread.so.1 ]; then patchelf --add-needed libiomp5.so libmkl_intel_thread.so.1; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_intel_thread.so.1 ]; then patchelf --add-needed libmkl_intel_lp64.so.1 libmkl_intel_thread.so.1; fi"
-    COMMAND /bin/sh -c "if [ -f libmkl_intel_thread.so.1 ]; then patchelf --add-needed libmkl_intel_ilp64.so.1 libmkl_intel_thread.so.1; fi"
     COMMAND docker rm pytorch_backend_ptlib
     COMMENT "Extracting pytorch and torchvision libraries and includes from ${TRITON_PYTORCH_DOCKER_IMAGE}"
     VERBATIM
