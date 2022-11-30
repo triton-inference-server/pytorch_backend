@@ -171,6 +171,7 @@ else()
     "libmkl_rt.so.1"
     "libmkl_sequential.so.1"
     "libmkl_vml_def.so.1"
+    "libiomp5.so"
   )
 endif()
 set(OPENCV_LIBS
