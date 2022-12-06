@@ -432,7 +432,6 @@ ModelState::ParseParameters()
               .c_str());
     }
 
-    // TODO Re-enable NvFuser once fixed
     // If 'ENABLE_NVFUSER' is not present in 'parameters' then no
     // update is made to 'enable_nvfuser'.
     bool enable_nvfuser = false;
@@ -448,8 +447,6 @@ ModelState::ParseParameters()
         TRITONSERVER_ErrorDelete(err);
       }
     } else {
-      // Override, disable NvFuser till fixed
-      enable_nvfuser = false;
       enable_nvfuser_pair_ = {true, enable_nvfuser};
       LOG_MESSAGE(
           TRITONSERVER_LOG_WARN, (std::string("NvFuser is ") +
