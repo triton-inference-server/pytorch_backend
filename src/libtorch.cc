@@ -432,7 +432,6 @@ ModelState::ParseParameters()
               .c_str());
     }
 
-    // TODO Re-enable NvFuser once fixed
     // If 'ENABLE_NVFUSER' is not present in 'parameters' then no
     // update is made to 'enable_nvfuser'.
     bool enable_nvfuser = false;
@@ -448,11 +447,9 @@ ModelState::ParseParameters()
         TRITONSERVER_ErrorDelete(err);
       }
     } else {
-      // Override, disable NvFuser till fixed
-      enable_nvfuser = false;
       enable_nvfuser_pair_ = {true, enable_nvfuser};
       LOG_MESSAGE(
-          TRITONSERVER_LOG_WARN, (std::string("NvFuser is ") +
+          TRITONSERVER_LOG_INFO, (std::string("NvFuser is ") +
                                   (enable_nvfuser ? "enabled" : "disabled") +
                                   " for model instance '" + Name() + "'")
                                      .c_str());
@@ -1231,7 +1228,7 @@ ModelInstanceState::ProcessRequests(
                 &compute_input_duration, compute_input_start_event_,
                 compute_infer_start_event_),
             TRITONSERVER_ERROR_INTERNAL, "Failed to capture elapsed time"),
-            "Failed to capture elapsed time");
+        "Failed to capture elapsed time");
 
     LOG_IF_ERROR(
         ConvertCUDAStatusToTritonError(
@@ -1239,7 +1236,7 @@ ModelInstanceState::ProcessRequests(
                 &compute_infer_duration, compute_infer_start_event_,
                 compute_output_start_event_),
             TRITONSERVER_ERROR_INTERNAL, "Failed to capture elapsed time"),
-            "Failed to capture elapsed time");
+        "Failed to capture elapsed time");
 
     compute_start_ns = exec_start_ns + (compute_input_duration * 1e6);
     compute_end_ns = compute_start_ns + (compute_infer_duration * 1e6);
