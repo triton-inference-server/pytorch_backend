@@ -513,8 +513,7 @@ class ModelInstanceState : public BackendModelInstance {
       const uint32_t request_count,
       std::vector<TRITONBACKEND_Response*>* responses,
       BackendInputCollector* collector, std::vector<const char*>* input_names,
-      std::vector<torch::jit::IValue>* input_tensors,
-      std::vector<BackendMemory*>* input_memories, bool* cuda_copy);
+      std::vector<torch::jit::IValue>* input_tensors, bool* cuda_copy);
   TRITONSERVER_Error* ReadOutputTensors(
       size_t total_batch_size,
       const std::vector<torch::jit::IValue>& output_tensors,
@@ -1102,7 +1101,6 @@ ModelInstanceState::ProcessRequests(
 
   std::vector<const char*> input_names;
   std::vector<torch::jit::IValue> input_tensors;
-  std::vector<BackendMemory*> input_memories;
   bool cuda_copy = false;
   std::unique_ptr<BackendInputCollector> collector;
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
@@ -1124,8 +1122,7 @@ ModelInstanceState::ProcessRequests(
         responses, request_count, all_response_failed,
         SetInputTensors(
             total_batch_size, requests, request_count, &responses,
-            collector.get(), &input_names, &input_tensors, &input_memories,
-            &cuda_copy));
+            collector.get(), &input_names, &input_tensors, &cuda_copy));
   }
 
 #ifdef TRITON_ENABLE_GPU
@@ -1148,14 +1145,6 @@ ModelInstanceState::ProcessRequests(
   if (!all_response_failed) {
     Execute(&responses, request_count, &input_tensors, &output_tensors);
   }
-
-  // Free BackendMemory used for inputs
-  for (BackendMemory* mem : input_memories) {
-    if (mem != nullptr) {
-      delete mem;
-    }
-  }
-  input_memories.clear();
 
   // Verify output indices are valid with number of outputs after execution
   bool invalid_index = false;
@@ -1718,8 +1707,7 @@ ModelInstanceState::SetInputTensors(
     const uint32_t request_count,
     std::vector<TRITONBACKEND_Response*>* responses,
     BackendInputCollector* collector, std::vector<const char*>* input_names,
-    std::vector<torch::jit::IValue>* input_tensors,
-    std::vector<BackendMemory*>* input_memories, bool* cuda_copy)
+    std::vector<torch::jit::IValue>* input_tensors, bool* cuda_copy)
 {
   // InferenceMode should be used to guard all tensors operations
   torch::InferenceMode infer_guard(model_state_->EnabledInferenceMode());
