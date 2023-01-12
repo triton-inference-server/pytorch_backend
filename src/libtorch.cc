@@ -1303,12 +1303,12 @@ ModelInstanceState::Execute(
         torch::jit::overrideCanFuseOnCPU(false);
         torch::jit::overrideCanFuseOnGPU(false);
         torch::jit::setTensorExprFuserEnabled(false);
-        torch::jit::RegisterCudaFuseGraph::registerPass(true);
+        torch::jit::fuser::cuda::setEnabled(true);
       } else {
         torch::jit::overrideCanFuseOnCPU(true);
         torch::jit::overrideCanFuseOnGPU(true);
         torch::jit::setTensorExprFuserEnabled(true);
-        torch::jit::RegisterCudaFuseGraph::registerPass(false);
+        torch::jit::fuser::cuda::setEnabled(false);
       }
     }
 
