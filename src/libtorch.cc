@@ -1,4 +1,4 @@
-// Copyright 2019-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -739,6 +739,15 @@ ModelInstanceState::ValidateTypedSequenceControl(
              "' does not follow <name>__<index> naming convention.")
                 .c_str());
       }
+    }
+
+    // check if the data type is supported by PyTorch
+    if (!ModelConfigDataTypeToTorchType(tensor_datatype).first) {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INTERNAL,
+          ("input '" + tensor_name + "' type '" + tensor_datatype +
+           "' is not supported by PyTorch.")
+              .c_str());
     }
 
     ip_index = std::atoi(tensor_name.substr(start_pos + 2).c_str());
