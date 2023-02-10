@@ -1,5 +1,5 @@
 <!--
-# Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -56,13 +56,13 @@ $ apt-get install patchelf rapidjson-dev python3-dev
 ```
 
 An appropriate PyTorch container from [NGC](https://ngc.nvidia.com) must be used.
-For example, to build a backend that uses the 21.02 version of the PyTorch
+For example, to build a backend that uses the 22.12 version of the PyTorch
 container from NGC:
 
 ```
 $ mkdir build
 $ cd build
-$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_PYTORCH_DOCKER_IMAGE="nvcr.io/nvidia/pytorch:21.02-py3" ..
+$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_PYTORCH_DOCKER_IMAGE="nvcr.io/nvidia/pytorch:22.12-py3" ..
 $ make install
 ```
 
@@ -80,8 +80,8 @@ Currently, Triton requires that a specially patched version of
 PyTorch be used with the PyTorch backend. The full source for
 these PyTorch versions are available as Docker images from
 [NGC](https://ngc.nvidia.com). For example, the PyTorch version
-compatible with the 21.02 release of Triton is available as
-nvcr.io/nvidia/pytorch:21.02-py3.
+compatible with the 22.12 release of Triton is available as
+nvcr.io/nvidia/pytorch:22.12-py3.
 
 Copy over the LibTorch and Torchvision headers and libraries from the
 [PyTorch NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch)
