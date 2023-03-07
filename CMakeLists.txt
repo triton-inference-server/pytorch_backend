@@ -138,6 +138,7 @@ set(PT_LIBS
     "libtorch_cuda.so"
     "libtorch_cuda_linalg.so"
     "libtorch_global_deps.so"
+    "libnvfuser_codegen.so"
 )
 
 if (${TRITON_PYTORCH_ENABLE_TORCHVISION})
@@ -213,6 +214,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch/lib/libtorch_cpu.so libtorch_cpu.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch/lib/libtorch_cuda.so libtorch_cuda.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch/lib/libtorch_cuda_linalg.so libtorch_cuda_linalg.so
+    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch/lib/libnvfuser_codegen.so libnvfuser_codegen.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch/lib/libtorch_global_deps.so libtorch_global_deps.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch/lib/libcaffe2_nvrtc.so libcaffe2_nvrtc.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/libtorchvision.so libtorchvision.so
