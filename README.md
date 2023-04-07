@@ -56,13 +56,13 @@ $ apt-get install patchelf rapidjson-dev python3-dev
 ```
 
 An appropriate PyTorch container from [NGC](https://ngc.nvidia.com) must be used.
-For example, to build a backend that uses the 22.12 version of the PyTorch
+For example, to build a backend that uses the 23.04 version of the PyTorch
 container from NGC:
 
 ```
 $ mkdir build
 $ cd build
-$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_PYTORCH_DOCKER_IMAGE="nvcr.io/nvidia/pytorch:22.12-py3" ..
+$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_PYTORCH_DOCKER_IMAGE="nvcr.io/nvidia/pytorch:23.04-py3" ..
 $ make install
 ```
 
