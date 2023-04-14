@@ -206,7 +206,7 @@ complex execution modes and dynamic shapes. If not specified, all are enabled by
 
     `ENABLE_TENSOR_FUSER`
 
-### Important Note
+### Important Notes
 
 * The execution of PyTorch model on GPU is asynchronous in nature. See
   [here](https://pytorch.org/docs/stable/notes/cuda.html#asynchronous-execution)
@@ -223,3 +223,15 @@ a List of Strings as input(s) / produces a List of String as output(s). For thes
 Triton allows users to pass String input(s)/receive String output(s) using the String
 datatype. As a limitation of using List instead of Tensor for String I/O, only for
 1-dimensional input(s)/output(s) are supported for I/O of String type.
+
+#### PyTorch 2.0
+
+Currently, the
+[PyTorch Backend](https://github.com/triton-inference-server/pytorch_backend)
+relies on LibTorch/TorchScript (C++) which has been deprecated from
+[PyTorch 2.0](https://pytorch.org/get-started/pytorch-2.0/). 
+
+So, users interested in new features introduced in PyTorch 2.0 should try the
+[Python Backend](https://github.com/triton-inference-server/python_backend)
+route instead.
+
