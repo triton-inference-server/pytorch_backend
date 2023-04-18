@@ -224,14 +224,3 @@ Triton allows users to pass String input(s)/receive String output(s) using the S
 datatype. As a limitation of using List instead of Tensor for String I/O, only for
 1-dimensional input(s)/output(s) are supported for I/O of String type.
 
-#### PyTorch 2.0
-
-Currently, the
-[PyTorch Backend](https://github.com/triton-inference-server/pytorch_backend)
-relies on LibTorch/TorchScript (C++) which has been deprecated from
-[PyTorch 2.0](https://pytorch.org/get-started/pytorch-2.0/). 
-
-So, users interested in new features introduced in PyTorch 2.0 should try the
-[Python Backend](https://github.com/triton-inference-server/python_backend)
-route instead.
-
