@@ -110,6 +110,10 @@ class ModelState : public BackendModel {
   {
     return model_outputs_;
   }
+  const std::map<std::string, std::pair<int64_t, int64_t>>& ModelOutputs()
+  {
+    return model_outputs_;
+  }
 
  private:
   ModelState(TRITONBACKEND_Model* triton_model);
@@ -544,6 +548,11 @@ class ModelInstanceState : public BackendModelInstance {
   TRITONSERVER_Error* ValidateTypedSequenceControl(
       triton::common::TritonJson::Value& sequence_batching,
       const std::string& control_kind, bool required, bool* have_control);
+  void AddInputToMap(
+      NamingConvention naming_convention, 
+      const std::vector<std::string> allowed_inputs, 
+      const std::string &io_name,
+      const uint32_t index);
   TRITONSERVER_Error* ValidateInputs(const size_t expected_input_cnt);
   void AddInputToMap(
       NamingConvention naming_convention,
@@ -873,6 +882,8 @@ ModelInstanceState::ValidateTypedSequenceControl(
 
   return nullptr;  // success
 }
+void ModelInstanceState::AddInputToMap(NamingConvention naming_convention, const std::vector<std::string> allowed_inputs, const std::string &io_name, const uint32_t index) {
+   std::string deliminator = "__";
 
 void
 ModelInstanceState::AddInputToMap(
@@ -1201,7 +1212,7 @@ ModelInstanceState::ValidateOutputs()
                 TRITONSERVER_ERROR_INTERNAL,
                 ("Triton only supports 1 dimensional List of String as output "
                  "for "
-                 "'" +
+                "'" +
                  std::string(state_name) + "' for model '" +
                  model_state_->Name() + "'")
                     .c_str());
@@ -1768,7 +1779,7 @@ ModelInstanceState::GetNamingConvention(
             ("PyTorch model '" + model_state_->Name() +
              "' is using sequence batching with state but state '" +
              state_name +
-             "' does not follow the <name>__<index> naming convention. ")
+              "' does not follow the <name>__<index> naming convention. ")
                 .c_str());
       } else {
         // check if the index part of the name is not an integer
@@ -2316,17 +2327,17 @@ ModelInstanceState::ReadOutputTensors(
           responder.ProcessTensor(
               name, output_dtype, batchn_shape, output_buffer, memory_type,
               memory_id);
-        }
-        if (output_tensor_pair.second != -1) {
-          std::vector<TRITONBACKEND_State*> states;
-          states = responder.ProcessStateTensor(
+      }
+      if (output_tensor_pair.second != -1) {
+        std::vector<TRITONBACKEND_State*> states;
+        states = responder.ProcessStateTensor(
               name, output_dtype, batchn_shape, output_buffer, memory_type,
               memory_id);
-          // Update the states
-          for (auto& state : states) {
-            RETURN_IF_ERROR(TRITONBACKEND_StateUpdate(state));
-          }
+        // Update the states
+        for (auto& state : states) {
+          RETURN_IF_ERROR(TRITONBACKEND_StateUpdate(state));
         }
+      }
 
       } else {
         responder.ProcessBatchOutput(
@@ -2372,6 +2383,11 @@ ModelInstanceState::ReadOutputTensors(
         }
         if (output_tensor_pair.second != -1) {
           TRITONBACKEND_State* response_state;
+          RESPOND_AND_SET_NULL_IF_ERROR(
+              &response, TRITONBACKEND_StateNew(
+                             &response_state, request, name.c_str(),
+                             TRITONSERVER_TYPE_BYTES, batchn_shape.data(),
+                             batchn_shape.size()));
           RESPOND_AND_SET_NULL_IF_ERROR(
               &response, TRITONBACKEND_StateNew(
                              &response_state, request, name.c_str(),
