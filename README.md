@@ -242,4 +242,4 @@ workaround available. You can explicitly specify the GPU device for the model
 instance in the
 [model configuration](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#instance-groups)
 to ensure that the model instance and the tensors used for inference are
-assigned to the same GPU device.
+assigned to the same GPU device as on which the model was traced.
