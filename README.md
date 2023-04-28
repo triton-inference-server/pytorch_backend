@@ -218,9 +218,28 @@ complex execution modes and dynamic shapes. If not specified, all are enabled by
     state and a restart of the server may be required to continue serving
     successfully.
 
-* PyTorch does not support Tensor of Strings but it does support models that accept
-a List of Strings as input(s) / produces a List of String as output(s). For these models
-Triton allows users to pass String input(s)/receive String output(s) using the String
-datatype. As a limitation of using List instead of Tensor for String I/O, only for
-1-dimensional input(s)/output(s) are supported for I/O of String type.
+* PyTorch does not support Tensor of Strings but it does support models that
+accept a List of Strings as input(s) / produces a List of String as output(s).
+For these models Triton allows users to pass String input(s)/receive String
+output(s) using the String datatype. As a limitation of using List instead of
+Tensor for String I/O, only for 1-dimensional input(s)/output(s) are supported
+for I/O of String type.
 
+* In a multi-GPU environment, a potential runtime issue can occur when using
+[Tracing](https://pytorch.org/docs/stable/generated/torch.jit.trace.html)
+to generate a
+[TorchScript](https://pytorch.org/docs/stable/jit.html) model. This issue
+arises due to a device mismatch between the model instance and the tensor. By
+default, Triton creates a single execution instance of the model for each
+available GPU. The runtime error occurs when a request is sent to a model
+instance with a different GPU device from the one used during the TorchScript
+generation process. To address this problem, it is highly recommended to use
+[Scripting](https://pytorch.org/docs/stable/generated/torch.jit.script.html#torch.jit.script)
+instead of Tracing for model generation in a multi-GPU environment. Scripting
+avoids the device mismatch issue and ensures compatibility with different GPUs
+when used with Triton. However, if using Tracing is unavoidable, there is a
+workaround available. You can explicitly specify the GPU device for the model
+instance in the
+[model configuration](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#instance-groups)
+to ensure that the model instance and the tensors used for inference are
+assigned to the same GPU device.
