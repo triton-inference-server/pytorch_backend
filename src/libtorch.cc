@@ -176,7 +176,7 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     : BackendModel(triton_model), enable_optimized_execution_(true),
-      enable_inference_mode_(false), enable_cache_cleaning_(false),
+      enable_inference_mode_(true), enable_cache_cleaning_(false),
       enable_weight_sharing_(false), enable_tensor_fuser_pair_({false, true}),
       enable_jit_profiling_pair_({false, true}),
       enable_jit_executor_pair_({false, true}),
@@ -1312,12 +1312,12 @@ ModelInstanceState::Execute(
         torch::jit::overrideCanFuseOnCPU(false);
         torch::jit::overrideCanFuseOnGPU(false);
         torch::jit::setTensorExprFuserEnabled(false);
-	torch::jit::fuser::cuda::setEnabled(true);
+        torch::jit::fuser::cuda::setEnabled(true);
       } else {
         torch::jit::overrideCanFuseOnCPU(true);
         torch::jit::overrideCanFuseOnGPU(true);
         torch::jit::setTensorExprFuserEnabled(true);
-	torch::jit::fuser::cuda::setEnabled(false);
+        torch::jit::fuser::cuda::setEnabled(false);
       }
     }
 
@@ -1761,9 +1761,9 @@ ModelInstanceState::SetInputTensors(
 
         batchn_shape[0] += GetElementCount(input_shape, input_dims_count);
       }
-    }
-    else {
-      batchn_shape = std::vector<int64_t>(input_shape, input_shape + input_dims_count);
+    } else {
+      batchn_shape =
+          std::vector<int64_t>(input_shape, input_shape + input_dims_count);
       if (supports_batching_) {
         batchn_shape[0] = total_batch_size;
       }
@@ -1887,9 +1887,11 @@ ModelInstanceState::ReadOutputTensors(
 
       // Output tensors may not reside on the same device as model
       torch::Device tensor_device = output_flat.device();
-      const auto memory_type = (tensor_device.type() == torch::kCPU) ? TRITONSERVER_MEMORY_CPU
-                                                  : TRITONSERVER_MEMORY_GPU;
-      const auto memory_id = (tensor_device.type() == torch::kCPU) ? 0 : tensor_device.index();
+      const auto memory_type = (tensor_device.type() == torch::kCPU)
+                                   ? TRITONSERVER_MEMORY_CPU
+                                   : TRITONSERVER_MEMORY_GPU;
+      const auto memory_id =
+          (tensor_device.type() == torch::kCPU) ? 0 : tensor_device.index();
 
       // Batch output doesn't support string data type yet, as it is not trivial
       // to parse string output
@@ -1906,16 +1908,16 @@ ModelInstanceState::ReadOutputTensors(
           return TRITONSERVER_ErrorNew(
               TRITONSERVER_ERROR_INVALID_ARG,
               (std::string("output '") + name +
-              "' is a scalar which is not supported.")
+               "' is a scalar which is not supported.")
                   .c_str());
         }
 
         responder.ProcessTensor(
-            name, output_dtype, batchn_shape, output_buffer,
-            memory_type, memory_id);
+            name, output_dtype, batchn_shape, output_buffer, memory_type,
+            memory_id);
       } else {
         responder.ProcessBatchOutput(
-          name, *batch_output, output_buffer, memory_type, memory_id);
+            name, *batch_output, output_buffer, memory_type, memory_id);
       }
     } else if (output_tensors[op_index].isList()) {
       // Custom handling for string/bytes tensor...
