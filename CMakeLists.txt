@@ -208,20 +208,20 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker rm pytorch_backend_ptlib || echo "error ignored..." || true
     COMMAND docker create --name pytorch_backend_ptlib ${TRITON_PYTORCH_DOCKER_IMAGE}
     COMMAND /bin/sh -c "for i in ${LIBTORCH_LIBS_STR} ; do echo copying $i && docker cp -L pytorch_backend_ptlib:/usr/local/lib/$i $i ; done"
-    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch/lib/libc10.so libc10.so
-    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch/lib/libc10_cuda.so libc10_cuda.so
-    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch/lib/libtorch.so libtorch.so
-    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch/lib/libtorch_cpu.so libtorch_cpu.so
-    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch/lib/libtorch_cuda.so libtorch_cuda.so
-    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch/lib/libtorch_cuda_linalg.so libtorch_cuda_linalg.so
-    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch/lib/libnvfuser_codegen.so libnvfuser_codegen.so
-    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch/lib/libtorch_global_deps.so libtorch_global_deps.so
-    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch/lib/libcaffe2_nvrtc.so libcaffe2_nvrtc.so
+    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.10/dist-packages/torch/lib/libc10.so libc10.so
+    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.10/dist-packages/torch/lib/libc10_cuda.so libc10_cuda.so
+    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.10/dist-packages/torch/lib/libtorch.so libtorch.so
+    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.10/dist-packages/torch/lib/libtorch_cpu.so libtorch_cpu.so
+    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.10/dist-packages/torch/lib/libtorch_cuda.so libtorch_cuda.so
+    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.10/dist-packages/torch/lib/libtorch_cuda_linalg.so libtorch_cuda_linalg.so
+    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.10/dist-packages/torch/lib/libnvfuser_codegen.so libnvfuser_codegen.so
+    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.10/dist-packages/torch/lib/libtorch_global_deps.so libtorch_global_deps.so
+    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.10/dist-packages/torch/lib/libcaffe2_nvrtc.so libcaffe2_nvrtc.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/libtorchvision.so libtorchvision.so
-    COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHTRT} = 'ON' ]; then docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch_tensorrt/lib/libtorchtrt_runtime.so libtorchtrt_runtime.so; fi"
-    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch_tensorrt/bin/torchtrtc torchtrtc || echo "error ignored..." || true
+    COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHTRT} = 'ON' ]; then docker cp pytorch_backend_ptlib:/usr/local/lib/python3.10/dist-packages/torch_tensorrt/lib/libtorchtrt_runtime.so libtorchtrt_runtime.so; fi"
+    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.10/dist-packages/torch_tensorrt/bin/torchtrtc torchtrtc || echo "error ignored..." || true
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/pytorch/LICENSE LICENSE.pytorch
-    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.8/dist-packages/torch/include include/torch
+    COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.10/dist-packages/torch/include include/torch
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/pytorch/torch/csrc/jit/codegen include/torch/torch/csrc/jit/.
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/vision/torchvision/csrc include/torchvision/torchvision
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/lib/libopencv_videoio.so libopencv_videoio.so
