@@ -123,7 +123,7 @@ key: "DISABLE_OPTIMIZED_EXECUTION"
 ```
 
 * `INFERENCE_MODE`: Boolean flag to enable the Inference Mode execution
-of TorchScript models. By default, the inference mode is disabled.
+of TorchScript models. By default, the inference mode is enabled.
 
 [InferenceMode](https://pytorch.org/cppdocs/notes/inference_mode.html) is a new
 RAII guard analogous to NoGradMode to be used when you are certain your operations
