@@ -80,7 +80,7 @@ class ModelState : public BackendModel {
   // representing the model.
   TRITONSERVER_Error* LoadModel(
       const std::string& artifact_name, const torch::Device device,
-      std::string* model_path,
+      std::string* model_path, const TRITONSERVER_InstanceGroupKind& kind,
       std::shared_ptr<torch::jit::script::Module>* torch_model);
 
   bool EnabledOptimizedExecution() { return enable_optimized_execution_; }
@@ -205,7 +205,7 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
 TRITONSERVER_Error*
 ModelState::LoadModel(
     const std::string& artifact_name, const torch::Device device,
-    std::string* model_path,
+    std::string* model_path,  const TRITONSERVER_InstanceGroupKind& kind,
     std::shared_ptr<torch::jit::script::Module>* torch_model)
 {
   // Find the TorchScript file that describes the model. If the model
@@ -255,8 +255,14 @@ ModelState::LoadModel(
 
   try {
     std::istringstream model_stream(model_data_str);
-    torch_model->reset(
-        new torch::jit::Module(torch::jit::load(model_stream, device)));
+    if (kind == TRITONSERVER_INSTANCEGROUPKIND_MODEL) {
+      // Don't select the device when loading the model.
+      torch_model->reset(
+        new torch::jit::Module(torch::jit::load(model_stream)));
+    } else {
+      torch_model->reset(
+          new torch::jit::Module(torch::jit::load(model_stream, device)));
+    }
   }
   catch (const std::exception& ex) {
     return TRITONSERVER_ErrorNew(
@@ -606,7 +612,7 @@ ModelInstanceState::ModelInstanceState(
   }
 
   THROW_IF_BACKEND_INSTANCE_ERROR(model_state->LoadModel(
-      ArtifactFilename(), device_, &model_path_, &torch_model_));
+      ArtifactFilename(), device_, &model_path_, Kind(), &torch_model_));
 
   size_t expected_input_cnt = 0;
   {
