@@ -205,7 +205,7 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
 TRITONSERVER_Error*
 ModelState::LoadModel(
     const std::string& artifact_name, const torch::Device device,
-    std::string* model_path,  const TRITONSERVER_InstanceGroupKind& kind,
+    std::string* model_path, const TRITONSERVER_InstanceGroupKind& kind,
     std::shared_ptr<torch::jit::script::Module>* torch_model)
 {
   // Find the TorchScript file that describes the model. If the model
@@ -258,7 +258,7 @@ ModelState::LoadModel(
     if (kind == TRITONSERVER_INSTANCEGROUPKIND_MODEL) {
       // Don't select the device when loading the model.
       torch_model->reset(
-        new torch::jit::Module(torch::jit::load(model_stream)));
+          new torch::jit::Module(torch::jit::load(model_stream)));
     } else {
       torch_model->reset(
           new torch::jit::Module(torch::jit::load(model_stream, device)));
