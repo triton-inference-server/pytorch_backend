@@ -505,9 +505,8 @@ class ModelInstanceState : public BackendModelInstance {
       const std::string& control_kind, bool required, bool* have_control);
   TRITONSERVER_Error* ValidateInputs(const size_t expected_input_cnt);
   void AddInputToMap(
-      NamingConvention naming_convention, 
-      const std::vector<std::string> allowed_inputs, 
-      const std::string &io_name,
+      NamingConvention naming_convention,
+      const std::vector<std::string> allowed_inputs, const std::string& io_name,
       const uint32_t index);
   TRITONSERVER_Error* ValidateOutputs();
   void Execute(
@@ -771,7 +770,12 @@ ModelInstanceState::ValidateTypedSequenceControl(
   return nullptr;  // success
 }
 
-void ModelInstanceState::AddInputToMap(NamingConvention naming_convention, const std::vector<std::string> allowed_inputs, const std::string &io_name, const uint32_t index) {
+void
+ModelInstanceState::AddInputToMap(
+    NamingConvention naming_convention,
+    const std::vector<std::string> allowed_inputs, const std::string& io_name,
+    const uint32_t index)
+{
   std::string deliminator = "__";
 
   if (is_dict_input_) {
@@ -924,11 +928,13 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
   }
 
   triton::common::TritonJson::Value batch_inputs;
-  RETURN_IF_ERROR(model_state_->ModelConfig().MemberAsArray("batch_input", &batch_inputs));
+  RETURN_IF_ERROR(
+      model_state_->ModelConfig().MemberAsArray("batch_input", &batch_inputs));
   size_t i = 0;
   for (const auto& batch_input : StateForModel()->BatchInputs()) {
     for (const auto& input_name : batch_input.TargetNames()) {
-      AddInputToMap(naming_convention, allowed_inputs, input_name, i + ios.ArraySize());
+      AddInputToMap(
+          naming_convention, allowed_inputs, input_name, i + ios.ArraySize());
       i++;
     }
   }
@@ -1754,6 +1760,16 @@ ModelInstanceState::SetInputTensors(
   RETURN_IF_ERROR(TRITONBACKEND_RequestInputCount(requests[0], &input_count));
 
   input_tensors->resize(input_count + batch_input_count_);
+
+  // The inputs must be in contiguous CPU/GPU memory.
+  std::vector<std::pair<TRITONSERVER_MemoryType, int64_t>> alloc_perference;
+  if (device_.is_cpu()) {
+    alloc_perference = {{TRITONSERVER_MEMORY_CPU_PINNED, 0},
+                        {TRITONSERVER_MEMORY_CPU, 0}};
+  } else {
+    alloc_perference = {{TRITONSERVER_MEMORY_GPU, device_.index()}};
+  }
+
   for (uint32_t input_idx = 0; input_idx < input_count; input_idx++) {
     TRITONBACKEND_Input* input;
     RETURN_IF_ERROR(
@@ -1795,15 +1811,6 @@ ModelInstanceState::SetInputTensors(
       if (supports_batching_) {
         batchn_shape[0] = total_batch_size;
       }
-    }
-
-    // The input must be in contiguous CPU/GPU memory.
-    std::vector<std::pair<TRITONSERVER_MemoryType, int64_t>> alloc_perference;
-    if (device_.is_cpu()) {
-      alloc_perference = {{TRITONSERVER_MEMORY_CPU_PINNED, 0},
-                          {TRITONSERVER_MEMORY_CPU, 0}};
-    } else {
-      alloc_perference = {{TRITONSERVER_MEMORY_GPU, device_.index()}};
     }
 
     const char* input_buffer;
@@ -1868,15 +1875,14 @@ ModelInstanceState::SetInputTensors(
       TRITONSERVER_MemoryType dst_memory_type;
       int64_t dst_memory_type_id;
 
-      // Batch inputs are always created on CPU
       RESPOND_ALL_AND_SET_NULL_IF_ERROR(
           (*responses), responses->size(),
           collector->ProcessBatchInput(
-              batch_input, nullptr, 0, {{TRITONSERVER_MEMORY_CPU, 0}},
-              &dst_buffer, &dst_buffer_byte_size, &dst_memory_type,
-              &dst_memory_type_id));
+              batch_input, nullptr, 0, alloc_perference, &dst_buffer,
+              &dst_buffer_byte_size, &dst_memory_type, &dst_memory_type_id));
 
-      const auto torch_dtype = ConvertDataTypeToTorchType(batch_input.DataType());
+      const auto torch_dtype =
+          ConvertDataTypeToTorchType(batch_input.DataType());
       torch::TensorOptions options{torch_dtype.second};
       auto updated_options = options.device(torch::kCPU);
 
