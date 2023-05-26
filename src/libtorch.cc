@@ -627,25 +627,17 @@ ModelInstanceState::ModelInstanceState(
 #ifdef TRITON_ENABLE_GPU
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) {
     // Only set the torch device and create a CUDA stream if the model uses GPU.
-    if (!device_id_set_.empty()) {
-      auto it = device_id_set_.begin();
-      // Use the first device to create the default stream.
+    for (auto it = device_id_set_.begin(); it != device_id_set_.end(); ++it) {
+      cudaStream_t stream;
       THROW_IF_BACKEND_INSTANCE_ERROR(
-          CreateCudaStream(*it, 0 /* cuda_stream_priority */, &stream_));
+          CreateCudaStream(*it, 0 /* cuda_stream_priority */, &stream));
+      stream_map_.insert({*it, stream});
+    }
+    if (!device_id_set_.empty()) {
+      // Use the first device to create the default stream.
+      auto it = device_id_set_.begin();
       device_ = torch::Device(torch::kCUDA, *it);
-
-      // Create a CUDA stream for other devices so that they can be synchronized
-      // later. Skip the first device since it is used to create the default
-      // stream.
-      if (it != device_id_set_.end()) {
-        ++it;
-      }
-      for (; it != device_id_set_.end(); ++it) {
-        cudaStream_t stream;
-        THROW_IF_BACKEND_INSTANCE_ERROR(
-            CreateCudaStream(*it, 0 /* cuda_stream_priority */, &stream));
-        stream_map_.insert({*it, stream});
-      }
+      stream_ = stream_map_[*it];
     }
   }
 
