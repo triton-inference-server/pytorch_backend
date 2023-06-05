@@ -2282,6 +2282,7 @@ void
 ModelInstanceState::SetCurrentCudaStream(
     const cudaStream_t& stream, const int& device_id)
 {
+#ifdef TRITON_ENABLE_GPU
   at::cuda::CUDAStream torch_stream =
       at::cuda::getStreamFromExternal(stream, device_id);
   // This function replaces the default stream with the stream we created. It
@@ -2289,6 +2290,7 @@ ModelInstanceState::SetCurrentCudaStream(
   // replacing the default stream for that device. See the documentation here:
   // https://pytorch.org/cppdocs/api/function_namespacec10_1_1cuda_1a6ed50cc0fc16cc7014d9c2f4c3bd098d.html
   at::cuda::setCurrentCUDAStream(torch_stream);
+#endif
 }
 
 /////////////
