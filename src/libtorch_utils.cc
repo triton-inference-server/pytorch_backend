@@ -152,7 +152,7 @@ ParseParameter(
 #ifdef TRITON_ENABLE_GPU
 TRITONSERVER_Error*
 ConvertCUDAStatusToTritonError(
-   cudaError_t cuda_error,TRITONSERVER_Error_Code code, const char* msg)
+    cudaError_t cuda_error, TRITONSERVER_Error_Code code, const char* msg)
 {
   if (cuda_error != cudaSuccess) {
     return TRITONSERVER_ErrorNew(

@@ -25,7 +25,10 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <stdint.h>
+
+#include <cstdint>
 #include <exception>
+
 #include "libtorch_utils.h"
 #include "triton/backend/backend_common.h"
 #include "triton/backend/backend_input_collector.h"
@@ -502,6 +505,10 @@ class ModelInstanceState : public BackendModelInstance {
       triton::common::TritonJson::Value& sequence_batching,
       const std::string& control_kind, bool required, bool* have_control);
   TRITONSERVER_Error* ValidateInputs(const size_t expected_input_cnt);
+  void AddInputToMap(
+      NamingConvention naming_convention,
+      const std::vector<std::string> allowed_inputs, const std::string& io_name,
+      const uint32_t index);
   TRITONSERVER_Error* ValidateOutputs();
   void Execute(
       std::vector<TRITONBACKEND_Response*>* responses,
@@ -538,6 +545,7 @@ class ModelInstanceState : public BackendModelInstance {
   // Map from configuration name for an input to the index of
   // that input in the model.
   std::unordered_map<std::string, int> input_index_map_;
+  uint32_t batch_input_count_ = 0;
 
   // Map from configuration name for an output to the index of
   // that output in the model.
@@ -606,6 +614,12 @@ ModelInstanceState::ModelInstanceState(
     triton::common::TritonJson::Value inputs;
     if (model_state->ModelConfig().Find("input", &inputs)) {
       expected_input_cnt = inputs.ArraySize();
+    }
+
+    triton::common::TritonJson::Value config_batch_inputs;
+    if (model_state->ModelConfig().Find("batch_input", &config_batch_inputs)) {
+      batch_input_count_ = config_batch_inputs.ArraySize();
+      expected_input_cnt += batch_input_count_;
     }
   }
 
@@ -757,6 +771,43 @@ ModelInstanceState::ValidateTypedSequenceControl(
   return nullptr;  // success
 }
 
+void
+ModelInstanceState::AddInputToMap(
+    NamingConvention naming_convention,
+    const std::vector<std::string> allowed_inputs, const std::string& io_name,
+    const uint32_t index)
+{
+  std::string deliminator = "__";
+
+  if (is_dict_input_) {
+    // If dictionary, index is irrelevant but we use the map to store the
+    // input names since they are the keys for the dictionary
+    input_index_map_[io_name] = index;
+  } else {
+    switch (naming_convention) {
+      case NamingConvention::FORWARD_ARGUMENT: {
+        auto itr =
+            std::find(allowed_inputs.begin(), allowed_inputs.end(), io_name);
+        if (itr != allowed_inputs.end()) {
+          input_index_map_[io_name] =
+              std::distance(allowed_inputs.begin(), itr);
+        }
+        return;
+      }
+      case NamingConvention::NAMED_INDEX: {
+        int start_pos = io_name.find(deliminator);
+        int ip_index = std::atoi(io_name.substr(start_pos + 2).c_str());
+        input_index_map_[io_name] = ip_index;
+        return;
+      }
+      case NamingConvention::STRICT_CONFIG_ORDERING: {
+        input_index_map_[io_name] = index;
+        return;
+      }
+    }
+  }
+}
+
 TRITONSERVER_Error*
 ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
 {
@@ -822,8 +873,6 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
 
   triton::common::TritonJson::Value ios;
   RETURN_IF_ERROR(model_state_->ModelConfig().MemberAsArray("input", &ios));
-  std::string deliminator = "__";
-  int ip_index = 0;
 
   if (ios.ArraySize() == 0) {
     return TRITONSERVER_ErrorNew(
@@ -842,34 +891,7 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
     // Validate name
     std::string io_name;
     RETURN_IF_ERROR(io.MemberAsString("name", &io_name));
-    if (is_dict_input_) {
-      // If dictionary, index is irrelevant but we use the map to store the
-      // input names since they are the keys for the dictionary
-      input_index_map_[io_name] = i;
-    } else {
-      switch (naming_convention) {
-        case NamingConvention::FORWARD_ARGUMENT: {
-          auto itr =
-              std::find(allowed_inputs.begin(), allowed_inputs.end(), io_name);
-          if (itr != allowed_inputs.end()) {
-            input_index_map_[io_name] =
-                std::distance(allowed_inputs.begin(), itr);
-          }
-          break;
-        }
-        case NamingConvention::NAMED_INDEX: {
-          int start_pos = io_name.find(deliminator);
-          ip_index = std::atoi(io_name.substr(start_pos + 2).c_str());
-          input_index_map_[io_name] = ip_index;
-          break;
-        }
-        case NamingConvention::STRICT_CONFIG_ORDERING: {
-          input_index_map_[io_name] = i;
-          break;
-        }
-      }
-    }
-
+    AddInputToMap(naming_convention, allowed_inputs, io_name, i);
     // Validate data type
     std::string io_dtype;
     RETURN_IF_ERROR(io.MemberAsString("data_type", &io_dtype));
@@ -903,6 +925,18 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
              "'")
                 .c_str());
       }
+    }
+  }
+
+  triton::common::TritonJson::Value batch_inputs;
+  RETURN_IF_ERROR(
+      model_state_->ModelConfig().MemberAsArray("batch_input", &batch_inputs));
+  size_t i = 0;
+  for (const auto& batch_input : StateForModel()->BatchInputs()) {
+    for (const auto& input_name : batch_input.TargetNames()) {
+      AddInputToMap(
+          naming_convention, allowed_inputs, input_name, i + ios.ArraySize());
+      i++;
     }
   }
 
@@ -1725,7 +1759,8 @@ ModelInstanceState::SetInputTensors(
   // request as the representative for the input tensors.
   uint32_t input_count;
   RETURN_IF_ERROR(TRITONBACKEND_RequestInputCount(requests[0], &input_count));
-  input_tensors->resize(input_count);
+
+  input_tensors->resize(input_count + batch_input_count_);
   for (uint32_t input_idx = 0; input_idx < input_count; input_idx++) {
     TRITONBACKEND_Input* input;
     RETURN_IF_ERROR(
@@ -1824,6 +1859,36 @@ ModelInstanceState::SetInputTensors(
       // Remove constness to align with the signature of torch::from_blob()
       torch::Tensor input_tensor = torch::from_blob(
           const_cast<char*>(input_buffer), batchn_shape, updated_options);
+      (*input_tensors)[input_index_map_[input_name]] = input_tensor;
+    }
+  }
+
+  for (const auto& batch_input : StateForModel()->BatchInputs()) {
+    std::vector<int64_t> shape;
+    collector->BatchInputShape(batch_input, &shape);
+
+    for (const auto& input_name : batch_input.TargetNames()) {
+      input_names->emplace_back(input_name.c_str());
+
+      const char* dst_buffer;
+      size_t dst_buffer_byte_size;
+      TRITONSERVER_MemoryType dst_memory_type;
+      int64_t dst_memory_type_id;
+
+      // Batch inputs are always created on CPU
+      RESPOND_ALL_AND_SET_NULL_IF_ERROR(
+          (*responses), responses->size(),
+          collector->ProcessBatchInput(
+              batch_input, nullptr, 0, {{TRITONSERVER_MEMORY_CPU, 0}},
+              &dst_buffer, &dst_buffer_byte_size, &dst_memory_type,
+              &dst_memory_type_id));
+
+      const auto torch_dtype =
+          ConvertDataTypeToTorchType(batch_input.DataType());
+
+      torch::Tensor input_tensor = torch::from_blob(
+          const_cast<char*>(dst_buffer), shape,
+          updated_options.dtype(torch_dtype.second));
       (*input_tensors)[input_index_map_[input_name]] = input_tensor;
     }
   }
