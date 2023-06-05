@@ -61,6 +61,107 @@
 
 namespace triton { namespace backend { namespace pytorch {
 
+namespace {
+
+// This object is used to capture timestamps for the instance group of type
+// 'MODEL'.
+class TimestampData {
+ public:
+  TimestampData()
+      : compute_input_start_(0), earliest_compute_infer_start_(0),
+        last_compute_infer_start_(0), compute_output_start_(0)
+  {
+  }
+
+  enum struct TimestampHint { COMPUTE_INPUT, COMPUTE_INFER, COMPUTE_OUTPUT };
+
+  // Set the timestamp hint
+  void SetTimestampHint(const TimestampHint& hint) { hint_ = hint; }
+
+  // Capture the timestamp based on the hint.
+  void CaptureTimestamp();
+
+  // Get the earliest timestamp.
+  void GetEarliestTimestamp(uint64_t& timestamp);
+
+  // Get the latest timestamp.
+  void GetLastTimestamp(uint64_t& timestamp);
+
+  // Get the duration of comput input.
+  uint64_t GetComputeInputDuration()
+  {
+    return last_compute_infer_start_ - compute_input_start_;
+  }
+
+  // Get the duration of comput infer.
+  uint64_t GetComputeInferDuration()
+  {
+    return compute_output_start_ - earliest_compute_infer_start_;
+  }
+
+ private:
+  uint64_t compute_input_start_;
+  // Need to get the earliest compute_infer_start to calculate a more accurate
+  // compute_infer_duration.
+  uint64_t earliest_compute_infer_start_;
+  // Need to get the last compute_infer_start to calculate a more accurate
+  // compute_input_duration.
+  uint64_t last_compute_infer_start_;
+  uint64_t compute_output_start_;
+  std::mutex mu_;
+  TimestampHint hint_;
+};
+
+void
+TimestampData::CaptureTimestamp()
+{
+  switch (hint_) {
+    case TimestampHint::COMPUTE_INPUT: {
+      GetEarliestTimestamp(compute_input_start_);
+      break;
+    }
+    case TimestampHint::COMPUTE_INFER: {
+      GetEarliestTimestamp(earliest_compute_infer_start_);
+      GetLastTimestamp(last_compute_infer_start_);
+      break;
+    }
+    case TimestampHint::COMPUTE_OUTPUT: {
+      GetLastTimestamp(compute_output_start_);
+      break;
+    }
+
+    default:
+      LOG_MESSAGE(TRITONSERVER_LOG_ERROR, "Unknown TimestampHint");
+  }
+}
+
+void
+TimestampData::GetEarliestTimestamp(uint64_t& timestamp)
+{
+  std::lock_guard<std::mutex> guard{mu_};
+  if (timestamp == 0) {
+    SET_TIMESTAMP(timestamp);
+  }
+}
+
+void
+TimestampData::GetLastTimestamp(uint64_t& timestamp)
+{
+  std::lock_guard<std::mutex> guard{mu_};
+  SET_TIMESTAMP(timestamp);
+}
+
+#ifdef TRITON_ENABLE_GPU
+void CUDART_CB
+TimestampCaptureCallback(void* data)
+{
+  auto timestamp_data = reinterpret_cast<TimestampData*>(data);
+  timestamp_data->CaptureTimestamp();
+}
+#endif
+
+}  // namespace
+
 //
 // ModelState
 //
@@ -81,7 +182,6 @@ class ModelState : public BackendModel {
   TRITONSERVER_Error* LoadModel(
       const std::string& artifact_name, const torch::Device device,
       std::string* model_path, const TRITONSERVER_InstanceGroupKind& kind,
-      std::unordered_set<int>& device_id_set,
       std::shared_ptr<torch::jit::script::Module>* torch_model);
 
   bool EnabledOptimizedExecution() { return enable_optimized_execution_; }
@@ -207,7 +307,6 @@ TRITONSERVER_Error*
 ModelState::LoadModel(
     const std::string& artifact_name, const torch::Device device,
     std::string* model_path, const TRITONSERVER_InstanceGroupKind& kind,
-    std::unordered_set<int>& device_id_set,
     std::shared_ptr<torch::jit::script::Module>* torch_model)
 {
   // Find the TorchScript file that describes the model. If the model
@@ -258,23 +357,9 @@ ModelState::LoadModel(
   try {
     std::istringstream model_stream(model_data_str);
     if (kind == TRITONSERVER_INSTANCEGROUPKIND_MODEL) {
+      // Load the model without selecting a device.
       torch_model->reset(
           new torch::jit::Module(torch::jit::load(model_stream)));
-
-      // Get the device used in the model
-      auto parameters = (*torch_model)->parameters();
-      auto buffers = (*torch_model)->buffers();
-
-      for (const auto& parameter : parameters) {
-        if (parameter.device().type() != torch::kCPU) {
-          device_id_set.insert(parameter.device().index());
-        }
-      }
-      for (const auto& buffer : buffers) {
-        if (buffer.device().type() != torch::kCPU) {
-          device_id_set.insert(buffer.device().index());
-        }
-      }
     } else {
       torch_model->reset(
           new torch::jit::Module(torch::jit::load(model_stream, device)));
@@ -548,12 +633,17 @@ class ModelInstanceState : public BackendModelInstance {
       TRITONBACKEND_Request** requests, const uint32_t request_count,
       std::vector<TRITONBACKEND_Response*>* responses);
   TRITONSERVER_Error* RecordBackendTimestamp(
-      uint64_t* timestamp, void* cuda_event);
+      uint64_t* timestamp, void* cuda_event, void* timestamp_data);
 
   // Get the naming convention for inputs/outputs from the model configuration
   TRITONSERVER_Error* GetNamingConvention(
       NamingConvention* naming_convention,
       const std::vector<std::string>& allowed_io);
+
+  // Replace the default CUDA stream with the stream we created to ensure proper
+  // cuda stream synchronization.
+  void SetCurrentCudaStream(
+      const cudaStream_t& stream, const int32_t& device_id);
 
   ModelState* model_state_;
 
@@ -583,12 +673,11 @@ class ModelInstanceState : public BackendModelInstance {
   cudaEvent_t compute_infer_start_event_;
   cudaEvent_t compute_output_start_event_;
 
-  // Store the GPU device ID used in a model for the instance group of type'
-  // MODEL'.
-  std::unordered_set<int> device_id_set_;
-  // Store the extra cuda stream created for the instance group of type' MODEL'
-  // and use device ID as the key.
-  std::unordered_map<int, cudaStream_t> stream_map_;
+  // Store the cuda streams created for the instance group of type 'MODEL'.
+  std::vector<cudaStream_t> stream_vec_;
+  // The TimestampData object for capturing timestamps for the instance group of
+  // type 'MODEL'.
+  TimestampData timestamp_data_;
 };
 
 TRITONSERVER_Error*
@@ -612,40 +701,16 @@ ModelInstanceState::Create(
 ModelInstanceState::ModelInstanceState(
     ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
     : BackendModelInstance(model_state, triton_model_instance),
-      model_state_(model_state), device_(torch::kCPU), is_dict_input_(false)
+      model_state_(model_state), device_(torch::kCPU), is_dict_input_(false),
+      timestamp_data_()
 {
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
 #ifdef TRITON_ENABLE_GPU
     device_ = torch::Device(torch::kCUDA, DeviceId());
-#endif
-  }
-
-  THROW_IF_BACKEND_INSTANCE_ERROR(model_state->LoadModel(
-      ArtifactFilename(), device_, &model_path_, Kind(), device_id_set_,
-      &torch_model_));
-
-#ifdef TRITON_ENABLE_GPU
-  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) {
-    // Only set the torch device and create a CUDA stream if the model uses GPU.
-    for (auto it = device_id_set_.begin(); it != device_id_set_.end(); ++it) {
-      cudaStream_t stream;
-      THROW_IF_BACKEND_INSTANCE_ERROR(
-          CreateCudaStream(*it, 0 /* cuda_stream_priority */, &stream));
-      stream_map_.insert({*it, stream});
-    }
-    if (!device_id_set_.empty()) {
-      // Use the first device to create the default stream.
-      auto it = device_id_set_.begin();
-      device_ = torch::Device(torch::kCUDA, *it);
-      stream_ = stream_map_[*it];
-    }
-  }
-
-  if (device_.is_cuda()) {
     // Need to set the CUDA context so that the context that events are
     // created on match with contexts that events are recorded with.
     THROW_IF_BACKEND_INSTANCE_ERROR(ConvertCUDAStatusToTritonError(
-        cudaSetDevice(device_.index()), TRITONSERVER_ERROR_INTERNAL,
+        cudaSetDevice(DeviceId()), TRITONSERVER_ERROR_INTERNAL,
         "Failed to set the device"));
     THROW_IF_BACKEND_INSTANCE_ERROR(ConvertCUDAStatusToTritonError(
         cudaEventCreate(&compute_input_start_event_),
@@ -656,8 +721,23 @@ ModelInstanceState::ModelInstanceState(
     THROW_IF_BACKEND_INSTANCE_ERROR(ConvertCUDAStatusToTritonError(
         cudaEventCreate(&compute_output_start_event_),
         TRITONSERVER_ERROR_INTERNAL, "Failed to create cuda event"));
-  }
 #endif
+  }
+
+  THROW_IF_BACKEND_INSTANCE_ERROR(model_state->LoadModel(
+      ArtifactFilename(), device_, &model_path_, Kind(), &torch_model_));
+
+  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) {
+#ifdef TRITON_ENABLE_GPU
+    // Create a CUDA stream for every availble device.
+    for (int i = 0; i < torch::cuda::device_count(); i++) {
+      cudaStream_t stream;
+      THROW_IF_BACKEND_INSTANCE_ERROR(
+          CreateCudaStream(i, 0 /* cuda_stream_priority */, &stream));
+      stream_vec_.push_back(stream);
+    }
+#endif
+  }
 
   size_t expected_input_cnt = 0;
   {
@@ -715,7 +795,7 @@ void
 ModelInstanceState::ClearCache()
 {
 #ifdef TRITON_ENABLE_GPU
-  if (device_.is_cuda()) {
+  if ((device_.is_cuda()) || (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL)) {
     c10::cuda::CUDACachingAllocator::emptyCache();
   }
 #endif  // TRITON_ENABLE_GPU
@@ -727,18 +807,22 @@ ModelInstanceState::~ModelInstanceState()
   ClearCache();
 
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) {
-    for (auto& m : stream_map_) {
-      cudaSetDevice(m.first);
-      cudaError_t err = cudaStreamDestroy(m.second);
-      if (err != cudaSuccess) {
-        TRITONSERVER_LogMessage(
-            TRITONSERVER_LOG_ERROR, __FILE__, __LINE__,
-            (std::string("~ModelInstanceState: ") + name_ +
-             " failed to destroy cuda stream: " + cudaGetErrorString(err))
-                .c_str());
-      }
-      m.second = nullptr;
+#ifdef TRITON_ENABLE_GPU
+    for (size_t i = 0; i < stream_vec_.size(); i++) {
+      LOG_IF_ERROR(
+          ConvertCUDAStatusToTritonError(
+              cudaSetDevice(i), TRITONSERVER_ERROR_INTERNAL,
+              "Failed to set the device"),
+          "Failed to set the device");
+
+      LOG_IF_ERROR(
+          ConvertCUDAStatusToTritonError(
+              cudaStreamDestroy(stream_vec_[i]), TRITONSERVER_ERROR_INTERNAL,
+              "Failed to destroy cuda stream"),
+          "~ModelInstanceState error: ");
+      stream_vec_[i] = nullptr;
     }
+#endif
   }
 }
 
@@ -1100,13 +1184,13 @@ ModelInstanceState::ProcessRequests(
           .c_str());
 
 #ifdef TRITON_ENABLE_GPU
-  if ((Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) ||
-      (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL && device_.is_cuda())) {
-    at::cuda::CUDAStream torch_stream = at::cuda::getStreamFromExternal(
-        stream_, (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU)
-                     ? DeviceId()
-                     : device_.index());
-    at::cuda::setCurrentCUDAStream(torch_stream);
+  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
+    SetCurrentCudaStream(stream_, DeviceId());
+  } else if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) {
+    // Replace the default stream of each device with the one we created.
+    for (size_t i = 0; i < stream_vec_.size(); i++) {
+      SetCurrentCudaStream(stream_vec_[i], i);
+    }
   }
 #endif
 
@@ -1214,14 +1298,23 @@ ModelInstanceState::ProcessRequests(
   std::vector<torch::jit::IValue> input_tensors;
   bool cuda_copy = false;
   std::unique_ptr<BackendInputCollector> collector;
-  if ((Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) ||
-      (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL && stream_ != nullptr)) {
+  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
 #ifdef TRITON_ENABLE_GPU
     RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
         responses, request_count, all_response_failed,
         ConvertCUDAStatusToTritonError(
             cudaEventRecord(compute_input_start_event_, stream_),
             TRITONSERVER_ERROR_INTERNAL, "Failed to record the event."));
+#endif
+  } else if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) {
+#ifdef TRITON_ENABLE_GPU
+    timestamp_data_.SetTimestampHint(
+        TimestampData::TimestampHint::COMPUTE_INPUT);
+    for (const auto& stream : stream_vec_) {
+      cudaLaunchHostFunc(
+          stream, TimestampCaptureCallback,
+          reinterpret_cast<void*>(&timestamp_data_));
+    }
 #endif
   }
 
@@ -1241,8 +1334,8 @@ ModelInstanceState::ProcessRequests(
   if (cuda_copy) {
     cudaStreamSynchronize(stream_);
     if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) {
-      for (auto& m : stream_map_) {
-        cudaStreamSynchronize(m.second);
+      for (auto& stream : stream_vec_) {
+        cudaStreamSynchronize(stream);
       }
     }
     cuda_copy = false;
@@ -1251,12 +1344,16 @@ ModelInstanceState::ProcessRequests(
 
   std::vector<torch::jit::IValue> output_tensors;
   uint64_t compute_start_ns = 0;
-
+  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) {
+    timestamp_data_.SetTimestampHint(
+        TimestampData::TimestampHint::COMPUTE_INFER);
+  }
   RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
       responses, request_count, all_response_failed,
       RecordBackendTimestamp(
           &compute_start_ns,
-          reinterpret_cast<void*>(&compute_infer_start_event_)));
+          reinterpret_cast<void*>(&compute_infer_start_event_),
+          reinterpret_cast<void*>(&timestamp_data_)));
 
   // Run...
   if (!all_response_failed) {
@@ -1288,11 +1385,16 @@ ModelInstanceState::ProcessRequests(
   }
 
   uint64_t compute_end_ns = 0;
+  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) {
+    timestamp_data_.SetTimestampHint(
+        TimestampData::TimestampHint::COMPUTE_OUTPUT);
+  }
   RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
       responses, request_count, all_response_failed,
       RecordBackendTimestamp(
           &compute_end_ns,
-          reinterpret_cast<void*>(&compute_output_start_event_)));
+          reinterpret_cast<void*>(&compute_output_start_event_),
+          reinterpret_cast<void*>(&timestamp_data_)));
 
   if (!all_response_failed) {
     if (!invalid_index) {
@@ -1322,8 +1424,7 @@ ModelInstanceState::ProcessRequests(
 
   // We don't need an explicit CUDA syncrhonization here since we have already
   // synchronized the stream in the ReadOutputTensors function.
-  if ((Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) ||
-      (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL && stream_ != nullptr)) {
+  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
 #ifdef TRITON_ENABLE_GPU
     // [FIXME] in the case of cudaEventElapsedTime failure, should handle
     // stats reporting more gracefully as the durations are inaccurate
@@ -1348,6 +1449,11 @@ ModelInstanceState::ProcessRequests(
     compute_start_ns = exec_start_ns + (compute_input_duration * 1e6);
     compute_end_ns = compute_start_ns + (compute_infer_duration * 1e6);
 #endif
+  } else if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) {
+    auto compute_input_duration = timestamp_data_.GetComputeInputDuration();
+    auto compute_infer_duration = timestamp_data_.GetComputeInferDuration();
+    compute_start_ns = exec_start_ns + compute_input_duration;
+    compute_end_ns = compute_start_ns + compute_infer_duration;
   }
 
   // Report statistics for each request.
@@ -1416,8 +1522,9 @@ ModelInstanceState::Execute(
 
     // NV-Fuser. No change is made unless parameter is explicitly set.
     if (std::get<0>(model_state_->EnabledNvfuserPair())) {
-      if (std::get<1>(model_state_->EnabledNvfuserPair()) &&
-          (device_.type() != torch::kCPU)) {
+      if ((std::get<1>(model_state_->EnabledNvfuserPair()) &&
+           (device_.type() != torch::kCPU)) ||
+          (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL)) {
         torch::jit::overrideCanFuseOnCPU(false);
         torch::jit::overrideCanFuseOnGPU(false);
         torch::jit::setTensorExprFuserEnabled(false);
@@ -1677,8 +1784,7 @@ SetStringInputTensor(
     torch::List<std::string>* input_list, TRITONBACKEND_Input* input,
     const char* name, const uint32_t buffer_count,
     const size_t request_element_cnt, TRITONBACKEND_Response** response,
-    cudaStream_t stream,
-    const std::unordered_map<int, cudaStream_t>& stream_map,
+    cudaStream_t stream, const std::vector<cudaStream_t>& stream_vec,
     const char* host_policy_name, const TRITONSERVER_InstanceGroupKind& kind)
 {
   bool cuda_copy = false;
@@ -1705,8 +1811,8 @@ SetStringInputTensor(
   if (cuda_copy) {
     cudaStreamSynchronize(stream);
     if (kind == TRITONSERVER_INSTANCEGROUPKIND_MODEL) {
-      for (auto& m : stream_map) {
-        cudaStreamSynchronize(m.second);
+      for (auto& stream : stream_vec) {
+        cudaStreamSynchronize(stream);
       }
     }
     cuda_copy = false;
@@ -1898,8 +2004,7 @@ ModelInstanceState::SetInputTensors(
 
     // The input must be in contiguous CPU/GPU memory.
     std::vector<std::pair<TRITONSERVER_MemoryType, int64_t>> alloc_perference;
-    if ((device_.is_cpu()) ||
-        (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL)) {
+    if (device_.is_cpu()) {
       alloc_perference = {{TRITONSERVER_MEMORY_CPU_PINNED, 0},
                           {TRITONSERVER_MEMORY_CPU, 0}};
     } else {
@@ -1944,7 +2049,7 @@ ModelInstanceState::SetInputTensors(
 
         *cuda_copy |= SetStringInputTensor(
             &input_list, input, input_name, buffer_count, batch_element_cnt,
-            &((*responses)[idx]), CudaStream(), stream_map_,
+            &((*responses)[idx]), CudaStream(), stream_vec_,
             HostPolicyName().c_str(), Kind());
       }
 
@@ -2135,8 +2240,8 @@ ModelInstanceState::ReadOutputTensors(
   // on GPU.
   cudaStreamSynchronize(stream_);
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) {
-    for (auto& m : stream_map_) {
-      cudaStreamSynchronize(m.second);
+    for (auto& stream : stream_vec_) {
+      cudaStreamSynchronize(stream);
     }
   }
 #endif
@@ -2146,20 +2251,44 @@ ModelInstanceState::ReadOutputTensors(
 
 TRITONSERVER_Error*
 ModelInstanceState::RecordBackendTimestamp(
-    uint64_t* timestamp, void* cuda_event)
+    uint64_t* timestamp, void* cuda_event, void* timestamp_data)
 {
-  if ((Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) ||
-      (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL && stream_ != nullptr)) {
+  // For the instance group of type 'GPU', we use a CUDA event to record the
+  // timestamp. For the instance group of type 'MODEL',we are not able to get
+  // the elapsed time between two cuda events from different devices, so we use
+  // a cuda stream callback function to record the timestamp.
+  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
 #ifdef TRITON_ENABLE_GPU
     cudaEvent_t* lcuda_event = reinterpret_cast<cudaEvent_t*>(cuda_event);
     RETURN_IF_ERROR(ConvertCUDAStatusToTritonError(
         cudaEventRecord(*lcuda_event, stream_), TRITONSERVER_ERROR_INTERNAL,
         "Failed to record the event."));
 #endif
+  } else if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) {
+#ifdef TRITON_ENABLE_GPU
+    for (const auto& stream : stream_vec_) {
+      cudaLaunchHostFunc(
+          stream, TimestampCaptureCallback,
+          reinterpret_cast<void*>(&timestamp_data_));
+    }
+#endif
   } else {
     SET_TIMESTAMP(*timestamp);
   }
   return nullptr;
+}
+
+void
+ModelInstanceState::SetCurrentCudaStream(
+    const cudaStream_t& stream, const int& device_id)
+{
+  at::cuda::CUDAStream torch_stream =
+      at::cuda::getStreamFromExternal(stream, device_id);
+  // This function replaces the default stream with the stream we created. It
+  // is not necessary to change the current device to the desired device when
+  // replacing the default stream for that device. See the documentation here:
+  // https://pytorch.org/cppdocs/api/function_namespacec10_1_1cuda_1a6ed50cc0fc16cc7014d9c2f4c3bd098d.html
+  at::cuda::setCurrentCUDAStream(torch_stream);
 }
 
 /////////////
