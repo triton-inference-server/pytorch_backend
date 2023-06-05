@@ -206,6 +206,16 @@ complex execution modes and dynamic shapes. If not specified, all are enabled by
 
     `ENABLE_TENSOR_FUSER`
 
+### Support 
+
+Starting from the 23.06 release, the PyTorch backend supports an instance group
+kind of type
+[`KIND_MODEL`](https://github.com/triton-inference-server/common/blob/r23.05/protobuf/model_config.proto#L174-L181)
+where the backend will not choose the GPU device for the model. Instead, it
+will respect the device(s) used in the model and use it as is when the type of
+the instance group is set to `KIND_MODEL` in the model config file. This is
+useful when the model is using multiple GPUs internally.
+
 ### Important Notes
 
 * The execution of PyTorch model on GPU is asynchronous in nature. See
