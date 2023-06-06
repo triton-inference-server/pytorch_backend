@@ -208,13 +208,25 @@ complex execution modes and dynamic shapes. If not specified, all are enabled by
 
 ### Support 
 
-Starting from the 23.06 release, the PyTorch backend supports an instance group
-kind of type
-[`KIND_MODEL`](https://github.com/triton-inference-server/common/blob/r23.05/protobuf/model_config.proto#L174-L181)
-where the backend will not choose the GPU device for the model. Instead, it
-will respect the device(s) used in the model and use it as is when the type of
-the instance group is set to `KIND_MODEL` in the model config file. This is
-useful when the model is using multiple GPUs internally.
+#### Model Instance Group Kind
+
+The PyTorch backend supports the following kinds of
+[Model Instance Groups](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#instance-groups)
+where the input tensors are placed as follows:
+
+* `KIND_GPU`: Inputs are prepared on the GPU device associated with the model
+instance.
+
+* `KIND_CPU`: Inputs are on the CPU.
+
+* `KIND_MODEL`:  Starting from the 23.06 release, the PyTorch backend supports
+instance group kind of type
+[`KIND_MODEL`](https://github.com/triton-inference-server/common/blob/r23.05/protobuf/model_config.proto#L174-L181).
+In this case, the inputs reside on the CPU. The backend does not choose the GPU
+device for the model; instead, it respects the device(s) specified in the model
+and uses them as they are when the instance group kind is set to `KIND_MODEL`
+in the model configuration file. This is useful when the model internally
+utilizes multiple GPUs.
 
 ### Important Notes
 
