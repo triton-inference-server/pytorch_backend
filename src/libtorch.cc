@@ -2004,7 +2004,10 @@ ModelInstanceState::SetInputTensors(
 
     // The input must be in contiguous CPU/GPU memory.
     std::vector<std::pair<TRITONSERVER_MemoryType, int64_t>> alloc_perference;
-    if (device_.is_cpu()) {
+    // For 'KIND_MODEL', intput will always be in CPU as we don't have a way to
+    // query the input types.
+    if ((device_.is_cpu()) ||
+        (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL)) {
       alloc_perference = {{TRITONSERVER_MEMORY_CPU_PINNED, 0},
                           {TRITONSERVER_MEMORY_CPU, 0}};
     } else {
