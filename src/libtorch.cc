@@ -1885,6 +1885,10 @@ ModelInstanceState::SetInputTensors(
 
       const auto torch_dtype =
           ConvertDataTypeToTorchType(batch_input.DataType());
+      torch::TensorOptions options{torch_dtype.second};
+      auto updated_options = (dst_memory_type == TRITONSERVER_MEMORY_GPU)
+                                 ? options.device(torch::kCUDA, device_.index())
+                                 : options.device(torch::kCPU);
 
       torch::Tensor input_tensor = torch::from_blob(
           const_cast<char*>(dst_buffer), shape,
