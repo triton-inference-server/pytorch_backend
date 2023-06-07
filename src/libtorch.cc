@@ -38,7 +38,6 @@
 #include "triton/backend/backend_output_responder.h"
 #include "triton/common/nvtx.h"
 #include "triton/core/tritonbackend.h"
-#include "triton/core/tritonserver.h"
 
 #ifdef TRITON_PYTORCH_ENABLE_TORCHVISION
 // Suppress warnings in torch headers
@@ -154,7 +153,9 @@ class ModelState : public BackendModel {
       torch_models_;
 
   // model_outputs is a map that contains unique outputs that the model must
-  // provide. In the model configuration, the output in the state configuration
+  // provide. The first pair is the model output index and the second is
+  // the index in the model state, -1 is used if one is not required.
+  // In the model configuration, the output in the state configuration
   // can have intersection with the outputs section of the model. If an output
   // is specified both in the output section and state section, it indicates
   // that the backend must return the output state to the client too.
@@ -548,11 +549,6 @@ class ModelInstanceState : public BackendModelInstance {
   TRITONSERVER_Error* ValidateTypedSequenceControl(
       triton::common::TritonJson::Value& sequence_batching,
       const std::string& control_kind, bool required, bool* have_control);
-  void AddInputToMap(
-      NamingConvention naming_convention, 
-      const std::vector<std::string> allowed_inputs, 
-      const std::string &io_name,
-      const uint32_t index);
   TRITONSERVER_Error* ValidateInputs(const size_t expected_input_cnt);
   void AddInputToMap(
       NamingConvention naming_convention,
@@ -882,8 +878,6 @@ ModelInstanceState::ValidateTypedSequenceControl(
 
   return nullptr;  // success
 }
-void ModelInstanceState::AddInputToMap(NamingConvention naming_convention, const std::vector<std::string> allowed_inputs, const std::string &io_name, const uint32_t index) {
-   std::string deliminator = "__";
 
 void
 ModelInstanceState::AddInputToMap(
@@ -1065,7 +1059,6 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
                   .c_str());
         }
 
-
         // Validate shape for String inputs. Only allow 1 dimension.
         if (state_dtype == "TYPE_STRING") {
           std::vector<int64_t> dims;
@@ -1212,7 +1205,7 @@ ModelInstanceState::ValidateOutputs()
                 TRITONSERVER_ERROR_INTERNAL,
                 ("Triton only supports 1 dimensional List of String as output "
                  "for "
-                "'" +
+                 "'" +
                  std::string(state_name) + "' for model '" +
                  model_state_->Name() + "'")
                     .c_str());
@@ -2333,11 +2326,11 @@ ModelInstanceState::ReadOutputTensors(
         states = responder.ProcessStateTensor(
               name, output_dtype, batchn_shape, output_buffer, memory_type,
               memory_id);
-        // Update the states
-        for (auto& state : states) {
-          RETURN_IF_ERROR(TRITONBACKEND_StateUpdate(state));
+          // Update the states
+          for (auto& state : states) {
+            RETURN_IF_ERROR(TRITONBACKEND_StateUpdate(state));
+          }
         }
-      }
 
       } else {
         responder.ProcessBatchOutput(
