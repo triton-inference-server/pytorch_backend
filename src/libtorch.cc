@@ -660,7 +660,14 @@ ModelInstanceState::ModelInstanceState(
 
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) {
 #ifdef TRITON_ENABLE_GPU
-    // Create a CUDA stream for every availble device.
+    // Since we cannot determine the exact devices used by the model, we create
+    // a CUDA stream for every available device to ensure proper synchronization
+    // of CUDA streams. This approach may have implications when a timestamp is
+    // captured on a device that is not used by the model. Currently, this issue
+    // is addressed by synchronizing the CUDA streams before recording
+    // timestamps to prevent timestamp skewing. However, in the future, any
+    // modifications to the CUDA stream synchronization logic should be handled
+    // with caution.
     for (int i = 0; i < torch::cuda::device_count(); i++) {
       cudaStream_t stream;
       THROW_IF_BACKEND_INSTANCE_ERROR(
