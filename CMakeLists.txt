@@ -498,7 +498,7 @@ endif() # TRITON_PYTORCH_DOCKER_BUILD
 install(
       CODE
         "EXECUTE_PROCESS(
-          COMMAND patchelf --set-rpath $ORIGIN:/opt/hpcx/ucx/lib/ libtorch.so
+          COMMAND patchelf --set-rpath $ORIGIN:/opt/hpcx/ucx/lib/ libtorch.so && /sbin/ldconfig
           RESULT_VARIABLE PATCHELF_STATUS
           WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/backends/pytorch)
         if(PATCHELF_STATUS AND NOT PATCHELF_STATUS EQUAL 0)
