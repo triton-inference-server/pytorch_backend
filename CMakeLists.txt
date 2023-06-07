@@ -507,7 +507,11 @@ install(
 
     execute_process(
       COMMAND /sbin/ldconfig
-    )"
+      RESULT_VARIABLE LDCONFIG_STATUS
+      WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/backends/pytorch)
+    if(LDCONFIG_STATUS AND NOT LDCONFIG_STATUS EQUAL 0)
+      message(FATAL_ERROR \"FAILED: to run ldconfig\")
+    endif()"
 )
 
 install(
