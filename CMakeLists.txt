@@ -496,15 +496,19 @@ endif() # TRITON_PYTORCH_DOCKER_BUILD
 
 # Libtorch.so has dependencies in the hpcx folder that must be in the rpath.
 install(
-      CODE
-        "EXECUTE_PROCESS(
-          COMMAND patchelf --set-rpath $ORIGIN:/opt/hpcx/ucx/lib/ libtorch.so && /sbin/ldconfig
-          RESULT_VARIABLE PATCHELF_STATUS
-          WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/backends/pytorch)
-        if(PATCHELF_STATUS AND NOT PATCHELF_STATUS EQUAL 0)
-          message(FATAL_ERROR \"FAILED: to run patchelf\")
-        endif()"
-    )
+  CODE
+    "execute_process(
+      COMMAND patchelf --add-rpath /opt/hpcx/ucx/lib/ libtorch.so
+      RESULT_VARIABLE PATCHELF_STATUS
+      WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/backends/pytorch)
+    if(PATCHELF_STATUS AND NOT PATCHELF_STATUS EQUAL 0)
+      message(FATAL_ERROR \"FAILED: to run patchelf\")
+    endif()
+
+    execute_process(
+      COMMAND /sbin/ldconfig
+    )"
+)
 
 install(
   EXPORT
