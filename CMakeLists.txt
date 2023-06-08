@@ -203,7 +203,6 @@ if(NOT TRITON_ENABLE_GPU)
       ${HPCX_LIBS}
     COMMAND docker pull ${TRITON_PYTORCH_DOCKER_IMAGE}
     COMMAND docker rm pytorch_backend_ptlib || echo "error ignored..." || true
-    COMMAND echo "Running ${TRITON_PYTORCH_DOCKER_IMAGE} to extract HPCX libraries"
     COMMAND docker create --name pytorch_backend_ptlib ${TRITON_PYTORCH_DOCKER_IMAGE}
     COMMAND docker cp -L pytorch_backend_ptlib:/opt/hpcx/ucc/lib/libucc.so.1 libucc.so.1
     COMMAND docker cp -L pytorch_backend_ptlib:/opt/hpcx/ucx/lib/libucm.so.0 libucm.so.0
