@@ -139,6 +139,11 @@ set(PT_LIBS
     "libtorch_cuda_linalg.so"
     "libtorch_global_deps.so"
     "libnvfuser_codegen.so"
+    "libucc.so.1"
+    "libucm.so.0"
+    "libucp.so.0"
+    "libucs.so.0"
+    "libuct.so.0"
 )
 
 if (${TRITON_PYTORCH_ENABLE_TORCHVISION})
@@ -254,7 +259,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMENT "Extracting pytorch and torchvision libraries and includes from ${TRITON_PYTORCH_DOCKER_IMAGE}"
     VERBATIM
   )
-  add_custom_target(ptlib_target DEPENDS ${PT_LIBS} ${LIBTORCH_LIBS} ${OPENCV_LIBS})
+add_custom_target(ptlib_target DEPENDS ${PT_LIBS} ${LIBTORCH_LIBS} ${OPENCV_LIBS})
   add_library(ptlib SHARED IMPORTED GLOBAL)
   add_dependencies(ptlib ptlib_target)
 
@@ -497,27 +502,6 @@ else()
     )
   ENDFOREACH(plib)
 endif() # TRITON_PYTORCH_DOCKER_BUILD
-
-
-# Libtorch.so has dependencies in the hpcx folder that must be in the rpath.
-install(
-  CODE
-    "execute_process(
-      COMMAND patchelf --add-rpath /opt/hpcx/ucx/lib/ libtorch.so
-      RESULT_VARIABLE PATCHELF_STATUS
-      WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/backends/pytorch)
-    if(PATCHELF_STATUS AND NOT PATCHELF_STATUS EQUAL 0)
-      message(FATAL_ERROR \"FAILED: to run patchelf\")
-    endif()
-
-    execute_process(
-      COMMAND /sbin/ldconfig
-      RESULT_VARIABLE LDCONFIG_STATUS
-      WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/backends/pytorch)
-    if(LDCONFIG_STATUS AND NOT LDCONFIG_STATUS EQUAL 0)
-      message(FATAL_ERROR \"FAILED: to run ldconfig\")
-    endif()"
-)
 
 install(
   EXPORT
