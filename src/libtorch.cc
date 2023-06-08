@@ -109,10 +109,6 @@ class ModelState : public BackendModel {
   {
     return model_outputs_;
   }
-  const std::map<std::string, std::pair<int64_t, int64_t>>& ModelOutputs()
-  {
-    return model_outputs_;
-  }
 
  private:
   ModelState(TRITONBACKEND_Model* triton_model);
@@ -1772,7 +1768,7 @@ ModelInstanceState::GetNamingConvention(
             ("PyTorch model '" + model_state_->Name() +
              "' is using sequence batching with state but state '" +
              state_name +
-              "' does not follow the <name>__<index> naming convention. ")
+             "' does not follow the <name>__<index> naming convention. ")
                 .c_str());
       } else {
         // check if the index part of the name is not an integer
@@ -2320,10 +2316,10 @@ ModelInstanceState::ReadOutputTensors(
           responder.ProcessTensor(
               name, output_dtype, batchn_shape, output_buffer, memory_type,
               memory_id);
-      }
-      if (output_tensor_pair.second != -1) {
-        std::vector<TRITONBACKEND_State*> states;
-        states = responder.ProcessStateTensor(
+        }
+        if (output_tensor_pair.second != -1) {
+          std::vector<TRITONBACKEND_State*> states;
+          states = responder.ProcessStateTensor(
               name, output_dtype, batchn_shape, output_buffer, memory_type,
               memory_id);
           // Update the states
