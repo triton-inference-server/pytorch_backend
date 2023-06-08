@@ -233,6 +233,11 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/lib/libopencv_calib3d.so libopencv_calib3d.so
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/lib/libopencv_features2d.so libopencv_features2d.so
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/lib/libopencv_flann.so libopencv_flann.so
+    COMMAND docker cp -L pytorch_backend_ptlib:/opt/hpcx/ucc/lib/libucc.so.1 libucc.so.1
+    COMMAND docker cp -L pytorch_backend_ptlib:/opt/hpcx/ucx/lib/libucm.so.0 libucm.so.0
+    COMMAND docker cp -L pytorch_backend_ptlib:/opt/hpcx/ucx/lib/libucp.so.0 libucp.so.0
+    COMMAND docker cp -L pytorch_backend_ptlib:/opt/hpcx/ucx/lib/libucs.so.0 libucs.so.0
+    COMMAND docker cp -L pytorch_backend_ptlib:/opt/hpcx/ucx/lib/libuct.so.0 libuct.so.0
     COMMAND docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libpng16.so.16.37.0 libpng16.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libjpeg.so.8.2.2 libjpeg.so
     COMMAND /bin/sh -c "if [ -f libmkl_def.so.1 ]; then patchelf --add-needed libmkl_gnu_thread.so.1 libmkl_def.so.1; fi"
@@ -493,6 +498,26 @@ else()
   ENDFOREACH(plib)
 endif() # TRITON_PYTORCH_DOCKER_BUILD
 
+
+# Libtorch.so has dependencies in the hpcx folder that must be in the rpath.
+install(
+  CODE
+    "execute_process(
+      COMMAND patchelf --add-rpath /opt/hpcx/ucx/lib/ libtorch.so
+      RESULT_VARIABLE PATCHELF_STATUS
+      WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/backends/pytorch)
+    if(PATCHELF_STATUS AND NOT PATCHELF_STATUS EQUAL 0)
+      message(FATAL_ERROR \"FAILED: to run patchelf\")
+    endif()
+
+    execute_process(
+      COMMAND /sbin/ldconfig
+      RESULT_VARIABLE LDCONFIG_STATUS
+      WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/backends/pytorch)
+    if(LDCONFIG_STATUS AND NOT LDCONFIG_STATUS EQUAL 0)
+      message(FATAL_ERROR \"FAILED: to run ldconfig\")
+    endif()"
+)
 
 install(
   EXPORT
