@@ -202,14 +202,14 @@ if(NOT TRITON_ENABLE_GPU)
     OUTPUT
       ${HPCX_LIBS}
     COMMAND docker pull ${TRITON_PYTORCH_DOCKER_IMAGE}
-    COMMAND docker rm pytorch_backend_ptlib || echo "error ignored..." || true
-    COMMAND docker create --name pytorch_backend_ptlib ${TRITON_PYTORCH_DOCKER_IMAGE}
-    COMMAND docker cp -L pytorch_backend_ptlib:/opt/hpcx/ucc/lib/libucc.so.1 libucc.so.1
-    COMMAND docker cp -L pytorch_backend_ptlib:/opt/hpcx/ucx/lib/libucm.so.0 libucm.so.0
-    COMMAND docker cp -L pytorch_backend_ptlib:/opt/hpcx/ucx/lib/libucp.so.0 libucp.so.0
-    COMMAND docker cp -L pytorch_backend_ptlib:/opt/hpcx/ucx/lib/libucs.so.0 libucs.so.0
-    COMMAND docker cp -L pytorch_backend_ptlib:/opt/hpcx/ucx/lib/libuct.so.0 libuct.so.0
-    COMMAND docker rm pytorch_backend_ptlib
+    COMMAND docker rm pytorch_backend_hpcxlib || echo "error ignored..." || true
+    COMMAND docker create --name pytorch_backend_hpcxlib ${TRITON_PYTORCH_DOCKER_IMAGE}
+    COMMAND docker cp -L pytorch_backend_hpcxlib:/opt/hpcx/ucc/lib/libucc.so.1 libucc.so.1
+    COMMAND docker cp -L pytorch_backend_hpcxlib:/opt/hpcx/ucx/lib/libucm.so.0 libucm.so.0
+    COMMAND docker cp -L pytorch_backend_hpcxlib:/opt/hpcx/ucx/lib/libucp.so.0 libucp.so.0
+    COMMAND docker cp -L pytorch_backend_hpcxlib:/opt/hpcx/ucx/lib/libucs.so.0 libucs.so.0
+    COMMAND docker cp -L pytorch_backend_hpcxlib:/opt/hpcx/ucx/lib/libuct.so.0 libuct.so.0
+    COMMAND docker rm pytorch_backend_hpcxlib
     VERBATIM
   )
 endif() # TRITON_ENABLE_GPU
