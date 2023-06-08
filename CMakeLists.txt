@@ -204,7 +204,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
       include/torch
       include/torchvision
     COMMAND ${CMAKE_COMMAND} -E make_directory "include/torchvision"
-    COMMAND docker pull ${TRITON_PYTORCH_DOCKER_IMAGE}
+    # COMMAND docker pull ${TRITON_PYTORCH_DOCKER_IMAGE}
     COMMAND docker rm pytorch_backend_ptlib || echo "error ignored..." || true
     COMMAND docker create --name pytorch_backend_ptlib ${TRITON_PYTORCH_DOCKER_IMAGE}
     COMMAND /bin/sh -c "for i in ${LIBTORCH_LIBS_STR} ; do echo copying $i && docker cp -L pytorch_backend_ptlib:/usr/local/lib/$i $i ; done"
@@ -493,26 +493,6 @@ else()
   ENDFOREACH(plib)
 endif() # TRITON_PYTORCH_DOCKER_BUILD
 
-
-# Libtorch.so has dependencies in the hpcx folder that must be in the rpath.
-install(
-  CODE
-    "execute_process(
-      COMMAND patchelf --add-rpath /opt/hpcx/ucx/lib/ libtorch.so
-      RESULT_VARIABLE PATCHELF_STATUS
-      WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/backends/pytorch)
-    if(PATCHELF_STATUS AND NOT PATCHELF_STATUS EQUAL 0)
-      message(FATAL_ERROR \"FAILED: to run patchelf\")
-    endif()
-
-    execute_process(
-      COMMAND /sbin/ldconfig
-      RESULT_VARIABLE LDCONFIG_STATUS
-      WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/backends/pytorch)
-    if(LDCONFIG_STATUS AND NOT LDCONFIG_STATUS EQUAL 0)
-      message(FATAL_ERROR \"FAILED: to run ldconfig\")
-    endif()"
-)
 
 install(
   EXPORT
