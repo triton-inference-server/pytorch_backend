@@ -277,7 +277,6 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMENT "Extracting pytorch and torchvision libraries and includes from ${TRITON_PYTORCH_DOCKER_IMAGE}"
     VERBATIM
   )
-  message(STATUS "hpcx libs: ${HPCX_LIBS}")
   add_custom_target(ptlib_target DEPENDS ${PT_LIBS} ${HPCX_LIBS} ${LIBTORCH_LIBS} ${OPENCV_LIBS})
   add_library(ptlib SHARED IMPORTED GLOBAL)
   add_dependencies(ptlib ptlib_target)
