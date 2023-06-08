@@ -139,11 +139,6 @@ set(PT_LIBS
     "libtorch_cuda_linalg.so"
     "libtorch_global_deps.so"
     "libnvfuser_codegen.so"
-    "libucc.so.1"
-    "libucm.so.0"
-    "libucp.so.0"
-    "libucs.so.0"
-    "libuct.so.0"
 )
 
 if (${TRITON_PYTORCH_ENABLE_TORCHVISION})
@@ -194,6 +189,34 @@ set(OPENCV_LIBS
     "libjpeg.so"
 )
 
+# In CPU-only mode, get the hpcx libraries neededby libtorch.so.
+if(NOT TRITON_ENABLE_GPU)
+  set(HPCX_LIBS
+      "libucc.so.1"
+      "libucm.so.0"
+      "libucp.so.0"
+      "libucs.so.0"
+      "libuct.so.0"
+  )
+  add_custom_command(
+    OUTPUT
+      ${HPCX_LIBS}
+    # COMMAND docker pull ${TRITON_PYTORCH_DOCKER_IMAGE}
+    COMMAND docker rm pytorch_backend_ptlib || echo "error ignored..." || true
+    COMMAND echo "Running ${TRITON_PYTORCH_DOCKER_IMAGE} to extract HPCX libraries"
+    COMMAND docker create --name pytorch_backend_ptlib ${TRITON_PYTORCH_DOCKER_IMAGE}
+    COMMAND docker cp -L pytorch_backend_ptlib:/opt/hpcx/ucc/lib/libucc.so.1 libucc.so.1
+    COMMAND docker cp -L pytorch_backend_ptlib:/opt/hpcx/ucx/lib/libucm.so.0 libucm.so.0
+    COMMAND docker cp -L pytorch_backend_ptlib:/opt/hpcx/ucx/lib/libucp.so.0 libucp.so.0
+    COMMAND docker cp -L pytorch_backend_ptlib:/opt/hpcx/ucx/lib/libucs.so.0 libucs.so.0
+    COMMAND docker cp -L pytorch_backend_ptlib:/opt/hpcx/ucx/lib/libuct.so.0 libuct.so.0
+    COMMAND ls -la .
+    COMMAND docker rm pytorch_backend_ptlib
+    COMMENT "Extracting HPCX libraries from ${TRITON_PYTORCH_DOCKER_IMAGE}"
+    VERBATIM
+  )
+endif() # TRITON_ENABLE_GPU
+
 # The patchelf commands ensure the MKL libraries are loaded correctly during runtime
 # Without these, the framework/backend complains of missing libraries / symbols and 
 # in some cases leads to segmentation faults.
@@ -238,11 +261,6 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/lib/libopencv_calib3d.so libopencv_calib3d.so
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/lib/libopencv_features2d.so libopencv_features2d.so
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/lib/libopencv_flann.so libopencv_flann.so
-    COMMAND docker cp -L pytorch_backend_ptlib:/opt/hpcx/ucc/lib/libucc.so.1 libucc.so.1
-    COMMAND docker cp -L pytorch_backend_ptlib:/opt/hpcx/ucx/lib/libucm.so.0 libucm.so.0
-    COMMAND docker cp -L pytorch_backend_ptlib:/opt/hpcx/ucx/lib/libucp.so.0 libucp.so.0
-    COMMAND docker cp -L pytorch_backend_ptlib:/opt/hpcx/ucx/lib/libucs.so.0 libucs.so.0
-    COMMAND docker cp -L pytorch_backend_ptlib:/opt/hpcx/ucx/lib/libuct.so.0 libuct.so.0
     COMMAND docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libpng16.so.16.37.0 libpng16.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libjpeg.so.8.2.2 libjpeg.so
     COMMAND /bin/sh -c "if [ -f libmkl_def.so.1 ]; then patchelf --add-needed libmkl_gnu_thread.so.1 libmkl_def.so.1; fi"
@@ -259,7 +277,8 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMENT "Extracting pytorch and torchvision libraries and includes from ${TRITON_PYTORCH_DOCKER_IMAGE}"
     VERBATIM
   )
-add_custom_target(ptlib_target DEPENDS ${PT_LIBS} ${LIBTORCH_LIBS} ${OPENCV_LIBS})
+  message(STATUS "hpcx libs: ${HPCX_LIBS}")
+  add_custom_target(ptlib_target DEPENDS ${PT_LIBS} ${HPCX_LIBS} ${LIBTORCH_LIBS} ${OPENCV_LIBS})
   add_library(ptlib SHARED IMPORTED GLOBAL)
   add_dependencies(ptlib ptlib_target)
 
@@ -425,7 +444,7 @@ install(
 
 if (${TRITON_PYTORCH_DOCKER_BUILD})
   set(PT_LIB_PATHS "")
-  FOREACH(plib ${PT_LIBS} ${LIBTORCH_LIBS} ${OPENCV_LIBS})
+  FOREACH(plib ${PT_LIBS} ${HPCX_LIBS} ${LIBTORCH_LIBS} ${OPENCV_LIBS})
     set(PT_LIB_PATHS ${PT_LIB_PATHS} "${CMAKE_CURRENT_BINARY_DIR}/${plib}")
   ENDFOREACH(plib)
 
@@ -444,7 +463,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     )
   endif() # TRITON_PYTORCH_ENABLE_TORCHTRT
 
-  FOREACH(plib ${PT_LIBS} ${LIBTORCH_LIBS} ${OPENCV_LIBS})
+  FOREACH(plib ${PT_LIBS} ${HPCX_LIBS} ${LIBTORCH_LIBS} ${OPENCV_LIBS})
     install(
       CODE
         "EXECUTE_PROCESS(
@@ -479,7 +498,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
       endif()"
   )
 else()
-  FOREACH(plib ${PT_LIBS})
+  FOREACH(plib ${PT_LIBS} ${HPCX_LIBS})
     set(PT_LIB_PATHS ${PT_LIB_PATHS} "${TRITON_PYTORCH_LIB_PATHS}/${plib}")
   ENDFOREACH(plib)
 
@@ -489,7 +508,7 @@ else()
     DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/pytorch
   )
 
-  FOREACH(plib ${PT_LIBS})
+  FOREACH(plib ${PT_LIBS} ${HPCX_LIBS})
     install(
       CODE
         "EXECUTE_PROCESS(
