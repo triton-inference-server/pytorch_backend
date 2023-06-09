@@ -65,7 +65,7 @@ namespace {
 
 #ifdef TRITON_ENABLE_GPU
 void CUDART_CB
-CaptureLastTimestampCallback(void* data)
+CaptureTimestampCallback(void* data)
 {
   auto* timestamp = reinterpret_cast<std::atomic<uint64_t>*>(data);
   SET_TIMESTAMP(*timestamp);
@@ -1312,7 +1312,7 @@ ModelInstanceState::ProcessRequests(
     // For the compute infer duration, multiple streams will be involved, so we
     // need to launch a CUDA callback function for timestamp capturing.
     cudaLaunchHostFunc(
-        GetCudaStreamByInstanceKind(), CaptureLastTimestampCallback,
+        GetCudaStreamByInstanceKind(), CaptureTimestampCallback,
         reinterpret_cast<void*>(&compute_output_start));
 #endif
   } else {
