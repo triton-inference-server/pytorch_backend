@@ -1305,7 +1305,7 @@ ModelInstanceState::ProcessRequests(
   }
 
   uint64_t compute_end_ns = 0;
-  std::atomic<uint64_t> compute_output_start = 0;
+  std::atomic<uint64_t> compute_output_start{0};
 
   if ((Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) && (device_cnt_ > 0)) {
 #ifdef TRITON_ENABLE_GPU
