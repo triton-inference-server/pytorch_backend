@@ -2241,17 +2241,17 @@ float
 ModelInstanceState::GetCudaEventElapsedTime(
     const cudaEvent_t& start_event, const cudaEvent_t& end_event)
 {
+  float duration = 0;
 #ifdef TRITON_ENABLE_GPU
   // [FIXME] in the case of cudaEventElapsedTime failure, should handle
   // stats reporting more gracefully as the durations are inaccurate
-  float duration = 0;
   LOG_IF_ERROR(
       ConvertCUDAStatusToTritonError(
           cudaEventElapsedTime(&duration, start_event, end_event),
           TRITONSERVER_ERROR_INTERNAL, "Failed to capture elapsed time"),
       "Failed to capture elapsed time");
-  return duration;
 #endif
+  return duration;
 }
 
 /////////////
