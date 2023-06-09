@@ -545,7 +545,7 @@ class ModelInstanceState : public BackendModelInstance {
       TRITONBACKEND_Request** requests, const uint32_t request_count,
       std::vector<TRITONBACKEND_Response*>* responses);
   TRITONSERVER_Error* RecordBackendTimestamp(
-      uint64_t* timestamp, void* cuda_event, void* timestamp_cb_data);
+      uint64_t* timestamp, void* cuda_event);
 
   // Get the naming convention for inputs/outputs from the model configuration
   TRITONSERVER_Error* GetNamingConvention(
@@ -1228,9 +1228,6 @@ ModelInstanceState::ProcessRequests(
 
   // For 'KIND_MODEL', it's fine to use CUDA events to calculate the compute
   // input duration since only one stream will be used for input collection.
-  // However, for the compute infer duration, multiple streams will be involved,
-  // so we need to launch a CUDA callback function for timestamp capturing, as
-  // demonstrated in the 'RecordBackendTimestamp' function.
   if ((Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) ||
       ((Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) && (device_cnt_ > 0))) {
 #ifdef TRITON_ENABLE_GPU
@@ -1265,28 +1262,18 @@ ModelInstanceState::ProcessRequests(
 
   std::vector<torch::jit::IValue> output_tensors;
   uint64_t compute_start_ns = 0;
-  std::atomic<uint64_t> compute_infer_start = 0;
-
-  // Record 'compute_infer_start_event_' for 'KIND_MODEL' to calculate the
-  // compute input duration. The compute infer start timestamp will be recorded
-  // in the 'RecordBackendTimestamp' function.
-  if ((Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) && (device_cnt_ > 0)) {
-#ifdef TRITON_ENABLE_GPU
-    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
-        responses, request_count, all_response_failed,
-        ConvertCUDAStatusToTritonError(
-            cudaEventRecord(
-                compute_infer_start_event_, GetCudaStreamByInstanceKind()),
-            TRITONSERVER_ERROR_INTERNAL, "Failed to record the event."));
-#endif
-  }
+  uint64_t compute_infer_start = 0;
 
   RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
       responses, request_count, all_response_failed,
       RecordBackendTimestamp(
           &compute_start_ns,
-          reinterpret_cast<void*>(&compute_infer_start_event_),
-          reinterpret_cast<void*>(&compute_infer_start)));
+          reinterpret_cast<void*>(&compute_infer_start_event_)));
+
+  // For 'KIND_MODEL', capture the timestamp for the compute infer duration.
+  if ((Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) && (device_cnt_ > 0)) {
+    SET_TIMESTAMP(compute_infer_start);
+  }
 
   // Run...
   if (!all_response_failed) {
@@ -1320,12 +1307,21 @@ ModelInstanceState::ProcessRequests(
   uint64_t compute_end_ns = 0;
   std::atomic<uint64_t> compute_output_start = 0;
 
-  RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
-      responses, request_count, all_response_failed,
-      RecordBackendTimestamp(
-          &compute_end_ns,
-          reinterpret_cast<void*>(&compute_output_start_event_),
-          reinterpret_cast<void*>(&compute_output_start)));
+  if ((Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) && (device_cnt_ > 0)) {
+#ifdef TRITON_ENABLE_GPU
+    // For the compute infer duration, multiple streams will be involved, so we
+    // need to launch a CUDA callback function for timestamp capturing.
+    cudaLaunchHostFunc(
+        GetCudaStreamByInstanceKind(), CaptureLastTimestampCallback,
+        reinterpret_cast<void*>(&compute_output_start));
+#endif
+  } else {
+    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+        responses, request_count, all_response_failed,
+        RecordBackendTimestamp(
+            &compute_end_ns,
+            reinterpret_cast<void*>(&compute_output_start_event_)));
+  }
 
 #ifdef TRITON_ENABLE_GPU
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) {
@@ -2174,25 +2170,15 @@ ModelInstanceState::ReadOutputTensors(
 
 TRITONSERVER_Error*
 ModelInstanceState::RecordBackendTimestamp(
-    uint64_t* timestamp, void* cuda_event, void* timestamp_cb_data)
+    uint64_t* timestamp, void* cuda_event)
 {
-  // For the 'KIND_GPU' instance group, we use a CUDA event to record the
-  // timestamp. For the 'KIND_MODEL' instance group, launch a CUDA callback
-  // function to record the timestamp for multiple streams.
-  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
+  if ((Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) ||
+      ((Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) && (device_cnt_ > 0))) {
 #ifdef TRITON_ENABLE_GPU
     cudaEvent_t* lcuda_event = reinterpret_cast<cudaEvent_t*>(cuda_event);
     RETURN_IF_ERROR(ConvertCUDAStatusToTritonError(
-        cudaEventRecord(*lcuda_event, stream_), TRITONSERVER_ERROR_INTERNAL,
-        "Failed to record the event."));
-#endif
-  } else if (
-      (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) && (device_cnt_ > 0)) {
-#ifdef TRITON_ENABLE_GPU
-    for (const auto& stream : stream_vec_) {
-      cudaLaunchHostFunc(
-          stream, CaptureLastTimestampCallback, timestamp_cb_data);
-    }
+        cudaEventRecord(*lcuda_event, GetCudaStreamByInstanceKind()),
+        TRITONSERVER_ERROR_INTERNAL, "Failed to record the event."));
 #endif
   } else {
     SET_TIMESTAMP(*timestamp);
@@ -2255,6 +2241,7 @@ float
 ModelInstanceState::GetCudaEventElapsedTime(
     const cudaEvent_t& start_event, const cudaEvent_t& end_event)
 {
+#ifdef TRITON_ENABLE_GPU
   // [FIXME] in the case of cudaEventElapsedTime failure, should handle
   // stats reporting more gracefully as the durations are inaccurate
   float duration = 0;
@@ -2264,6 +2251,7 @@ ModelInstanceState::GetCudaEventElapsedTime(
           TRITONSERVER_ERROR_INTERNAL, "Failed to capture elapsed time"),
       "Failed to capture elapsed time");
   return duration;
+#endif
 }
 
 /////////////
