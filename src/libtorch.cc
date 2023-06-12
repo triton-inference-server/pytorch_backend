@@ -61,19 +61,6 @@
 
 namespace triton { namespace backend { namespace pytorch {
 
-namespace {
-
-#ifdef TRITON_ENABLE_GPU
-void CUDART_CB
-CaptureTimestampCallback(void* data)
-{
-  auto* timestamp = reinterpret_cast<std::atomic<uint64_t>*>(data);
-  SET_TIMESTAMP(*timestamp);
-}
-#endif
-
-}  // namespace
-
 //
 // ModelState
 //
@@ -1304,16 +1291,22 @@ ModelInstanceState::ProcessRequests(
     }
   }
 
+#ifdef TRITON_ENABLE_GPU
+  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) {
+    // For 'KIND_MODEL', multiple streams will be involved, so we need to call
+    // 'cudaStreamSynchronize' before reading the output tensors.
+    for (auto& stream : stream_vec_) {
+      cudaStreamSynchronize(stream);
+    }
+  }
+#endif
+
   uint64_t compute_end_ns = 0;
-  std::atomic<uint64_t> compute_output_start{0};
+  uint64_t compute_output_start = 0;
 
   if ((Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) && (device_cnt_ > 0)) {
 #ifdef TRITON_ENABLE_GPU
-    // For the compute infer duration, multiple streams will be involved, so we
-    // need to launch a CUDA callback function for timestamp capturing.
-    cudaLaunchHostFunc(
-        GetCudaStreamByInstanceKind(), CaptureTimestampCallback,
-        reinterpret_cast<void*>(&compute_output_start));
+    SET_TIMESTAMP(compute_output_start);
 #endif
   } else {
     RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
@@ -1322,14 +1315,6 @@ ModelInstanceState::ProcessRequests(
             &compute_end_ns,
             reinterpret_cast<void*>(&compute_output_start_event_)));
   }
-
-#ifdef TRITON_ENABLE_GPU
-  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) {
-    for (auto& stream : stream_vec_) {
-      cudaStreamSynchronize(stream);
-    }
-  }
-#endif
 
   if (!all_response_failed) {
     if (!invalid_index) {
