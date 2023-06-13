@@ -206,6 +206,28 @@ complex execution modes and dynamic shapes. If not specified, all are enabled by
 
     `ENABLE_TENSOR_FUSER`
 
+### Support 
+
+#### Model Instance Group Kind
+
+The PyTorch backend supports the following kinds of
+[Model Instance Groups](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#instance-groups)
+where the input tensors are placed as follows:
+
+* `KIND_GPU`: Inputs are prepared on the GPU device associated with the model
+instance.
+
+* `KIND_CPU`: Inputs are prepared on the CPU.
+
+* `KIND_MODEL`: Inputs are prepared on the CPU. When loading the model, the
+backend does not choose the GPU device for the model; instead, it respects the
+device(s) specified in the model and uses them as they are during inference.
+This is useful when the model internally utilizes multiple GPUs, as demonstrated
+in this
+[example model](https://github.com/triton-inference-server/server/blob/main/qa/L0_libtorch_instance_group_kind_model/gen_models.py).
+If no device is specified in the model, the backend uses the first available
+GPU device. This feature is available starting in the 23.06 release.
+
 ### Important Notes
 
 * The execution of PyTorch model on GPU is asynchronous in nature. See
