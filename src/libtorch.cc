@@ -25,6 +25,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <stdint.h>
+
 #include <cstdint>
 #include <exception>
 
@@ -1764,8 +1765,8 @@ ModelInstanceState::SetInputTensors(
   // The inputs must be in contiguous CPU/GPU memory.
   std::vector<std::pair<TRITONSERVER_MemoryType, int64_t>> alloc_perference;
   if (device_.is_cpu()) {
-    alloc_perference = {{TRITONSERVER_MEMORY_CPU_PINNED, 0},
-                        {TRITONSERVER_MEMORY_CPU, 0}};
+    alloc_perference = {
+        {TRITONSERVER_MEMORY_CPU_PINNED, 0}, {TRITONSERVER_MEMORY_CPU, 0}};
   } else {
     alloc_perference = {{TRITONSERVER_MEMORY_GPU, device_.index()}};
   }
@@ -1885,8 +1886,8 @@ ModelInstanceState::SetInputTensors(
           ConvertDataTypeToTorchType(batch_input.DataType());
       torch::TensorOptions options{torch_dtype.second};
       auto updated_options = (dst_memory_type == TRITONSERVER_MEMORY_GPU)
-                               ? options.device(torch::kCUDA, device_.index())
-                               : options.device(torch::kCPU);
+                                 ? options.device(torch::kCUDA, device_.index())
+                                 : options.device(torch::kCPU);
 
       torch::Tensor input_tensor = torch::from_blob(
           const_cast<char*>(dst_buffer), shape, updated_options);
