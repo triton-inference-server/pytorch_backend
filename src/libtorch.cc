@@ -25,6 +25,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <stdint.h>
+
 #include <cstdint>
 #include <exception>
 
@@ -1860,8 +1861,8 @@ ModelInstanceState::SetInputTensors(
   // The inputs must be in contiguous CPU/GPU memory.
   std::vector<std::pair<TRITONSERVER_MemoryType, int64_t>> alloc_perference;
   if (device_.is_cpu()) {
-    alloc_perference = {{TRITONSERVER_MEMORY_CPU_PINNED, 0},
-                        {TRITONSERVER_MEMORY_CPU, 0}};
+    alloc_perference = {
+        {TRITONSERVER_MEMORY_CPU_PINNED, 0}, {TRITONSERVER_MEMORY_CPU, 0}};
   } else {
     alloc_perference = {{TRITONSERVER_MEMORY_GPU, device_.index()}};
   }
@@ -1914,8 +1915,8 @@ ModelInstanceState::SetInputTensors(
     // For 'KIND_MODEL', input will always be in CPU as we don't have a way to
     // query the input types.
     if (device_.is_cpu() || (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL)) {
-      alloc_perference = {{TRITONSERVER_MEMORY_CPU_PINNED, 0},
-                          {TRITONSERVER_MEMORY_CPU, 0}};
+      alloc_perference = {
+          {TRITONSERVER_MEMORY_CPU_PINNED, 0}, {TRITONSERVER_MEMORY_CPU, 0}};
     } else {
       alloc_perference = {{TRITONSERVER_MEMORY_GPU, device_.index()}};
     }
