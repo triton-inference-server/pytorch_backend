@@ -206,7 +206,7 @@ complex execution modes and dynamic shapes. If not specified, all are enabled by
 
     `ENABLE_TENSOR_FUSER`
 
-### Support 
+### Support
 
 #### Model Instance Group Kind
 
