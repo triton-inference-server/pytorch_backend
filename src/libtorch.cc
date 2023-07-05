@@ -2377,11 +2377,6 @@ ModelInstanceState::ReadOutputTensors(
                              &response_state, request, name.c_str(),
                              TRITONSERVER_TYPE_BYTES, batchn_shape.data(),
                              batchn_shape.size()));
-          RESPOND_AND_SET_NULL_IF_ERROR(
-              &response, TRITONBACKEND_StateNew(
-                             &response_state, request, name.c_str(),
-                             TRITONSERVER_TYPE_BYTES, batchn_shape.data(),
-                             batchn_shape.size()));
 
           string_buffer.emplace_back(new std::string());
           cuda_copy |= SetStringStateBuffer(
