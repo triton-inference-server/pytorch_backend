@@ -1552,7 +1552,7 @@ ModelInstanceState::Execute(
           std::get<1>(model_state_->EnabledJitExecutor());
     }
 
-    // Fuser. Parameter is ignored if NVFuser parameter is explicitily
+    // Fuser. Parameter is ignored if NVFuser parameter is explicitly
     // set (either enabled or disabled). No change is made unless
     // fuser is explicitly set in parameters.
     if (!std::get<0>(model_state_->EnabledNvfuserPair()) &&

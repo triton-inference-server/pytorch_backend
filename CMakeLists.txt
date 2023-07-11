@@ -1,4 +1,4 @@
-# Copyright 2019-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -85,7 +85,7 @@ find_package(Python3 REQUIRED COMPONENTS Development)
 #
 # Dependencies
 #
-# FetchContent's composibility isn't very good. We must include the
+# FetchContent's composability isn't very good. We must include the
 # transitive closure of all repos so that we can override the tag.
 #
 include(FetchContent)
@@ -181,7 +181,7 @@ set(OPENCV_LIBS
     "libopencv_highgui.so"
     "libopencv_imgcodecs.so"
     "libopencv_imgproc.so"
-    "libopencv_core.so" 
+    "libopencv_core.so"
     "libopencv_calib3d.so"
     "libopencv_flann.so"
     "libopencv_features2d.so"
@@ -190,7 +190,7 @@ set(OPENCV_LIBS
 )
 
 # The patchelf commands ensure the MKL libraries are loaded correctly during runtime
-# Without these, the framework/backend complains of missing libraries / symbols and 
+# Without these, the framework/backend complains of missing libraries / symbols and
 # in some cases leads to segmentation faults.
 if (${TRITON_PYTORCH_DOCKER_BUILD})
   string(REPLACE ";" " " LIBTORCH_LIBS_STR "${LIBTORCH_LIBS}")
