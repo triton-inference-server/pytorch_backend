@@ -147,6 +147,8 @@ class ModelState : public BackendModel {
   std::map<
       std::pair<bool, int64_t>, std::shared_ptr<torch::jit::script::Module>>
       torch_models_;
+  // Mutex to protect concurrent access of model state by model instances
+  std::mutex model_mtx_;
 
   // model_outputs is a map that contains unique outputs that the model must
   // provide. The first pair is the model output index and the second is
@@ -269,6 +271,7 @@ ModelState::LoadModel(
   std::pair<bool, int> device_pair;
   if (enable_weight_sharing_) {
     device_pair = std::make_pair(!device.is_cpu(), device.index());
+    std::unique_lock<std::mutex> lk(model_mtx_);
     auto mit = torch_models_.find(device_pair);
     if (mit != torch_models_.end()) {
       *torch_model = mit->second;
@@ -307,6 +310,7 @@ ModelState::LoadModel(
   }
 
   if (enable_weight_sharing_) {
+    std::unique_lock<std::mutex> lk(model_mtx_);
     if (!((torch_models_.emplace(device_pair, *torch_model)).second)) {
       std::string type = device.is_cpu() ? "CPU" : "GPU";
       LOG_MESSAGE(
