@@ -120,7 +120,7 @@ class ModelState : public BackendModel {
   // Flag to indicate whether optimized execution is enabled. Defaults to true.
   bool enable_optimized_execution_;
 
-  // Flag to indicate whether inference mode is enabled. Defaults to false.
+  // Flag to indicate whether inference mode is enabled. Defaults to true.
   bool enable_inference_mode_;
 
   // Flag to indicate whether cache cleaning after each run is enabled.
@@ -758,6 +758,11 @@ ModelInstanceState::ClearCache()
 
 ModelInstanceState::~ModelInstanceState()
 {
+  LOG_MESSAGE(
+      TRITONSERVER_LOG_INFO,
+      (std::string("Number of model counts before reset: ") +
+       std::to_string(torch_model_.use_count()))
+          .c_str());
   torch_model_.reset();
   ClearCache();
 
@@ -1531,7 +1536,7 @@ ModelInstanceState::Execute(
 {
   NVTX_RANGE(nvtx_, "Execute " + Name());
 
-  torch::jit::IValue model_outputs_;
+  torch::jit::IValue model_outputs;
 
   try {
     // enable/disable optimized execution
@@ -1590,15 +1595,15 @@ ModelInstanceState::Execute(
         input_dict.insert(input_index.first, ival.toTensor());
       }
       std::vector<torch::jit::IValue> input_dict_ivalue = {input_dict};
-      model_outputs_ = torch_model_->forward(input_dict_ivalue);
+      model_outputs = torch_model_->forward(input_dict_ivalue);
     } else {
-      model_outputs_ = torch_model_->forward(*input_tensors);
+      model_outputs = torch_model_->forward(*input_tensors);
     }
 
-    if (model_outputs_.isTuple()) {
-      auto model_outputs_tuple = model_outputs_.toTuple();
+    if (model_outputs.isTuple()) {
+      auto model_outputstuple = model_outputs.toTuple();
       size_t op_index = 0;
-      for (auto& m_op : model_outputs_tuple->elements()) {
+      for (auto& m_op : model_outputstuple->elements()) {
         if (m_op.isList()) {
           auto list_output = m_op.toList();
           if (list_output.elementType()->kind() != c10::TypeKind::StringType) {
@@ -1614,16 +1619,16 @@ ModelInstanceState::Execute(
         }
         op_index++;
       }
-    } else if (model_outputs_.isTensor()) {
-      output_tensors->push_back(model_outputs_);
-    } else if (model_outputs_.isList()) {
-      auto list_output = model_outputs_.toList();
+    } else if (model_outputs.isTensor()) {
+      output_tensors->push_back(model_outputs);
+    } else if (model_outputs.isList()) {
+      auto list_output = model_outputs.toList();
       if (list_output.elementType()->kind() != c10::TypeKind::StringType) {
         throw std::invalid_argument(
             "output must be of type Tensor or List[str], received List[" +
             list_output.elementType()->str() + "]");
       }
-      output_tensors->push_back(model_outputs_);
+      output_tensors->push_back(model_outputs);
     } else {
       throw std::invalid_argument(
           "output must be of type Tensor, List[str] or Tuple containing one of "
