@@ -504,6 +504,13 @@ install(
     ${INSTALL_CONFIGDIR}
 )
 
+install(
+  FILES
+    src/model.py
+  DESTINATION
+    ${CMAKE_INSTALL_PREFIX}/backends/pytorch
+)
+
 include(CMakePackageConfigHelpers)
 configure_package_config_file(
   ${CMAKE_CURRENT_LIST_DIR}/cmake/TritonPyTorchBackendConfig.cmake.in
