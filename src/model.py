@@ -43,6 +43,7 @@ import triton_python_backend_utils as pb_utils
 
 
 def _get_model_path(config):
+    # FIXME: Add support for torch.export IR models (.pt2)
     filenames = ["model.py", "model.pt"]
     if config["default_model_filename"]:
         filenames.insert(0, config["default_model_filename"])
