@@ -98,10 +98,6 @@ class ModelState : public BackendModel {
     return enable_jit_executor_pair_;
   }
   bool EnabledInferenceMode() { return enable_inference_mode_; }
-  const std::pair<bool, bool>& EnabledNvfuserPair() const
-  {
-    return enable_nvfuser_pair_;
-  }
   bool EnabledCacheCleaning() { return enable_cache_cleaning_; }
 
   bool EnabledWeightSharing() { return enable_weight_sharing_; }
@@ -132,15 +128,10 @@ class ModelState : public BackendModel {
 
   // Flag pairs to indicate if various JIT settings are set and
   // enabled respectively. Defaults to (false, true). Default behavior
-  // is to do nothing if not explicitly set. Tensor fuser flag is
-  // ignore if nvfuser is explicitly set.
+  // is to do nothing if not explicitly set.
   std::pair<bool, bool> enable_tensor_fuser_pair_;
   std::pair<bool, bool> enable_jit_profiling_pair_;
   std::pair<bool, bool> enable_jit_executor_pair_;
-
-  // Flag pair to indicate whether nvfuser is set and enabled respectively.
-  // Defaults to (false, false).
-  std::pair<bool, bool> enable_nvfuser_pair_;
 
   // Model mapping for shared TorchScript model across all instances on the
   // same device. The key is a pair of isGPU and device index.
@@ -233,8 +224,7 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
       enable_inference_mode_(true), enable_cache_cleaning_(false),
       enable_weight_sharing_(false), enable_tensor_fuser_pair_({false, true}),
       enable_jit_profiling_pair_({false, true}),
-      enable_jit_executor_pair_({false, true}),
-      enable_nvfuser_pair_({false, false})
+      enable_jit_executor_pair_({false, true})
 {
 }
 
@@ -474,29 +464,6 @@ ModelState::ParseParameters()
            (enable_jit_executor ? "enabled" : "disabled") +
            " for model instance '" + Name() + "'")
               .c_str());
-    }
-
-    // If 'ENABLE_NVFUSER' is not present in 'parameters' then no
-    // update is made to 'enable_nvfuser'.
-    bool enable_nvfuser = false;
-    err = ParseParameter(params, "ENABLE_NVFUSER", &enable_nvfuser);
-    if (err != nullptr) {
-      if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
-        return err;
-      } else {
-        LOG_MESSAGE(
-            TRITONSERVER_LOG_INFO, (std::string("NvFuser is not specified") +
-                                    " for model instance '" + Name() + "'")
-                                       .c_str());
-        TRITONSERVER_ErrorDelete(err);
-      }
-    } else {
-      enable_nvfuser_pair_ = {true, enable_nvfuser};
-      LOG_MESSAGE(
-          TRITONSERVER_LOG_INFO, (std::string("NvFuser is ") +
-                                  (enable_nvfuser ? "enabled" : "disabled") +
-                                  " for model instance '" + Name() + "'")
-                                     .c_str());
     }
   }
 
@@ -1552,32 +1519,11 @@ ModelInstanceState::Execute(
           std::get<1>(model_state_->EnabledJitExecutor());
     }
 
-    // Fuser. Parameter is ignored if NVFuser parameter is explicitly
-    // set (either enabled or disabled). No change is made unless
-    // fuser is explicitly set in parameters.
-    if (!std::get<0>(model_state_->EnabledNvfuserPair()) &&
-        std::get<0>(model_state_->EnabledTensorExprFuser())) {
+    // Fuser. No change is made unless fuser is explicitly set in
+    // parameters.
+    if (std::get<0>(model_state_->EnabledTensorExprFuser())) {
       torch::jit::setTensorExprFuserEnabled(
           std::get<1>(model_state_->EnabledTensorExprFuser()));
-    }
-
-    // NV-Fuser. No change is made unless parameter is explicitly set.
-    if (std::get<0>(model_state_->EnabledNvfuserPair())) {
-      bool is_device_gpu =
-          (device_.is_cuda() ||
-           ((Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) &&
-            (device_cnt_ > 0)));
-      if (std::get<1>(model_state_->EnabledNvfuserPair()) && is_device_gpu) {
-        torch::jit::overrideCanFuseOnCPU(false);
-        torch::jit::overrideCanFuseOnGPU(false);
-        torch::jit::setTensorExprFuserEnabled(false);
-        torch::jit::fuser::cuda::setEnabled(true);
-      } else {
-        torch::jit::overrideCanFuseOnCPU(true);
-        torch::jit::overrideCanFuseOnGPU(true);
-        torch::jit::setTensorExprFuserEnabled(true);
-        torch::jit::fuser::cuda::setEnabled(false);
-      }
     }
 
     torch::NoGradGuard no_grad;
