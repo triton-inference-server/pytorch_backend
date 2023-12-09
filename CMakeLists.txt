@@ -506,14 +506,18 @@ install(
 )
 
 if (${TRITON_PYTORCH_ENABLE_PYTHON_RUNTIME})
-  install(CODE "execute_process(COMMAND bash -c ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_pb_exec_env.sh)")
-  install(
-    FILES
-      src/model.py
-      ${CMAKE_CURRENT_BINARY_DIR}/pb_exec_env_model.py.tar.gz
-    DESTINATION
-      ${CMAKE_INSTALL_PREFIX}/backends/pytorch
-  )
+  if ((CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "x86_64") OR (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "AMD64"))
+    install(CODE "execute_process(COMMAND bash -c ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_pb_exec_env.sh)")
+    install(
+      FILES
+        src/model.py
+        ${CMAKE_CURRENT_BINARY_DIR}/pb_exec_env_model.py.tar.gz
+      DESTINATION
+        ${CMAKE_INSTALL_PREFIX}/backends/pytorch
+    )
+  else()
+    message(WARNING "Skipped PyTorch Python runtime on unsupported architecture ${CMAKE_HOST_SYSTEM_PROCESSOR}")
+  endif()
 endif() # TRITON_PYTORCH_ENABLE_PYTHON_RUNTIME
 
 include(CMakePackageConfigHelpers)
