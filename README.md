@@ -144,26 +144,6 @@ key: "INFERENCE_MODE"
 }
 ```
 
-* `ENABLE_NVFUSER`: Boolean flag to enable the NvFuser (CUDA Graph
-Fuser) optimization for TorchScript models. If not specified, the
-default PyTorch fuser is used. If `ENABLE_NVFUSER` is specified, the
-`ENABLE_TENSOR_FUSER` configuration (see below) is ignored.
-
-Please note that in some models generated using trace in old PyTorch versions might not work
-correctly with NvFuser. We recommend using scripting and a recent version of PyTorch
-to generate these models.
-
-The section of model config file specifying this parameter will look like:
-
-```
-parameters: {
-key: "ENABLE_NVFUSER"
-    value: {
-    string_value: "true"
-    }
-}
-```
-
 * `ENABLE_WEIGHT_SHARING`: Boolean flag to enable model instances on the same device to
 share weights. This optimization should not be used with stateful models. If not specified,
 weight sharing is disabled.
@@ -203,8 +183,6 @@ complex execution modes and dynamic shapes. If not specified, all are enabled by
     `ENABLE_JIT_EXECUTOR`
 
     `ENABLE_JIT_PROFILING`
-
-    `ENABLE_TENSOR_FUSER`
 
 ### Support
 
