@@ -398,8 +398,8 @@ ModelState::ParseParameters()
          " for model instance '" + Name() + "'")
             .c_str());
 
-    // If 'INFERENCE_MODE' is not present in 'parameters' then no update is made
-    // to 'enable_inference_mode_'.
+    // If 'DISABLE_CUDNN' is not present in 'parameters' then no update is made
+    // to 'enable_cudnn_'.
     bool disable_cudnn = false;
     err = ParseParameter(params, "DISABLE_CUDNN", &disable_cudnn);
     if (err != nullptr) {
