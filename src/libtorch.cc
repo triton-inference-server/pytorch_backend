@@ -98,6 +98,7 @@ class ModelState : public BackendModel {
     return enable_jit_executor_pair_;
   }
   bool EnabledInferenceMode() { return enable_inference_mode_; }
+  bool EnabledCudnn() { return enable_cudnn_; }
   bool EnabledCacheCleaning() { return enable_cache_cleaning_; }
 
   bool EnabledWeightSharing() { return enable_weight_sharing_; }
@@ -118,6 +119,9 @@ class ModelState : public BackendModel {
 
   // Flag to indicate whether inference mode is enabled. Defaults to false.
   bool enable_inference_mode_;
+
+  // Flag to indicate whether cudnn is enabled. Defaults to true.
+  bool enable_cudnn_;
 
   // Flag to indicate whether cache cleaning after each run is enabled.
   // Defaults to false.
@@ -221,8 +225,9 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     : BackendModel(triton_model), enable_optimized_execution_(true),
-      enable_inference_mode_(true), enable_cache_cleaning_(false),
-      enable_weight_sharing_(false), enable_tensor_fuser_pair_({false, true}),
+      enable_inference_mode_(true), enable_cudnn_(true),
+      enable_cache_cleaning_(false), enable_weight_sharing_(false), 
+      enable_tensor_fuser_pair_({false, true}),
       enable_jit_profiling_pair_({false, true}),
       enable_jit_executor_pair_({false, true})
 {
@@ -384,6 +389,25 @@ ModelState::ParseParameters()
         TRITONSERVER_LOG_INFO,
         (std::string("Inference Mode is ") +
          (enable_inference_mode_ ? "enabled" : "disabled") +
+         " for model instance '" + Name() + "'")
+            .c_str());
+
+    // If 'INFERENCE_MODE' is not present in 'parameters' then no update is made
+    // to 'enable_inference_mode_'.
+    bool disable_cudnn = false;
+    err = ParseParameter(params, "DISABLE_CUDNN", &disable_cudnn);
+    if (err != nullptr) {
+      if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
+        return err;
+      } else {
+        TRITONSERVER_ErrorDelete(err);
+      }
+    }
+    enable_cudnn_ = !disable_cudnn;
+    LOG_MESSAGE(
+        TRITONSERVER_LOG_INFO,
+        (std::string("cuDNN is ") +
+         (enable_cudnn_ ? "enabled" : "disabled") +
          " for model instance '" + Name() + "'")
             .c_str());
 
@@ -1507,6 +1531,9 @@ ModelInstanceState::Execute(
 
     // enable/disable inference mode - supersedes NoGradGuard
     torch::InferenceMode infer_guard(model_state_->EnabledInferenceMode());
+
+    // enable/disable cudnn
+    at::globalContext().setUserEnabledCuDNN(model_state_->EnabledCudnn());
 
     // JIT. No change is made unless parameter is explicitly set.
     if (std::get<0>(model_state_->EnabledJitProfiling())) {
