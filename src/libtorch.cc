@@ -2143,7 +2143,7 @@ ModelInstanceState::SetInputTensors(
         (*input_tensors)[input_index_map_[input_name]] = input_tensor;
       } else {
         // torch:from_blob seems not working when the input size is 0
-        // create zero-lenght inputs directly
+        // create zero-length inputs directly
         torch::Tensor input_tensor =
             torch::zeros(batchn_shape, updated_options);
         (*input_tensors)[input_index_map_[input_name]] = input_tensor;
