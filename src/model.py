@@ -35,10 +35,6 @@ try:
 except ModuleNotFoundError as error:
     raise RuntimeError("Missing/Incomplete PyTorch package installation") from error
 
-# triton_python_backend_utils is available in every Triton Python model. You
-# need to use this module to create inference requests and responses. It also
-# contains some utility functions for extracting information from model_config
-# and converting Triton input/output types to numpy types.
 import triton_python_backend_utils as pb_utils
 
 
