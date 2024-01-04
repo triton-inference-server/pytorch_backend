@@ -232,7 +232,7 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     : BackendModel(triton_model), enable_optimized_execution_(true),
       enable_inference_mode_(true), enable_cudnn_(true),
-      enable_cache_cleaning_(false), enable_weight_sharing_(false), 
+      enable_cache_cleaning_(false), enable_weight_sharing_(false),
       enable_tensor_fuser_pair_({false, true}),
       enable_jit_profiling_pair_({false, true}),
       enable_jit_executor_pair_({false, true})
@@ -412,8 +412,7 @@ ModelState::ParseParameters()
     enable_cudnn_ = !disable_cudnn;
     LOG_MESSAGE(
         TRITONSERVER_LOG_INFO,
-        (std::string("cuDNN is ") +
-         (enable_cudnn_ ? "enabled" : "disabled") +
+        (std::string("cuDNN is ") + (enable_cudnn_ ? "enabled" : "disabled") +
          " for model instance '" + Name() + "'")
             .c_str());
 
