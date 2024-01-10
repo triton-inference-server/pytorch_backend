@@ -321,7 +321,7 @@ model_repository/
 
 The `model.pt` is the TorchScript model file.
 
-### Customization
+## Customization
 
 The following PyTorch settings may be customized by setting parameters on the
 `config.pbtxt`.
