@@ -287,6 +287,8 @@ directory as the [Python runtime](src/model.py).
 
 ## Model Layout
 
+### PyTorch 2.0 models
+
 The model repository should look like:
 
 ```
@@ -294,7 +296,7 @@ model_repository/
 `-- model_directory
     |-- 1
     |   |-- model.py
-    |   `-- model.pt
+    |   `-- [model.pt]
     `-- config.pbtxt
 ```
 
@@ -303,8 +305,21 @@ should extend the
 [`torch.nn.Module`](https://pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module).
 The `model.pt` may be optionally provided which contains the saved
 [`state_dict`](https://pytorch.org/tutorials/beginner/saving_loading_models.html#saving-loading-model-for-inference)
-of the model. For serving TorchScript models, a `model.pt` TorchScript can be
-provided in place of the `model.py` file.
+of the model.
+
+### TorchScript models
+
+The model repository should look like:
+
+```
+model_repository/
+`-- model_directory
+    |-- 1
+    |   `-- model.pt
+    `-- config.pbtxt
+```
+
+The `model.pt` is the TorchScript model file.
 
 ### Customization
 
