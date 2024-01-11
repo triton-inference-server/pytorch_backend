@@ -28,6 +28,9 @@ cmake_minimum_required (VERSION 3.18)
 
 project(tritonpytorchbackend LANGUAGES C CXX)
 
+# Use C++17 standard as Triton's minimum required.
+set(TRITON_MIN_CXX_STANDARD 17 CACHE STRING "The minimum C++ standard which features are requested to build this target.")
+
 #
 # Options
 #
@@ -295,7 +298,7 @@ endif() # TRITON_PYTORCH_DOCKER_BUILD
 # Need to turn off -Werror due to Torchvision vision.h extern initialization
 # Unfortunately gcc does not provide a specific flag to ignore the specific
 # warning: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=45977
-target_compile_features(triton-pytorch-backend PRIVATE cxx_std_11)
+target_compile_features(triton-pytorch-backend PRIVATE cxx_std_${TRITON_MIN_CXX_STANDARD})
 target_compile_options(
   triton-pytorch-backend PRIVATE
   $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:
