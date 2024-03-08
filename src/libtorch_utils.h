@@ -62,4 +62,11 @@ TRITONSERVER_Error* ParseParameter(
     triton::common::TritonJson::Value& params, const std::string& mkey,
     bool* value);
 
+// If the key 'mkey' is present in 'params' then update 'value' with the
+// value associated with that key. If 'mkey' is not present in 'params' then
+// 'value' is set to 'default_value'.
+TRITONSERVER_Error* ParseParameterInt(
+    triton::common::TritonJson::Value& params, const std::string& mkey,
+    int* value);
+
 }}}  // namespace triton::backend::pytorch
