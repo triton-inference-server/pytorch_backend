@@ -176,6 +176,20 @@ key: "ENABLE_CACHE_CLEANING"
 }
 ```
 
+* `MODULE_METHOD_NAME`: String flag to specify which method on the PyTorch model is being called.
+Default value is `forward`.
+
+The section of model config file specifying this parameter will look like:
+
+```
+parameters: {
+key: "MODULE_METHOD_NAME"
+    value: {
+    string_value:"custom_method"
+    }
+}
+```
+
 * Additional Optimizations: Three additional boolean parameters are available to disable
 certain Torch optimizations that can sometimes cause latency regressions in models with
 complex execution modes and dynamic shapes. If not specified, all are enabled by default.
