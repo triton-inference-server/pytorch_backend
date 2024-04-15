@@ -176,6 +176,47 @@ key: "ENABLE_CACHE_CLEANING"
 }
 ```
 
+* `INTER_OP_THREAD_COUNT`:
+
+PyTorch allows using multiple CPU threads during TorchScript model inference.
+One or more inference threads execute a model’s forward pass on the given
+inputs. Each inference thread invokes a JIT interpreter that executes the ops
+of a model inline, one by one. This parameter sets the size of this thread
+pool. The default value of this setting is the number of cpu cores. Please refer
+to [this](https://pytorch.org/docs/stable/notes/cpu_threading_torchscript_inference.html)
+document for learning how to set this parameter properly.
+
+The section of model config file specifying this parameter will look like:
+
+```
+parameters: {
+key: "INTER_OP_THREAD_COUNT"
+    value: {
+    string_value:"1"
+    }
+}
+```
+
+* `INTRA_OP_THREAD_COUNT`:
+
+In addition to the inter-op parallelism, PyTorch can also utilize multiple threads
+within the ops (intra-op parallelism). This can be useful in many cases, including
+element-wise ops on large tensors, convolutions, GEMMs, embedding lookups and
+others. The default value for this setting is the number of CPU cores. Please refer
+to [this](https://pytorch.org/docs/stable/notes/cpu_threading_torchscript_inference.html)
+document for learning how to set this parameter properly.
+
+The section of model config file specifying this parameter will look like:
+
+```
+parameters: {
+key: "INTRA_OP_THREAD_COUNT"
+    value: {
+    string_value:"1"
+    }
+}
+```
+
 * Additional Optimizations: Three additional boolean parameters are available to disable
 certain Torch optimizations that can sometimes cause latency regressions in models with
 complex execution modes and dynamic shapes. If not specified, all are enabled by default.
