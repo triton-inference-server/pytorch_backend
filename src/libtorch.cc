@@ -1,4 +1,4 @@
-// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -55,6 +55,12 @@
 #include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime_api.h>
 #endif  // TRITON_ENABLE_GPU
+
+// for thread control
+// https://pytorch.org/docs/stable/notes/cpu_threading_torchscript_inference.html#runtime-api
+// https://github.com/pytorch/pytorch/blob/v2.2.1-rc3/aten/src/ATen/Parallel.h#L133
+#include <ATen/Parallel.h>
+
 
 //
 // PyTorch C++ (LibTorch) Backend that implements the TRITONBACKEND API.
@@ -464,6 +470,54 @@ ModelState::ParseParameters()
            (enable_jit_executor ? "enabled" : "disabled") +
            " for model instance '" + Name() + "'")
               .c_str());
+    }
+
+    // If 'INTRA_OP_THREAD_COUNT' is not present in 'parameters' then no update
+    // is made to 'intra_op_thread_count', which by default will take all
+    // threads
+    int intra_op_thread_count = -1;
+    err = ParseParameter(
+        params, "INTRA_OP_THREAD_COUNT", &intra_op_thread_count);
+    if (err != nullptr) {
+      if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
+        return err;
+      } else {
+        TRITONSERVER_ErrorDelete(err);
+      }
+    } else {
+      if (intra_op_thread_count > 0) {
+        at::set_num_threads(intra_op_thread_count);
+        LOG_MESSAGE(
+            TRITONSERVER_LOG_INFO,
+            (std::string("Intra op thread count is set to ") +
+             std::to_string(intra_op_thread_count) + " for model instance '" +
+             Name() + "'")
+                .c_str());
+      }
+    }
+
+    // If 'INTER_OP_THREAD_COUNT' is not present in 'parameters' then no update
+    // is made to 'inter_op_thread_count', which by default will take all
+    // threads
+    int inter_op_thread_count = -1;
+    err = ParseParameter(
+        params, "INTER_OP_THREAD_COUNT", &inter_op_thread_count);
+    if (err != nullptr) {
+      if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
+        return err;
+      } else {
+        TRITONSERVER_ErrorDelete(err);
+      }
+    } else {
+      if (inter_op_thread_count > 0) {
+        at::set_num_interop_threads(inter_op_thread_count);
+        LOG_MESSAGE(
+            TRITONSERVER_LOG_INFO,
+            (std::string("Inter op thread count is set to ") +
+             std::to_string(inter_op_thread_count) + " for model instance '" +
+             Name() + "'")
+                .c_str());
+      }
     }
   }
 

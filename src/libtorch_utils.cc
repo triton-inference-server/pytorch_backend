@@ -1,4 +1,4 @@
-// Copyright (c) 2020-21 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright (c) 2020-24 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -148,6 +148,19 @@ ParseParameter(
 
   return nullptr;
 }
+
+TRITONSERVER_Error*
+ParseParameter(
+    triton::common::TritonJson::Value& params, const std::string& mkey,
+    int* value)
+{
+  std::string value_str;
+  RETURN_IF_ERROR(GetParameterValue(params, mkey, &value_str));
+  RETURN_IF_ERROR(ParseIntValue(value_str, value));
+
+  return nullptr;
+}
+
 
 #ifdef TRITON_ENABLE_GPU
 TRITONSERVER_Error*
