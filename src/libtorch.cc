@@ -476,8 +476,8 @@ ModelState::ParseParameters()
     // is made to 'intra_op_thread_count', which by default will take all
     // threads
     int intra_op_thread_count = -1;
-    err = ParseParameter(
-        params, "INTRA_OP_THREAD_COUNT", &intra_op_thread_count);
+    err =
+        ParseParameter(params, "INTRA_OP_THREAD_COUNT", &intra_op_thread_count);
     if (err != nullptr) {
       if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
         return err;
@@ -500,8 +500,8 @@ ModelState::ParseParameters()
     // is made to 'inter_op_thread_count', which by default will take all
     // threads
     int inter_op_thread_count = -1;
-    err = ParseParameter(
-        params, "INTER_OP_THREAD_COUNT", &inter_op_thread_count);
+    err =
+        ParseParameter(params, "INTER_OP_THREAD_COUNT", &inter_op_thread_count);
     if (err != nullptr) {
       if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
         return err;
