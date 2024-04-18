@@ -1,4 +1,4 @@
-// Copyright (c) 2020-21 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright (c) 2020-24 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -150,7 +150,7 @@ ParseParameter(
 }
 
 TRITONSERVER_Error*
-ParseParameterInt(
+ParseParameter(
     triton::common::TritonJson::Value& params, const std::string& mkey,
     int* value)
 {

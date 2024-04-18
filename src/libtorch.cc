@@ -1,4 +1,4 @@
-// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -472,11 +472,11 @@ ModelState::ParseParameters()
               .c_str());
     }
 
-    // If "INTRA_OP_THREAD_COUNT" is not present in 'parameters' then no update
+    // If 'INTRA_OP_THREAD_COUNT' is not present in 'parameters' then no update
     // is made to 'intra_op_thread_count', which by default will take all
     // threads
     int intra_op_thread_count = -1;
-    err = ParseParameterInt(
+    err = ParseParameter(
         params, "INTRA_OP_THREAD_COUNT", &intra_op_thread_count);
     if (err != nullptr) {
       if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
@@ -496,11 +496,11 @@ ModelState::ParseParameters()
       }
     }
 
-    // If "INTER_OP_THREAD_COUNT" is not present in 'parameters' then no update
+    // If 'INTER_OP_THREAD_COUNT' is not present in 'parameters' then no update
     // is made to 'inter_op_thread_count', which by default will take all
     // threads
     int inter_op_thread_count = -1;
-    err = ParseParameterInt(
+    err = ParseParameter(
         params, "INTER_OP_THREAD_COUNT", &inter_op_thread_count);
     if (err != nullptr) {
       if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {

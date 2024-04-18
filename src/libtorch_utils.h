@@ -1,4 +1,4 @@
-// Copyright 2020-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -65,7 +65,7 @@ TRITONSERVER_Error* ParseParameter(
 // If the key 'mkey' is present in 'params' then update 'value' with the
 // value associated with that key. If 'mkey' is not present in 'params' then
 // 'value' is set to 'default_value'.
-TRITONSERVER_Error* ParseParameterInt(
+TRITONSERVER_Error* ParseParameter(
     triton::common::TritonJson::Value& params, const std::string& mkey,
     int* value);
 
