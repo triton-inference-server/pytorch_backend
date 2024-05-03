@@ -61,8 +61,6 @@
 // https://github.com/pytorch/pytorch/blob/v2.2.1-rc3/aten/src/ATen/Parallel.h#L133
 #include <ATen/Parallel.h>
 
-// Default forward method to call on PyTorch modules
-const std::string DEFAULT_MODULE_METHOD_NAME = "forward";
 
 //
 // PyTorch C++ (LibTorch) Backend that implements the TRITONBACKEND API.
@@ -113,7 +111,6 @@ class ModelState : public BackendModel {
   {
     return model_outputs_;
   }
-  const std::string& ModuleMethodName() { return module_method_name_; }
 
  private:
   ModelState(TRITONBACKEND_Model* triton_model);
@@ -156,10 +153,6 @@ class ModelState : public BackendModel {
   // is specified both in the output section and state section, it indicates
   // that the backend must return the output state to the client too.
   std::map<std::string, std::pair<int64_t, int64_t>> model_outputs_;
-
-  // Method to call on PyTorch Module.
-  // Defaults to DEFAULT_MODULE_METHOD_NAME.
-  std::string module_method_name_;
 };
 
 TRITONSERVER_Error*
@@ -237,8 +230,7 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
       enable_inference_mode_(true), enable_cache_cleaning_(false),
       enable_weight_sharing_(false), enable_tensor_fuser_pair_({false, true}),
       enable_jit_profiling_pair_({false, true}),
-      enable_jit_executor_pair_({false, true}),
-      module_method_name_(DEFAULT_MODULE_METHOD_NAME)
+      enable_jit_executor_pair_({false, true})
 {
 }
 
@@ -526,30 +518,6 @@ ModelState::ParseParameters()
              Name() + "'")
                 .c_str());
       }
-    }
-
-    // If 'MODULE_METHOD_NAME' is not present in 'parameters' then
-    // 'module_method_name_' is set to 'DEFAULT_MODULE_METHOD_NAME' ('forward').
-    std::string module_method_name = DEFAULT_MODULE_METHOD_NAME;
-    err = GetParameterValue(params, "MODULE_METHOD_NAME", &module_method_name);
-    if (err != nullptr) {
-      if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
-        return err;
-      } else {
-        LOG_MESSAGE(
-            TRITONSERVER_LOG_INFO,
-            (std::string("module_method_name is not specified") +
-             " for model instance '" + Name() + "'")
-                .c_str());
-        TRITONSERVER_ErrorDelete(err);
-      }
-    } else {
-      module_method_name_ = module_method_name;
-      LOG_MESSAGE(
-          TRITONSERVER_LOG_INFO,
-          (std::string("module_method_name is ") + module_method_name_ +
-           " for model instance '" + Name() + "'")
-              .c_str());
     }
   }
 
@@ -972,20 +940,7 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
   // configuration specifies only those.
   std::vector<std::string> allowed_inputs;
 
-  // First check if method exists in the model and throw an error if absent
-  const auto methodNameToExecute = model_state_->ModuleMethodName();
-  const auto optionalMethodHandle =
-      torch_model_->find_method(methodNameToExecute);
-  if (!optionalMethodHandle.has_value()) {
-    return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_INVALID_ARG,
-        (std::string("unable to find method '") + methodNameToExecute +
-         "' in model '" + model_path_ + "'")
-            .c_str());
-  }
-
-  // Get the method schema and validate the inputs
-  const torch::jit::Method& method = optionalMethodHandle.value();
+  const torch::jit::Method& method = torch_model_->get_method("forward");
   const auto& schema = method.function().getSchema();
   const std::vector<c10::Argument>& arguments = schema.arguments();
 
@@ -1628,23 +1583,17 @@ ModelInstanceState::Execute(
     torch::NoGradGuard no_grad;
 
     // If input is a dictionary, prepare dictionary from 'input_tensors'.
-    std::string module_method_name = model_state_->ModuleMethodName();
-    std::vector<c10::IValue> inputs;
     if (is_dict_input_) {
-      c10::Dict<std::string, at::Tensor> dict;
+      torch::Dict<std::string, torch::Tensor> input_dict;
       for (auto& input_index : input_index_map_) {
         torch::jit::IValue ival = (*input_tensors)[input_index.second];
-        dict.insert(input_index.first, ival.toTensor());
+        input_dict.insert(input_index.first, ival.toTensor());
       }
-      inputs.push_back(dict);
+      std::vector<torch::jit::IValue> input_dict_ivalue = {input_dict};
+      model_outputs_ = torch_model_->forward(input_dict_ivalue);
     } else {
-      for (auto& input_tensor : *input_tensors) {
-        inputs.push_back(input_tensor.toTensor());
-      }
+      model_outputs_ = torch_model_->forward(*input_tensors);
     }
-
-    // Actually run the method on the model.
-    model_outputs_ = torch_model_->get_method(module_method_name)(inputs);
 
     if (model_outputs_.isTuple()) {
       auto model_outputs_tuple = model_outputs_.toTuple();
