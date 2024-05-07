@@ -41,7 +41,7 @@ export PYTHONNOUSERSITE=True
 conda install -c conda-forge libstdcxx-ng=12 -y
 
 # install PyTorch
-conda install pytorch torchvision torchaudio pytorch-cuda -c pytorch -c nvidia -y
+conda install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia -y
 
 # pack environment
 rm -f pb_exec_env_model.py.tar.gz
