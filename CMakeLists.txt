@@ -230,7 +230,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.10/dist-packages/torch/lib/libtorch_global_deps.so libtorch_global_deps.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.10/dist-packages/torch/lib/libcaffe2_nvrtc.so libcaffe2_nvrtc.so
     # TODO: Revisit when not needed by making it part of cuda base container.
-    COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/cuda-12.5/targets/x86_64-linux/lib/libcusparseLt.so libcusparseLt.so
+    COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/cuda-12.5/targets/${LIBS_ARCH}-linux/lib/libcusparseLt.so libcusparseLt.so
     COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/libtorchvision.so libtorchvision.so
     COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHTRT} = 'ON' ]; then docker cp pytorch_backend_ptlib:/usr/local/lib/python3.10/dist-packages/torch_tensorrt/lib/libtorchtrt_runtime.so libtorchtrt_runtime.so; fi"
     COMMAND docker cp pytorch_backend_ptlib:/usr/local/lib/python3.10/dist-packages/torch_tensorrt/bin/torchtrtc torchtrtc || echo "error ignored..." || true
