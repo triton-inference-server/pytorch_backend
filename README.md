@@ -146,11 +146,11 @@ key: "INFERENCE_MODE"
 
 * `DISABLE_CUDNN`: Boolean flag to disable the cuDNN library. By default, cuDNN is enabled.
 
-[cuDNN](https://developer.nvidia.com/cudnn) is a GPU-accelerated library of primitives for 
+[cuDNN](https://developer.nvidia.com/cudnn) is a GPU-accelerated library of primitives for
 deep neural networks. cuDNN provides highly tuned implementations for standard routines.
 
 Typically, models run with cuDNN enabled are faster. However there are some exceptions
-where using cuDNN can be slower, cause higher memory usage or result in errors. 
+where using cuDNN can be slower, cause higher memory usage or result in errors.
 
 
 The section of model config file specifying this parameter will look like:
