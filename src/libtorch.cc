@@ -1937,21 +1937,17 @@ SetStringInputTensor(
   }
 #endif  // TRITON_ENABLE_GPU
 
-  auto callback = [](torch::List<std::string>* input_list, const char* content,
-                     const uint32_t len) {
-    // Set string value
-    input_list->push_back(std::string(content, len));
-  };
-  auto fn = std::bind(
-      callback, input_list, std::placeholders::_2, std::placeholders::_3);
-
+  std::vector<std::pair<const char*, const uint32_t>> str_list;
   err = ValidateStringBuffer(
-      content, content_byte_size, request_element_cnt, name, &element_idx, fn);
+      content, content_byte_size, request_element_cnt, name, &str_list);
+  // Set string values.
+  for (const auto& [addr, len] : str_list) {
+    input_list->push_back(std::string(addr, len));
+  }
+
   if (err != nullptr) {
     RESPOND_AND_SET_NULL_IF_ERROR(response, err);
-    if (element_idx < request_element_cnt) {
-      FillStringTensor(input_list, request_element_cnt - element_idx);
-    }
+    FillStringTensor(input_list, request_element_cnt - element_idx);
   }
   return cuda_copy;
 }
