@@ -1911,7 +1911,6 @@ SetStringInputTensor(
     cudaStream_t stream, const char* host_policy_name)
 {
   bool cuda_copy = false;
-  size_t element_idx = 0;
 
   // For string data type, we always need to have the data on CPU so
   // that we can read string length and construct the string
@@ -1926,7 +1925,7 @@ SetStringInputTensor(
       stream, &cuda_copy);
   if (err != nullptr) {
     RESPOND_AND_SET_NULL_IF_ERROR(response, err);
-    FillStringTensor(input_list, request_element_cnt - element_idx);
+    FillStringTensor(input_list, request_element_cnt);
     return cuda_copy;
   }
 
@@ -1945,9 +1944,10 @@ SetStringInputTensor(
     input_list->push_back(std::string(addr, len));
   }
 
+  size_t element_cnt = str_list.size();
   if (err != nullptr) {
     RESPOND_AND_SET_NULL_IF_ERROR(response, err);
-    FillStringTensor(input_list, request_element_cnt - element_idx);
+    FillStringTensor(input_list, request_element_cnt - element_cnt);
   }
   return cuda_copy;
 }
