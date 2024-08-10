@@ -84,7 +84,7 @@ else()
 endif()
 
 # Python.h needed by torch headers.
-find_package(Python3 REQUIRED COMPONENTS Development)
+find_package(Python REQUIRED COMPONENTS Development.Module)
 
 #
 # Dependencies
