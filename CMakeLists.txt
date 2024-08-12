@@ -84,7 +84,7 @@ else()
 endif()
 
 # Python.h needed by torch headers.
-find_package(Python REQUIRED COMPONENTS Development.Module)
+find_package(Python3 REQUIRED COMPONENTS Development.Module)
 
 set(RHEL_BUILD OFF)
 set(LIBTORCH_PATH "/usr/local/lib")
@@ -95,6 +95,8 @@ if(EXISTS "/etc/os-release")
   if(DISTRO_LIKE MATCHES ".*rhel.*" OR DISTRO_LIKE MATCHES ".*centos.*")
     set(RHEL_BUILD ON)
     set(LIBTORCH_PATH "/opt/_internal/cpython-3.10.13/lib")
+    message(WARNING "TRITON_PYTORCH_ENABLE_TORCHVISION is on, but not currently supported by RHEL Triton. Overriding to OFF.")
+    set(TRITON_PYTORCH_ENABLE_TORCHVISION OFF)
   endif()
 endif()
 
