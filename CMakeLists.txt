@@ -95,7 +95,7 @@ if(EXISTS "/etc/os-release")
   if(DISTRO_LIKE MATCHES ".*rhel.*" OR DISTRO_LIKE MATCHES ".*centos.*")
     set(RHEL_BUILD ON)
     set(LIBTORCH_PATH "/opt/_internal/cpython-3.10.13/lib")
-    message(WARNING "TRITON_PYTORCH_ENABLE_TORCHVISION is on, but not currently supported by RHEL Triton. Overriding to OFF.")
+    message(WARNING "TRITON_PYTORCH_ENABLE_TORCHVISION is ON, but not currently supported by RHEL Triton. Overriding to OFF.")
     set(TRITON_PYTORCH_ENABLE_TORCHVISION OFF)
   endif()
 endif()
@@ -233,6 +233,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
       # TODO: TPRD-371 Support Torchvision for manylinux
       #   include/torchvision
       # COMMAND ${CMAKE_COMMAND} -E make_directory "include/torchvision"
+      COMMAND ${CMAKE_COMMAND} -E make_directory "include"
       COMMAND docker pull ${TRITON_PYTORCH_DOCKER_IMAGE}
       COMMAND docker rm pytorch_backend_ptlib || echo "error ignored..." || true
       COMMAND docker create --name pytorch_backend_ptlib ${TRITON_PYTORCH_DOCKER_IMAGE}
@@ -267,8 +268,8 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
       # TODO: TPRD-371 Support Torchvision for manylinux
       # COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then cp /usr/local/lib64/libtorchvision.so libtorchvision.so; fi"
       # COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/vision/torchvision/csrc include/torchvision/torchvision
-      # COMMAND docker cp pytorch_backend_ptlib:/usr/lib64/libpng16.so.16.34.0 libpng16.so
-      # COMMAND docker cp pytorch_backend_ptlib:/usr/lib64/libjpeg.so.62.2.0 libjpeg.so
+      COMMAND docker cp pytorch_backend_ptlib:/usr/lib64/libpng16.so.16.34.0 libpng16.so
+      COMMAND cp /usr/lib64/libjpeg.so.62.2.0 libjpeg.so
       COMMAND /bin/sh -c "if [ -f libmkl_def.so.1 ]; then patchelf --add-needed libmkl_gnu_thread.so.1 libmkl_def.so.1; fi"
       COMMAND /bin/sh -c "if [ -f libmkl_def.so.1 ]; then patchelf --add-needed libmkl_core.so.1 libmkl_def.so.1; fi"
       COMMAND /bin/sh -c "if [ -f libmkl_avx2.so.1 ]; then patchelf --add-needed libmkl_gnu_thread.so.1 libmkl_avx2.so.1; fi"
