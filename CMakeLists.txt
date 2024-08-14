@@ -95,8 +95,6 @@ if(EXISTS "/etc/os-release")
   if(DISTRO_LIKE MATCHES ".*rhel.*" OR DISTRO_LIKE MATCHES ".*centos.*")
     set(RHEL_BUILD ON)
     set(LIBTORCH_PATH "/opt/_internal/cpython-3.10.13/lib")
-    message(WARNING "TRITON_PYTORCH_ENABLE_TORCHVISION is ON, but not currently supported by RHEL Triton. Overriding to OFF.")
-    set(TRITON_PYTORCH_ENABLE_TORCHVISION OFF)
   endif()
 endif()
 
@@ -230,32 +228,29 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
         ${OPENCV_LIBS}
         LICENSE.pytorch
         include/torch
-      # TODO: TPRD-371 Support Torchvision for manylinux
-      #   include/torchvision
-      # COMMAND ${CMAKE_COMMAND} -E make_directory "include/torchvision"
-      COMMAND ${CMAKE_COMMAND} -E make_directory "include"
+        include/torchvision
+      COMMAND ${CMAKE_COMMAND} -E make_directory "include/torchvision"
       COMMAND docker pull ${TRITON_PYTORCH_DOCKER_IMAGE}
       COMMAND docker rm pytorch_backend_ptlib || echo "error ignored..." || true
       COMMAND docker create --name pytorch_backend_ptlib ${TRITON_PYTORCH_DOCKER_IMAGE}
-      # Transfer and install torch wheel which contains many of the target libraries
-      COMMAND docker cp pytorch_backend_ptlib:/opt/transfer/. /tmp/ && /bin/sh -c "pip install /tmp/torch-*.whl"
       COMMAND /bin/sh -c "for i in ${LIBTORCH_LIBS_STR} ; do echo copying $i && docker cp -L pytorch_backend_ptlib:${LIBTORCH_PATH}/$i $i ; done"
-      COMMAND cp ${LIBTORCH_PATH}/python3.10/site-packages/torch/lib/libc10.so libc10.so
-      COMMAND cp ${LIBTORCH_PATH}/python3.10/site-packages/torch/lib/libc10_cuda.so libc10_cuda.so
-      COMMAND cp ${LIBTORCH_PATH}/python3.10/site-packages/torch/lib/libtorch.so libtorch.so
-      COMMAND cp ${LIBTORCH_PATH}/python3.10/site-packages/torch/lib/libtorch_cpu.so libtorch_cpu.so
-      COMMAND cp ${LIBTORCH_PATH}/python3.10/site-packages/torch/lib/libtorch_cuda.so libtorch_cuda.so
-      COMMAND cp ${LIBTORCH_PATH}/python3.10/site-packages/torch/lib/libtorch_cuda_linalg.so libtorch_cuda_linalg.so
-      COMMAND cp ${LIBTORCH_PATH}/python3.10/site-packages/torch/lib/libtorch_global_deps.so libtorch_global_deps.so
-      COMMAND cp ${LIBTORCH_PATH}/python3.10/site-packages/torch/lib/libcaffe2_nvrtc.so libcaffe2_nvrtc.so
+      COMMAND docker cp pytorch_backend_ptlib:${LIBTORCH_PATH}/python3.10/site-packages/torch/lib/libc10.so libc10.so
+      COMMAND docker cp pytorch_backend_ptlib:${LIBTORCH_PATH}/python3.10/site-packages/torch/lib/libc10_cuda.so libc10_cuda.so
+      COMMAND docker cp pytorch_backend_ptlib:${LIBTORCH_PATH}/python3.10/site-packages/torch/lib/libtorch.so libtorch.so
+      COMMAND docker cp pytorch_backend_ptlib:${LIBTORCH_PATH}/python3.10/site-packages/torch/lib/libtorch_cpu.so libtorch_cpu.so
+      COMMAND docker cp pytorch_backend_ptlib:${LIBTORCH_PATH}/python3.10/site-packages/torch/lib/libtorch_cuda.so libtorch_cuda.so
+      COMMAND docker cp pytorch_backend_ptlib:${LIBTORCH_PATH}/python3.10/site-packages/torch/lib/libtorch_cuda_linalg.so libtorch_cuda_linalg.so
+      COMMAND docker cp pytorch_backend_ptlib:${LIBTORCH_PATH}/python3.10/site-packages/torch/lib/libtorch_global_deps.so libtorch_global_deps.so
+      COMMAND docker cp pytorch_backend_ptlib:${LIBTORCH_PATH}/python3.10/site-packages/torch/lib/libcaffe2_nvrtc.so libcaffe2_nvrtc.so
       COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/cuda/targets/x86_64-linux/lib/libcusparseLt.so libcusparseLt.so
+      COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then docker cp pytorch_backend_ptlib:/usr/local/lib64/libtorchvision.so libtorchvision.so; fi"
+      COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then docker cp pytorch_backend_ptlib:/opt/pytorch/vision/torchvision/csrc include/torchvision/torchvision; fi"
       # TODO: TPRD-372 Support TorchTRT for manylinux
-      # COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHTRT} = 'ON' ]; then cp ${LIBTORCH_PATH}/python3.10/dist-packages/torch_tensorrt/lib/libtorchtrt_runtime.so libtorchtrt_runtime.so; fi"
+      # COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHTRT} = 'ON' ]; then cp ${LIBTORCH_PATH}/python3.10/site-packages/torch_tensorrt/lib/libtorchtrt_runtime.so libtorchtrt_runtime.so; fi"
       # COMMAND cp ${LIBTORCH_PATH}/python3.10/site-packages/torch_tensorrt/bin/torchtrtc torchtrtc || echo "error ignored..." || true
       COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/pytorch/LICENSE LICENSE.pytorch
-      COMMAND cp -r ${LIBTORCH_PATH}/python3.10/site-packages/torch/include include/torch
-      COMMAND cp -r ${LIBTORCH_PATH}/python3.10/site-packages/torch/include/torch/csrc/jit/codegen include/torch/torch/csrc/jit/.
-      COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/pytorch/torch/csrc/jit/codegen/fuser include/torch/torch/csrc/jit/codegen/fuser
+      COMMAND docker cp pytorch_backend_ptlib:${LIBTORCH_PATH}/python3.10/site-packages/torch/include include/torch
+      COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/pytorch/torch/csrc/jit/codegen include/torch/torch/csrc/jit/.
       COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/lib64/libopencv_videoio.so libopencv_videoio.so
       COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/lib64/libopencv_highgui.so libopencv_highgui.so
       COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/lib64/libopencv_video.so libopencv_video.so
@@ -265,11 +260,8 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
       COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/lib64/libopencv_calib3d.so libopencv_calib3d.so
       COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/lib64/libopencv_features2d.so libopencv_features2d.so
       COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/lib64/libopencv_flann.so libopencv_flann.so
-      # TODO: TPRD-371 Support Torchvision for manylinux
-      # COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then cp /usr/local/lib64/libtorchvision.so libtorchvision.so; fi"
-      # COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/vision/torchvision/csrc include/torchvision/torchvision
       COMMAND docker cp pytorch_backend_ptlib:/usr/lib64/libpng16.so.16.34.0 libpng16.so
-      COMMAND cp /usr/lib64/libjpeg.so.62.2.0 libjpeg.so
+      COMMAND docker cp pytorch_backend_ptlib:/usr/lib64/libjpeg.so.62.2.0 libjpeg.so
       COMMAND /bin/sh -c "if [ -f libmkl_def.so.1 ]; then patchelf --add-needed libmkl_gnu_thread.so.1 libmkl_def.so.1; fi"
       COMMAND /bin/sh -c "if [ -f libmkl_def.so.1 ]; then patchelf --add-needed libmkl_core.so.1 libmkl_def.so.1; fi"
       COMMAND /bin/sh -c "if [ -f libmkl_avx2.so.1 ]; then patchelf --add-needed libmkl_gnu_thread.so.1 libmkl_avx2.so.1; fi"
