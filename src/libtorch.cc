@@ -1622,7 +1622,7 @@ ModelInstanceState::Execute(
     } else {
       model_outputs_ = torch_model_->forward(*input_tensors);
     }
-    std::cout << model_outputs_ << std::endl;
+    // std::cout << model_outputs_ << std::endl;
 
     if (model_outputs_.isTuple()) {
       auto model_outputs_tuple = model_outputs_.toTuple();
