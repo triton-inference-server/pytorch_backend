@@ -38,6 +38,8 @@
 #include "triton/backend/backend_output_responder.h"
 #include "triton/common/nvtx.h"
 #include "triton/core/tritonbackend.h"
+#include <iostream> 
+#include <fstream> 
 
 #ifdef TRITON_PYTORCH_ENABLE_TORCHVISION
 // Suppress warnings in torch headers
@@ -1620,6 +1622,7 @@ ModelInstanceState::Execute(
     } else {
       model_outputs_ = torch_model_->forward(*input_tensors);
     }
+    std::cout << model_outputs_ << std::endl;
 
     if (model_outputs_.isTuple()) {
       auto model_outputs_tuple = model_outputs_.toTuple();
@@ -2174,6 +2177,23 @@ ModelInstanceState::SetInputTensors(
         // Remove constness to align with the signature of torch::from_blob()
         torch::Tensor input_tensor = torch::from_blob(
             const_cast<char*>(input_buffer), batchn_shape, updated_options);
+        
+        char* input_buffer_cpu = new char[sizeof(char)*batchn_byte_size];
+        bool cuda_used;
+        RETURN_IF_ERROR(CopyBuffer(
+            "vulture_test", TRITONSERVER_MEMORY_GPU, memory_type_id,
+            TRITONSERVER_MEMORY_CPU, 0,
+            batchn_byte_size, input_buffer, input_buffer_cpu,
+            0, &cuda_used));
+        if (cuda_used) {
+          cudaStreamSynchronize(0);
+          std::ofstream file("vulture.bin", std::ios::binary);
+          file.write(input_buffer_cpu, sizeof(char)*batchn_byte_size);
+          file.close();
+          delete[] input_buffer_cpu;
+        }
+        
+        // torch::save(input_tensor, "vulture.pt");
         (*input_tensors)[input_index_map_[input_name]] = input_tensor;
       } else {
         // torch:from_blob seems not working when the input size is 0
