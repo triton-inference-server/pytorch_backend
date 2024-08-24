@@ -1566,7 +1566,7 @@ ModelInstanceState::ProcessRequests(
             compute_start_ns, compute_end_ns, exec_end_ns),
         "failed reporting batch request statistics");
   }
-  std::cout << model_outputs_ << std::endl;
+  std::cout << output_tensors[0] << std::endl;
 }
 
 void
