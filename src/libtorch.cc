@@ -1566,6 +1566,7 @@ ModelInstanceState::ProcessRequests(
             compute_start_ns, compute_end_ns, exec_end_ns),
         "failed reporting batch request statistics");
   }
+  std::cout << model_outputs_ << std::endl;
 }
 
 void
@@ -1622,7 +1623,6 @@ ModelInstanceState::Execute(
     } else {
       model_outputs_ = torch_model_->forward(*input_tensors);
     }
-    // std::cout << model_outputs_ << std::endl;
 
     if (model_outputs_.isTuple()) {
       auto model_outputs_tuple = model_outputs_.toTuple();
