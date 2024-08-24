@@ -2178,20 +2178,20 @@ ModelInstanceState::SetInputTensors(
         torch::Tensor input_tensor = torch::from_blob(
             const_cast<char*>(input_buffer), batchn_shape, updated_options);
         
-        char* input_buffer_cpu = new char[sizeof(char)*batchn_byte_size];
-        bool cuda_used;
-        RETURN_IF_ERROR(CopyBuffer(
-            "vulture_test", TRITONSERVER_MEMORY_GPU, memory_type_id,
-            TRITONSERVER_MEMORY_CPU, 0,
-            batchn_byte_size, input_buffer, input_buffer_cpu,
-            0, &cuda_used));
-        if (cuda_used) {
-          cudaStreamSynchronize(0);
-          std::ofstream file("vulture.bin", std::ios::binary);
-          file.write(input_buffer_cpu, sizeof(char)*batchn_byte_size);
-          file.close();
-          delete[] input_buffer_cpu;
-        }
+        // char* input_buffer_cpu = new char[sizeof(char)*batchn_byte_size];
+        // bool cuda_used;
+        // RETURN_IF_ERROR(CopyBuffer(
+        //     "vulture_test", TRITONSERVER_MEMORY_GPU, memory_type_id,
+        //     TRITONSERVER_MEMORY_CPU, 0,
+        //     batchn_byte_size, input_buffer, input_buffer_cpu,
+        //     0, &cuda_used));
+        // if (cuda_used) {
+        //   cudaStreamSynchronize(0);
+        //   std::ofstream file("vulture.bin", std::ios::binary);
+        //   file.write(input_buffer_cpu, sizeof(char)*batchn_byte_size);
+        //   file.close();
+        //   delete[] input_buffer_cpu;
+        // }
         
         // torch::save(input_tensor, "vulture.pt");
         (*input_tensors)[input_index_map_[input_name]] = input_tensor;
