@@ -88,6 +88,7 @@ find_package(Python3 REQUIRED COMPONENTS Development.Module)
 
 set(RHEL_BUILD OFF)
 set(LIB_DIR "lib")
+set(LIBTORCH_LIBS_PATH "/usr/local/lib")
 set(PY_INSTALL_PATH "/usr/local/lib/python3.10/dist-packages")
 if(LINUX)
   file(STRINGS "/etc/os-release" DISTRO_ID_LIKE REGEX "ID_LIKE")
@@ -95,6 +96,9 @@ if(LINUX)
     set(RHEL_BUILD ON)
     set(LIB_DIR "lib64")
     set(PY_INSTALL_PATH "/opt/_internal/cpython-3.10.13/lib/python3.10/site-packages")
+    if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "x86_64")
+      set(LIBTORCH_LIBS_PATH "/opt/_internal/cpython-3.10.13/lib")
+    endif(${CMAKE_SYSTEM_PROCESSOR} MATCHES "x86_64")
   endif(${DISTRO_ID_LIKE} MATCHES "rhel|centos")
 endif(LINUX)
 
@@ -232,7 +236,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker pull ${TRITON_PYTORCH_DOCKER_IMAGE}
     COMMAND docker rm pytorch_backend_ptlib || echo "error ignored..." || true
     COMMAND docker create --name pytorch_backend_ptlib ${TRITON_PYTORCH_DOCKER_IMAGE}
-    COMMAND /bin/sh -c "for i in ${LIBTORCH_LIBS_STR} ; do echo copying $i && docker cp -L pytorch_backend_ptlib:$<IF:$<BOOL:${RHEL_BUILD}>,/opt/_internal/cpython-3.10.13/lib/$i,/usr/local/lib/$i> $i ; done"
+    COMMAND /bin/sh -c "for i in ${LIBTORCH_LIBS_STR} ; do echo copying $i && docker cp -L pytorch_backend_ptlib:${LIBTORCH_LIBS_PATH}/$i $i ; done"
     COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libc10.so libc10.so
     COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libc10_cuda.so libc10_cuda.so
     COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libtorch.so libtorch.so
