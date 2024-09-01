@@ -28,13 +28,8 @@
 
 [![License](https://img.shields.io/badge/License-BSD3-lightgrey.svg)](https://opensource.org/licenses/BSD-3-Clause)
 
-# PyTorch (LibTorch) Backend
+# PyTorch Backend
 
-The Triton backend for [PyTorch](https://github.com/pytorch/pytorch).
-You can learn more about Triton backends in the [backend
-repo](https://github.com/triton-inference-server/backend). Ask
-questions or report problems on the [issues
-page](https://github.com/triton-inference-server/server/issues).
 This backend is designed to run [TorchScript](https://pytorch.org/docs/stable/jit.html)
 models using the PyTorch C++ API. All models created in PyTorch
 using the python API must be traced/scripted to produce a TorchScript
