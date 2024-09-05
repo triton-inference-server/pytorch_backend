@@ -1895,14 +1895,6 @@ GetContiguousInputContent(
   return nullptr;  // success
 }
 
-void
-FillStringTensor(torch::List<std::string>* input_list, const size_t cnt)
-{
-  for (size_t c = 0; c < cnt; ++c) {
-    input_list->push_back("");
-  }
-}
-
 bool
 SetStringInputTensor(
     torch::List<std::string>* input_list, TRITONBACKEND_Input* input,
@@ -1925,7 +1917,6 @@ SetStringInputTensor(
       stream, &cuda_copy);
   if (err != nullptr) {
     RESPOND_AND_SET_NULL_IF_ERROR(response, err);
-    FillStringTensor(input_list, request_element_cnt);
     return cuda_copy;
   }
 
@@ -1947,7 +1938,6 @@ SetStringInputTensor(
   size_t element_cnt = str_list.size();
   if (err != nullptr) {
     RESPOND_AND_SET_NULL_IF_ERROR(response, err);
-    FillStringTensor(input_list, request_element_cnt - element_cnt);
   }
   return cuda_copy;
 }
