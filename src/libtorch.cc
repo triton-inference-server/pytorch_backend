@@ -1935,7 +1935,6 @@ SetStringInputTensor(
     input_list->push_back(std::string(addr, len));
   }
 
-  size_t element_cnt = str_list.size();
   if (err != nullptr) {
     RESPOND_AND_SET_NULL_IF_ERROR(response, err);
   }
