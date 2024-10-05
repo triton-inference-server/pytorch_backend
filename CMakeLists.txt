@@ -245,8 +245,6 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libtorch_cuda_linalg.so libtorch_cuda_linalg.so
     COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libtorch_global_deps.so libtorch_global_deps.so
     COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libcaffe2_nvrtc.so libcaffe2_nvrtc.so
-    # TODO: Revisit when not needed by making it part of cuda base container.
-    COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/cuda/lib64/libcusparseLt.so libcusparseLt.so;
     COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then docker cp pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libtorchvision.so libtorchvision.so; fi"
     COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then docker cp pytorch_backend_ptlib:/opt/pytorch/vision/torchvision/csrc include/torchvision/torchvision; fi"
     COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHTRT} = 'ON' ]; then docker cp pytorch_backend_ptlib:/usr/local/lib/python3.10/dist-packages/torch_tensorrt/lib/libtorchtrt_runtime.so libtorchtrt_runtime.so; fi"
@@ -452,7 +450,6 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
   install(
     FILES
       ${PT_LIB_PATHS}
-      ${CMAKE_CURRENT_BINARY_DIR}/libcusparseLt.so
       ${CMAKE_CURRENT_BINARY_DIR}/LICENSE.pytorch
     DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/pytorch
   )
@@ -493,7 +490,6 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
         COMMAND ln -sf libopencv_flann.so libopencv_flann.so.${OPENCV_VERSION}
         COMMAND ln -sf libpng16.so libpng16.so.16
         COMMAND ln -sf libjpeg.so libjpeg.so.8
-        COMMAND ln -sf libcusparseLt.so libcusparseLt.so.0
         RESULT_VARIABLE LINK_STATUS
         WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/backends/pytorch)
       if(LINK_STATUS AND NOT LINK_STATUS EQUAL 0)
