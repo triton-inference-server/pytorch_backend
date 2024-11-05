@@ -89,15 +89,15 @@ find_package(Python3 REQUIRED COMPONENTS Development.Module)
 set(RHEL_BUILD OFF)
 set(LIB_DIR "lib")
 set(LIBTORCH_LIBS_PATH "/usr/local/lib")
-set(PY_INSTALL_PATH "/usr/local/lib/python3.10/dist-packages")
+set(PY_INSTALL_PATH "/usr/local/lib/python3.12/dist-packages")
 if(LINUX)
   file(STRINGS "/etc/os-release" DISTRO_ID_LIKE REGEX "ID_LIKE")
   if(${DISTRO_ID_LIKE} MATCHES "rhel|centos")
     set(RHEL_BUILD ON)
     set(LIB_DIR "lib64")
-    set(PY_INSTALL_PATH "/opt/_internal/cpython-3.10.13/lib/python3.10/site-packages")
+    set(PY_INSTALL_PATH "/opt/_internal/cpython-3.12.3/lib/python3.12/site-packages")
     if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "x86_64")
-      set(LIBTORCH_LIBS_PATH "/opt/_internal/cpython-3.10.13/lib")
+      set(LIBTORCH_LIBS_PATH "/opt/_internal/cpython-3.12.3/lib")
     endif(${CMAKE_SYSTEM_PROCESSOR} MATCHES "x86_64")
   endif(${DISTRO_ID_LIKE} MATCHES "rhel|centos")
 endif(LINUX)
@@ -249,7 +249,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/cuda/lib64/libcusparseLt.so libcusparseLt.so;
     COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then docker cp pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libtorchvision.so libtorchvision.so; fi"
     COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then docker cp pytorch_backend_ptlib:/opt/pytorch/vision/torchvision/csrc include/torchvision/torchvision; fi"
-    COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHTRT} = 'ON' ]; then docker cp pytorch_backend_ptlib:/usr/local/lib/python3.10/dist-packages/torch_tensorrt/lib/libtorchtrt_runtime.so libtorchtrt_runtime.so; fi"
+    COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHTRT} = 'ON' ]; then docker cp pytorch_backend_ptlib:/usr/local/lib/python3.12/dist-packages/torch_tensorrt/lib/libtorchtrt_runtime.so libtorchtrt_runtime.so; fi"
     COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch_tensorrt/bin/torchtrtc torchtrtc || echo "error ignored..." || true
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/pytorch/LICENSE LICENSE.pytorch
     COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/include include/torch
