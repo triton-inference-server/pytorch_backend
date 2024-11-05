@@ -1436,6 +1436,9 @@ ModelInstanceState::ProcessRequests(
     SET_TIMESTAMP(compute_infer_start);
   }
 
+  std::cout <<"***************************************************************" << std::endl;
+  std::cout << "1439 all_response_failed: " << all_response_failed << std::endl;
+  std::cout << "Kind(): " << TRITONSERVER_InstanceGroupKindString(Kind()) << std::endl;
   // Run...
   if (!all_response_failed) {
     Execute(&responses, request_count, &input_tensors, &output_tensors);
@@ -1445,6 +1448,7 @@ ModelInstanceState::ProcessRequests(
   bool invalid_index = false;
   int max_index = output_tensors.size() - 1;
 
+  std::cout << "1449 all_response_failed: " << all_response_failed << std::endl;
   if (!all_response_failed) {
     for (const auto& name : model_state_->ModelOutputs()) {
       int op_index = output_index_map_[name.first];
@@ -1489,6 +1493,9 @@ ModelInstanceState::ProcessRequests(
             &compute_end_ns,
             reinterpret_cast<void*>(&compute_output_start_event_)));
   }
+
+  std::cout << "invalid_index: " << invalid_index << std::endl;
+  std::cout << "1494 all_response_failed: " << all_response_failed << std::endl;
 
   if (!all_response_failed) {
     if (!invalid_index) {
@@ -2277,6 +2284,14 @@ ModelInstanceState::ReadOutputTensors(
                 .c_str()));
       }
 
+      // Print first 10 elements of the output tensor
+      std::cout << "****************************** TUPLE 10 elements of output tensor '"
+                << name << "' ****************************** ";
+      for (int i = 0; i < 10 && i < output_flat.numel(); ++i) {
+        std::cout << output_flat[i].item<float>() << " ";
+      }
+      std::cout <<"***************************************************************" << std::endl;
+
       const char* output_buffer =
           static_cast<const char*>(output_flat.data_ptr());
 
@@ -2330,6 +2345,21 @@ ModelInstanceState::ReadOutputTensors(
       // Custom handling for string/bytes tensor...
       torch::List<torch::jit::IValue> output_list =
           output_tensors[op_index].toList();
+
+
+      // Print the first 10 elements of the output list
+      std::cout << "****************************** LIST 10 elements of output tensor '"
+                << name << "' ******************************" << std::endl;
+      for (size_t i = 0; i < 10 && i < output_list.size(); ++i) {
+        if (output_list[i].isTensor()) {
+          auto tensor = output_list[i].toTensor();
+          std::cout << tensor.item<float>() << " ";  // Print as float, adjust if necessary
+        } else if (output_list[i].isString()) {
+          std::cout << output_list[i].toString()->string() << " ";
+        }
+        // Handle other data types if needed
+      }
+      std::cout <<"***************************************************************" << std::endl;
 
       // Get output shape
       std::vector<int64_t> batchn_shape{(int64_t)output_list.size()};
