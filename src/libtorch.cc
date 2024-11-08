@@ -1436,9 +1436,11 @@ ModelInstanceState::ProcessRequests(
     SET_TIMESTAMP(compute_infer_start);
   }
 
-  std::cout <<"***************************************************************" << std::endl;
+  std::cout << "***************************************************************"
+            << std::endl;
   std::cout << "1439 all_response_failed: " << all_response_failed << std::endl;
-  std::cout << "Kind(): " << TRITONSERVER_InstanceGroupKindString(Kind()) << std::endl;
+  std::cout << "Kind(): " << TRITONSERVER_InstanceGroupKindString(Kind())
+            << std::endl;
   // Run...
   if (!all_response_failed) {
     Execute(&responses, request_count, &input_tensors, &output_tensors);
@@ -1615,6 +1617,39 @@ ModelInstanceState::Execute(
 
     torch::NoGradGuard no_grad;
 
+    std::cout << "\nmodel_state_->EnabledOptimizedExecution(): " << model_state_->EnabledOptimizedExecution() << std::endl;
+    std::cout << "model_state_->EnabledInferenceMode(): " << model_state_->EnabledInferenceMode() << std::endl;
+    std::cout << "model_state_->EnabledCudnn(): " << model_state_->EnabledCudnn() << std::endl;
+    std::cout << "std::get<1>(model_state_->EnabledJitProfiling()): " << std::get<1>(model_state_->EnabledJitProfiling()) << std::endl;
+    std::cout << "std::get<1>(model_state_->EnabledJitExecutor()): " << std::get<1>(model_state_->EnabledJitExecutor()) << std::endl;
+    std::cout << "std::get<1>(model_state_->EnabledTensorExprFuser())): " << std::get<1>(model_state_->EnabledTensorExprFuser())) << std::endl;
+
+    std::cout << "\nis_dict_input_: " << is_dict_input_ << std::endl;
+
+    // Print first 5 elements of the first 5 inputs
+    std::cout << "****************** Input Tensors - " << input_tensors->size() << " *******************"
+              << std::endl;
+    for (size_t input_index = 0;
+         input_index < std::min(input_tensors->size(), (size_t)5);
+         ++input_index) {
+      auto& input_tensor = (*input_tensors)[input_index];
+
+      std::cout << "Input " << input_index << ": ";
+      if (input_tensor.isTensor()) {
+        std::cout << input_tensor.toTensor() << std::endl;
+      } else if (input_tensor.isList()) {
+        auto list_input = input_tensor.toList();
+        std::cout << "List of Tensors (Size: " << list_input.size()
+                  << "):" << std::endl;
+        for (size_t i = 0; i < std::min(list_input.size(), (size_t)5); ++i) {
+          std::cout << "  Element " << i << ": " << list_input.get(i).toTensor()
+                    << std::endl;
+        }
+      } else {
+        std::cout << "Not a Tensor or List" << std::endl;
+      }
+    }
+
     // If input is a dictionary, prepare dictionary from 'input_tensors'.
     if (is_dict_input_) {
       torch::Dict<std::string, torch::Tensor> input_dict;
@@ -1647,8 +1682,37 @@ ModelInstanceState::Execute(
         }
         op_index++;
       }
+
+      // Print the first 10 elements of the tuple outputs
+      std::cout << "************* Model Output (Tuple) *************"
+                << std::endl;
+      op_index = 0;
+      for (const auto& output : model_outputs_tuple->elements()) {
+        if (output.isTensor()) {
+          std::cout << "Output " << op_index << ": " << output.toTensor()
+                    << std::endl;
+        } else if (output.isList()) {
+          auto list_output = output.toList();
+          std::cout << "Output " << op_index
+                    << " (List of Tensors):" << std::endl;
+          for (size_t i = 0; i < std::min(list_output.size(), (size_t)10);
+               ++i) {
+            std::cout << "  Element " << i << ": "
+                      << list_output.get(i).toTensor() << std::endl;
+          }
+        }
+        op_index++;
+        if (op_index >= 10)
+          break;  // Limit to first 10 outputs
+      }
+      std::cout << "*******************************************" << std::endl;
     } else if (model_outputs_.isTensor()) {
       output_tensors->push_back(model_outputs_);
+      std::cout << "************* Model Output (Tensor) *************"
+                << std::endl;
+      std::cout << model_outputs_.toTensor() << std::endl;
+      std::cout << "*******************************************" << std::endl;
+
     } else if (model_outputs_.isList()) {
       auto list_output = model_outputs_.toList();
       if (list_output.elementType()->kind() != c10::TypeKind::StringType) {
@@ -1657,6 +1721,14 @@ ModelInstanceState::Execute(
             list_output.elementType()->str() + "]");
       }
       output_tensors->push_back(model_outputs_);
+
+      std::cout << "************* Model Output (List) *************"
+                << std::endl;
+      for (size_t i = 0; i < std::min(list_output.size(), (size_t)10); ++i) {
+        std::cout << "  Element " << i << ": " << list_output.get(i).toTensor()
+                  << std::endl;
+      }
+      std::cout << "*******************************************" << std::endl;
     } else {
       throw std::invalid_argument(
           "output must be of type Tensor, List[str] or Tuple containing one of "
@@ -2285,12 +2357,15 @@ ModelInstanceState::ReadOutputTensors(
       }
 
       // Print first 10 elements of the output tensor
-      std::cout << "****************************** TUPLE 10 elements of output tensor '"
+      std::cout << "****************************** TUPLE 10 elements of output "
+                   "tensor '"
                 << name << "' ****************************** ";
       for (int i = 0; i < 10 && i < output_flat.numel(); ++i) {
         std::cout << output_flat[i].item<float>() << " ";
       }
-      std::cout <<"***************************************************************" << std::endl;
+      std::cout
+          << "***************************************************************"
+          << std::endl;
 
       const char* output_buffer =
           static_cast<const char*>(output_flat.data_ptr());
@@ -2348,18 +2423,27 @@ ModelInstanceState::ReadOutputTensors(
 
 
       // Print the first 10 elements of the output list
-      std::cout << "****************************** LIST 10 elements of output tensor '"
+      std::cout << "****************************** LIST 10 elements of output "
+                   "tensor '"
                 << name << "' ******************************" << std::endl;
       for (size_t i = 0; i < 10 && i < output_list.size(); ++i) {
-        if (output_list[i].isTensor()) {
-          auto tensor = output_list[i].toTensor();
-          std::cout << tensor.item<float>() << " ";  // Print as float, adjust if necessary
-        } else if (output_list[i].isString()) {
-          std::cout << output_list[i].toString()->string() << " ";
+        // Get each IValue from the list
+        torch::jit::IValue element = output_list.get(i);
+
+        // Check the type and print accordingly
+        if (element.isTensor()) {
+          auto tensor = element.toTensor();
+          std::cout << tensor.item<float>()
+                    << " ";  // Adjust data type as necessary
+        } else if (element.isString()) {
+          std::cout << element.toStringRef() << " ";
+        } else {
+          std::cout << "<unsupported type> ";
         }
-        // Handle other data types if needed
       }
-      std::cout <<"***************************************************************" << std::endl;
+      std::cout
+          << "***************************************************************"
+          << std::endl;
 
       // Get output shape
       std::vector<int64_t> batchn_shape{(int64_t)output_list.size()};
