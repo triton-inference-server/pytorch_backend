@@ -223,6 +223,7 @@ set(OPENCV_LIBS
 # in some cases leads to segmentation faults.
 if (${TRITON_PYTORCH_DOCKER_BUILD})
   string(REPLACE ";" " " LIBTORCH_LIBS_STR "${LIBTORCH_LIBS}")
+  string(RANDOM 8 "abcdefghijklmnopqrstuvwxyz" random_id)
 
   add_custom_command(
     OUTPUT
@@ -263,8 +264,8 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libopencv_calib3d.so libopencv_calib3d.so
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libopencv_features2d.so libopencv_features2d.so
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libopencv_flann.so libopencv_flann.so
-    COMMAND /bin/sh -c "docker cp pytorch_backend_ptlib:$<IF:$<BOOL:${RHEL_BUILD}>,/usr/lib64/libpng16.so.16.34.0,/usr/local/lib/python3.12/dist-packages/torchvision.libs/libpng16-748299c7.so.16.34.0> libpng16.so"
-    COMMAND /bin/sh -c "docker cp pytorch_backend_ptlib:$<IF:$<BOOL:${RHEL_BUILD}>,/usr/lib64/libjpeg.so.62.2.0,/usr/local/lib/python3.12/dist-packages/torchvision.libs/libjpeg-da649728.so.62.2.0> libjpeg.so"
+    COMMAND /bin/sh -c "docker run --name libjpeg-${random_id} -it ${TRITON_PYTORCH_DOCKER_IMAGE} find /usr/lib64 /usr/local/lib/python3.12/dist-packages/torchvision.libs/ -name libjpeg* -exec cp -v {} /tmp/libjpeg.so \\; && docker cp libjpeg-${random_id}:/tmp/libjpeg.so libjpeg.so"
+    COMMAND /bin/sh -c "docker run --name libpng-${random_id} -it ${TRITON_PYTORCH_DOCKER_IMAGE} find /usr/lib64 /usr/local/lib/python3.12/dist-packages/torchvision.libs/ -name libpng* -exec cp -v {} /tmp/libpng16.so \\; && docker cp libpng-${random_id}:/tmp/libpng16.so libpng16.so"
     COMMAND /bin/sh -c "if [ -f libmkl_def.so.1 ]; then patchelf --add-needed libmkl_gnu_thread.so.1 libmkl_def.so.1; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_def.so.1 ]; then patchelf --add-needed libmkl_core.so.1 libmkl_def.so.1; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_avx2.so.1 ]; then patchelf --add-needed libmkl_gnu_thread.so.1 libmkl_avx2.so.1; fi"
