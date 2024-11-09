@@ -264,9 +264,9 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libopencv_calib3d.so libopencv_calib3d.so
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libopencv_features2d.so libopencv_features2d.so
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libopencv_flann.so libopencv_flann.so
-    COMMAND /bin/sh -c "docker run --name libjpeg-${random_id} ${TRITON_PYTORCH_DOCKER_IMAGE} find /usr/lib64 /usr/local/lib/python3.12/dist-packages/torchvision.libs/ -name libjpeg* -exec cp -v {} /tmp/libjpeg.so \\; || true"
+    COMMAND /bin/sh -c "docker run --name libjpeg-${random_id} ${TRITON_PYTORCH_DOCKER_IMAGE} find /usr/lib64 /usr/local/lib/python3.12/dist-packages/torchvision.libs/ -name libjpeg*.so* -type f -exec cp -v {} /tmp/libjpeg.so \\; || true"
     COMMAND docker cp libjpeg-${random_id}:/tmp/libjpeg.so libjpeg.so
-    COMMAND /bin/sh -c "docker run --name libpng-${random_id} ${TRITON_PYTORCH_DOCKER_IMAGE} find /usr/lib64 /usr/local/lib/python3.12/dist-packages/torchvision.libs/ -name libpng* -exec cp -v {} /tmp/libpng16.so \\; || true"
+    COMMAND /bin/sh -c "docker run --name libpng-${random_id} ${TRITON_PYTORCH_DOCKER_IMAGE} find /usr/lib64 /usr/local/lib/python3.12/dist-packages/torchvision.libs/ -name libpng*.so* -type f -exec cp -v {} /tmp/libpng16.so \\; || true"
     COMMAND docker cp libpng-${random_id}:/tmp/libpng16.so libpng16.so
     COMMAND /bin/sh -c "if [ -f libmkl_def.so.1 ]; then patchelf --add-needed libmkl_gnu_thread.so.1 libmkl_def.so.1; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_def.so.1 ]; then patchelf --add-needed libmkl_core.so.1 libmkl_def.so.1; fi"
