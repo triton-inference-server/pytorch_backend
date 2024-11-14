@@ -27,8 +27,8 @@
 
 # install conda
 rm -rf ./miniconda
-wget https://repo.anaconda.com/miniconda/Miniconda3-py310_23.3.1-0-Linux-x86_64.sh
-bash Miniconda3-py310_23.3.1-0-Linux-x86_64.sh -p ./miniconda -b
+wget https://repo.anaconda.com/miniconda/Miniconda3-py312_24.9.2-0-Linux-x86_64.sh
+bash Miniconda3-py312_24.9.2-0-Linux-x86_64.sh -p ./miniconda -b
 eval "$(./miniconda/bin/conda shell.bash hook)"
 
 # create conda environment
@@ -38,7 +38,7 @@ conda install -c conda-forge conda-pack -y
 
 # pre install step
 export PYTHONNOUSERSITE=True
-conda install -c conda-forge libstdcxx-ng=12 -y
+conda install -c conda-forge libstdcxx-ng=14 -y
 
 # install PyTorch
 conda install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia -y
