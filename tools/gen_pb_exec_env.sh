@@ -49,4 +49,3 @@ conda pack -o pb_exec_env_model.py.tar.gz
 
 # deactivate conda
 conda deactivate
-conda deactivate

@@ -207,6 +207,12 @@ class TritonPythonModel:
             "Torch parallelism settings " + for_model + ": " + setting_msg
         )
 
+        # Print out python version
+        print(
+            f"Python version is {sys.version_info.major}.{sys.version_info.minor}",
+            flush=True,
+        )
+
         self._infer_mode = torch.inference_mode(mode=True)
         self._infer_mode.__enter__()
 
