@@ -32,7 +32,7 @@ bash Miniconda3-py312_24.9.2-0-Linux-x86_64.sh -p ./miniconda -b
 eval "$(./miniconda/bin/conda shell.bash hook)"
 
 # create conda environment
-conda create -n pt python=3.10 -y
+conda create -n pt python=3.12 -y
 conda activate pt
 conda install -c conda-forge conda-pack -y
 
