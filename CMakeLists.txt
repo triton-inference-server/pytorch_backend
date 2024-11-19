@@ -214,6 +214,8 @@ set(OPENCV_LIBS
     "libopencv_calib3d.so"
     "libopencv_flann.so"
     "libopencv_features2d.so"
+    "libpng16.so"
+    "libjpeg.so"
 )
 
 # The patchelf commands ensure the MKL libraries are loaded correctly during runtime
@@ -262,6 +264,8 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libopencv_calib3d.so libopencv_calib3d.so
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libopencv_features2d.so libopencv_features2d.so
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libopencv_flann.so libopencv_flann.so
+    COMMAND /bin/sh -c "docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libpng16.so.16.43.0 libpng16.so"
+    COMMAND /bin/sh -c "docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libjpeg.so.8.2.2 libjpeg.so"
     COMMAND /bin/sh -c "if [ -f libmkl_def.so.1 ]; then patchelf --add-needed libmkl_gnu_thread.so.1 libmkl_def.so.1; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_def.so.1 ]; then patchelf --add-needed libmkl_core.so.1 libmkl_def.so.1; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_avx2.so.1 ]; then patchelf --add-needed libmkl_gnu_thread.so.1 libmkl_avx2.so.1; fi"
@@ -488,6 +492,8 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
         COMMAND ln -sf libopencv_calib3d.so libopencv_calib3d.so.${OPENCV_VERSION}
         COMMAND ln -sf libopencv_features2d.so libopencv_features2d.so.${OPENCV_VERSION}
         COMMAND ln -sf libopencv_flann.so libopencv_flann.so.${OPENCV_VERSION}
+        COMMAND ln -sf libpng16.so libpng16.so.16
+        COMMAND ln -sf libjpeg.so libjpeg.so.8
         COMMAND ln -sf libcusparseLt.so libcusparseLt.so.0
         RESULT_VARIABLE LINK_STATUS
         WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/backends/pytorch)
