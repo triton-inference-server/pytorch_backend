@@ -78,7 +78,7 @@ else()
   endif()
 
     # Look for installed Torchvision package in lib paths
-  if(TRITON_PYTORCH_ENABLE_TORCHVISION AND NOT EXISTS "${TRITON_PYTORCH_LIB_PATHS}/libtorchvision.so")
+  if(TRITON_PYTORCH_ENABLE_TORCHVISION AND NOT EXISTS "${TRITON_PYTORCH_LIB_PATHS}/libtorchvision.so.1.0")
     message(WARNING "TRITON_PYTORCH_ENABLE_TORCHVISION is on, but TRITON_PYTORCH_LIB_PATHS does not contain Torchvision package")
   endif()
 endif()
