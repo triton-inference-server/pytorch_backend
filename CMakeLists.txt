@@ -78,7 +78,7 @@ else()
   endif()
 
     # Look for installed Torchvision package in lib paths
-  if(TRITON_PYTORCH_ENABLE_TORCHVISION AND NOT EXISTS "${TRITON_PYTORCH_LIB_PATHS}/libtorchvision.so*")
+  if(TRITON_PYTORCH_ENABLE_TORCHVISION AND NOT EXISTS "${TRITON_PYTORCH_LIB_PATHS}/libtorchvision.so.1")
     message(WARNING "TRITON_PYTORCH_ENABLE_TORCHVISION is on, but TRITON_PYTORCH_LIB_PATHS does not contain Torchvision package")
   endif()
 endif()
@@ -163,7 +163,7 @@ set(PT_LIBS
 if (${TRITON_PYTORCH_ENABLE_TORCHVISION})
   set(PT_LIBS
       ${PT_LIBS}
-      "libtorchvision.so"
+      "libtorchvision.so.1"
   )
 endif() # TRITON_PYTORCH_ENABLE_TORCHVISION
 
@@ -248,7 +248,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libcaffe2_nvrtc.so libcaffe2_nvrtc.so
     # TODO: Revisit when not needed by making it part of cuda base container.
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/cuda/lib64/libcusparseLt.so libcusparseLt.so;
-    COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then docker cp  -a -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libtorchvision.so.1.0 libtorchvision.so; fi"
+    COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then docker cp  -a -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libtorchvision.so.1 libtorchvision.so.1; fi"
     COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then docker cp pytorch_backend_ptlib:/opt/pytorch/vision/torchvision/csrc include/torchvision/torchvision; fi"
     COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHTRT} = 'ON' ]; then docker cp pytorch_backend_ptlib:/usr/local/lib/python3.12/dist-packages/torch_tensorrt/lib/libtorchtrt_runtime.so libtorchtrt_runtime.so; fi"
     COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch_tensorrt/bin/torchtrtc torchtrtc || echo "error ignored..." || true
@@ -276,6 +276,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND /bin/sh -c "if [ -f libmkl_vml_def.so.1 ]; then patchelf --add-needed libmkl_intel_thread.so.1 libmkl_vml_def.so.1; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_vml_def.so.1 ]; then patchelf --add-needed libmkl_core.so.1 libmkl_vml_def.so.1; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_intel_thread.so.1 ]; then patchelf --add-needed libmkl_intel_lp64.so.1 libmkl_intel_thread.so.1; fi"
+    COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then ln -s libtorchvision.so.1 libtorchvision.so; fi"
     COMMAND docker rm pytorch_backend_ptlib
     COMMENT "Extracting pytorch and torchvision libraries and includes from ${TRITON_PYTORCH_DOCKER_IMAGE}"
     VERBATIM
@@ -380,7 +381,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
   if (${TRITON_PYTORCH_ENABLE_TORCHVISION})
     set(TRITON_PYTORCH_LIBS
         ${TRITON_PYTORCH_LIBS}
-        "${CMAKE_CURRENT_BINARY_DIR}/libtorchvision.so.1.0")
+        "${CMAKE_CURRENT_BINARY_DIR}/libtorchvision.so.1")
   endif() # TRITON_PYTORCH_ENABLE_TORCHVISION
 
   if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
