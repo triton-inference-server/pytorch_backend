@@ -158,6 +158,7 @@ set(PT_LIBS
     "libtorch_cuda.so"
     "libtorch_cuda_linalg.so"
     "libtorch_global_deps.so"
+    "libjpeg.so.62"
 )
 
 if (${TRITON_PYTORCH_ENABLE_TORCHVISION})
@@ -264,8 +265,10 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libopencv_calib3d.so libopencv_calib3d.so
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libopencv_features2d.so libopencv_features2d.so
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libopencv_flann.so libopencv_flann.so
+    COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/lib/libjpeg.so.62 libjpeg.so.62
     COMMAND /bin/sh -c "docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libpng16.so.16.43.0 libpng16.so"
     COMMAND /bin/sh -c "docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libjpeg.so.8.2.2 libjpeg.so"
+    COMMAND /bin/sh -c "docker cp pytorch_backend_ptlib:/usr/local/lib/libjpeg.so.62 libjpeg.so.62 || docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libjpeg.so.62 libjpeg.so.62"
     COMMAND /bin/sh -c "if [ -f libmkl_def.so.1 ]; then patchelf --add-needed libmkl_gnu_thread.so.1 libmkl_def.so.1; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_def.so.1 ]; then patchelf --add-needed libmkl_core.so.1 libmkl_def.so.1; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_avx2.so.1 ]; then patchelf --add-needed libmkl_gnu_thread.so.1 libmkl_avx2.so.1; fi"
