@@ -78,7 +78,7 @@ else()
   endif()
 
     # Look for installed Torchvision package in lib paths
-  if(TRITON_PYTORCH_ENABLE_TORCHVISION AND NOT EXISTS "${TRITON_PYTORCH_LIB_PATHS}/libtorchvision.so.1")
+  if(TRITON_PYTORCH_ENABLE_TORCHVISION AND NOT EXISTS "${TRITON_PYTORCH_LIB_PATHS}/libtorchvision.so.1.0")
     message(WARNING "TRITON_PYTORCH_ENABLE_TORCHVISION is on, but TRITON_PYTORCH_LIB_PATHS does not contain Torchvision package")
   endif()
 endif()
@@ -158,13 +158,12 @@ set(PT_LIBS
     "libtorch_cuda.so"
     "libtorch_cuda_linalg.so"
     "libtorch_global_deps.so"
-    "libjpeg.so.62"
 )
 
 if (${TRITON_PYTORCH_ENABLE_TORCHVISION})
   set(PT_LIBS
       ${PT_LIBS}
-      "libtorchvision.so.1"
+      "libtorchvision.so.1.0"
   )
 endif() # TRITON_PYTORCH_ENABLE_TORCHVISION
 
@@ -249,7 +248,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libcaffe2_nvrtc.so libcaffe2_nvrtc.so
     # TODO: Revisit when not needed by making it part of cuda base container.
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/cuda/lib64/libcusparseLt.so libcusparseLt.so;
-    COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then docker cp -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libtorchvision.so.1 libtorchvision.so.1; fi"
+    COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then docker cp pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libtorchvision.so.1.0  libtorchvision.so.1.0 ; fi"
     COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then docker cp pytorch_backend_ptlib:/opt/pytorch/vision/torchvision/csrc include/torchvision/torchvision; fi"
     COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHTRT} = 'ON' ]; then docker cp pytorch_backend_ptlib:/usr/local/lib/python3.12/dist-packages/torch_tensorrt/lib/libtorchtrt_runtime.so libtorchtrt_runtime.so; fi"
     COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch_tensorrt/bin/torchtrtc torchtrtc || echo "error ignored..." || true
@@ -265,10 +264,10 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libopencv_calib3d.so libopencv_calib3d.so
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libopencv_features2d.so libopencv_features2d.so
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libopencv_flann.so libopencv_flann.so
-    COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/lib/libjpeg.so.62 libjpeg.so.62
-    COMMAND /bin/sh -c "docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libpng16.so.16.43.0 libpng16.so"
-    COMMAND /bin/sh -c "docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libjpeg.so.8.2.2 libjpeg.so"
-    COMMAND /bin/sh -c "docker cp pytorch_backend_ptlib:/usr/local/lib/libjpeg.so.62 libjpeg.so.62 || docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libjpeg.so.62 libjpeg.so.62"
+    COMMAND /bin/sh -c "docker run --name libjpeg-${random_id} ${TRITON_PYTORCH_DOCKER_IMAGE} find /usr/lib64 /usr/local/lib/python3.12/dist-packages/torchvision.libs/ -name libjpeg*.so* -type f -exec cp -v {} /tmp/libjpeg.so \\; || true"
+    COMMAND docker cp libjpeg-${random_id}:/tmp/libjpeg.so libjpeg.so
+    COMMAND /bin/sh -c "docker run --name libpng-${random_id} ${TRITON_PYTORCH_DOCKER_IMAGE} find /usr/lib64 /usr/local/lib/python3.12/dist-packages/torchvision.libs/ -name libpng*.so* -type f -exec cp -v {} /tmp/libpng16.so \\; || true"
+    COMMAND docker cp libpng-${random_id}:/tmp/libpng16.so libpng16.so
     COMMAND /bin/sh -c "if [ -f libmkl_def.so.1 ]; then patchelf --add-needed libmkl_gnu_thread.so.1 libmkl_def.so.1; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_def.so.1 ]; then patchelf --add-needed libmkl_core.so.1 libmkl_def.so.1; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_avx2.so.1 ]; then patchelf --add-needed libmkl_gnu_thread.so.1 libmkl_avx2.so.1; fi"
@@ -279,7 +278,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND /bin/sh -c "if [ -f libmkl_vml_def.so.1 ]; then patchelf --add-needed libmkl_intel_thread.so.1 libmkl_vml_def.so.1; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_vml_def.so.1 ]; then patchelf --add-needed libmkl_core.so.1 libmkl_vml_def.so.1; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_intel_thread.so.1 ]; then patchelf --add-needed libmkl_intel_lp64.so.1 libmkl_intel_thread.so.1; fi"
-    COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then ln -s libtorchvision.so.1 libtorchvision.so; fi"
+    COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then ln -s libtorchvision.so.1.0 libtorchvision.so.1 && ln -s libtorchvision.so.1 libtorchvision.so; fi"
     COMMAND docker rm pytorch_backend_ptlib
     COMMENT "Extracting pytorch and torchvision libraries and includes from ${TRITON_PYTORCH_DOCKER_IMAGE}"
     VERBATIM
@@ -384,7 +383,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
   if (${TRITON_PYTORCH_ENABLE_TORCHVISION})
     set(TRITON_PYTORCH_LIBS
         ${TRITON_PYTORCH_LIBS}
-        "${CMAKE_CURRENT_BINARY_DIR}/libtorchvision.so.1")
+        "${CMAKE_CURRENT_BINARY_DIR}/libtorchvision.so.1.0")
   endif() # TRITON_PYTORCH_ENABLE_TORCHVISION
 
   if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
@@ -498,6 +497,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
         COMMAND ln -sf libopencv_flann.so libopencv_flann.so.${OPENCV_VERSION}
         COMMAND ln -sf libpng16.so libpng16.so.16
         COMMAND ln -sf libjpeg.so libjpeg.so.8
+        COMMAND ln -sf libjpeg.so libjpeg.so.62
         COMMAND ln -sf libcusparseLt.so libcusparseLt.so.0
         RESULT_VARIABLE LINK_STATUS
         WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/backends/pytorch)
