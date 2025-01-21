@@ -52,7 +52,8 @@ main Triton [issues page](https://github.com/triton-inference-server/server/issu
 Use a recent cmake to build. First install the required dependencies.
 
 ```
-$ apt-get install patchelf rapidjson-dev python3-dev
+$ apt-get install rapidjson-dev python3-dev python3-pip
+$ pip3 install patchelf==0.17.2
 ```
 
 An appropriate PyTorch container from [NGC](https://ngc.nvidia.com) must be used.
