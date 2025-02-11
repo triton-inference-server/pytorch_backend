@@ -284,7 +284,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     #COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/lib/libjpeg.so.62 libjpeg.so.62
     COMMAND /bin/sh -c "if [ ${RHEL_BUILD} = 'OFF' ]; then docker cp -L pytorch_backend_ptlib:/usr/local/lib/libjpeg.so.62 libjpeg.so.62; else docker cp -L pytorch_backend_ptlib:/usr/lib64/libjpeg.so.62 libjpeg.so.62; fi;"
     COMMAND /bin/sh -c "if [ ${RHEL_BUILD} = 'OFF' ]; then docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libpng16.so* libpng16.so; else docker cp -L pytorch_backend_ptlib:/usr/lib64/libpng16.so.16 libpng16.so; fi;"
-    COMMAND /bin/sh -c "if [ ${RHEL_BUILD} = 'OFF' ]; thendocker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libjpeg.so.8.2.2 libjpeg.so; fi;"
+    COMMAND /bin/sh -c "if [ ${RHEL_BUILD} = 'OFF' ]; then docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libjpeg.so.8.2.2 libjpeg.so; fi;"
     COMMAND /bin/sh -c "if [ -f libmkl_def.so.1 ]; then patchelf --add-needed libmkl_gnu_thread.so.1 libmkl_def.so.1; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_def.so.1 ]; then patchelf --add-needed libmkl_core.so.1 libmkl_def.so.1; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_avx2.so.1 ]; then patchelf --add-needed libmkl_gnu_thread.so.1 libmkl_avx2.so.1; fi"
