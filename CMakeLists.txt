@@ -170,10 +170,17 @@ set(PT_LIBS
 )
 
 if (${TRITON_PYTORCH_ENABLE_TORCHVISION})
-  set(PT_LIBS
-      ${PT_LIBS}
-      ${RHEL_BUILD} ? "libtorchvision.so" : "libtorchvision.so.1"
-  )
+  if(${RHEL_BUILD})
+    set(PT_LIBS
+        ${PT_LIBS}
+        "libtorchvision.so"
+    )
+  else()
+    set(PT_LIBS
+        ${PT_LIBS}
+        "libtorchvision.so.1"
+    )
+  endif()
 endif() # TRITON_PYTORCH_ENABLE_TORCHVISION
 
 if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
