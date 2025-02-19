@@ -240,8 +240,7 @@ if(${RHEL_BUILD})
 else()
     set(OPENCV_LIBS
         ${OPENCV_LIBS}
-        "libjpeg.so"     # Non-RHEL uses both .so and .so.62
-        "libjpeg.so.62"
+        "libjpeg.so"
         "libpng16.so"
     )
 endif()
