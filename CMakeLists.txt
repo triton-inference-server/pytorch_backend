@@ -82,7 +82,6 @@ else()
   if(NOT ${LIBTORCHVISION}) 
     message(WARNING "TRITON_PYTORCH_ENABLE_TORCHVISION is on, but TRITON_PYTORCH_LIB_PATHS does not contain Torchvision package")
   endif(NOT ${LIBTORCHVISION})
-  endif()
 endif()
 
 # Python.h needed by torch headers.
