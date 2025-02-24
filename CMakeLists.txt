@@ -163,17 +163,7 @@ set(PT_LIBS
 )
 
 if (${TRITON_PYTORCH_ENABLE_TORCHVISION})
-  if(${RHEL_BUILD})
-    set(PT_LIBS
-        ${PT_LIBS}
-        "libtorchvision.so"
-    )
-  else()
-    set(PT_LIBS
-        ${PT_LIBS}
-        "libtorchvision.so.1"
-    )
-  endif()
+  $<IF:${RHEL_BUILD},libtorchvision.so,libtorchvision.so.1>
 endif() # TRITON_PYTORCH_ENABLE_TORCHVISION
 
 if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
@@ -223,20 +213,9 @@ set(OPENCV_LIBS
     "libopencv_calib3d.so"
     "libopencv_flann.so"
     "libopencv_features2d.so"
+    $<IF:${RHEL_BUILD},libjpeg.so.62,libjpeg.so>
+    $<IF:${RHEL_BUILD},libpng16.so.16,libpng16.so>
 )
-if(${RHEL_BUILD})
-    set(OPENCV_LIBS
-        ${OPENCV_LIBS}
-        "libjpeg.so.62"  # RHEL uses only .so.62 version
-        "libpng16.so.16" # RHEL uses .so.16 version
-    )
-else()
-    set(OPENCV_LIBS
-        ${OPENCV_LIBS}
-        "libjpeg.so"
-        "libpng16.so"
-    )
-endif()
 
 # The patchelf commands ensure the MKL libraries are loaded correctly during runtime
 # Without these, the framework/backend complains of missing libraries / symbols and
@@ -399,15 +378,9 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
   set(TRITON_PYTORCH_LIBS "${CMAKE_CURRENT_BINARY_DIR}/libtorch.so")
 
   if (${TRITON_PYTORCH_ENABLE_TORCHVISION})
-    if(${RHEL_BUILD})
-      set(TRITON_PYTORCH_LIBS
-          ${TRITON_PYTORCH_LIBS}
-          "${CMAKE_CURRENT_BINARY_DIR}/libtorchvision.so")
-    else()
-      set(TRITON_PYTORCH_LIBS
-          ${TRITON_PYTORCH_LIBS}
-          "${CMAKE_CURRENT_BINARY_DIR}/libtorchvision.so.1")
-    endif()
+    set(TRITON_PYTORCH_LIBS
+    ${TRITON_PYTORCH_LIBS}
+    "${CMAKE_CURRENT_BINARY_DIR}/$<IF:${RHEL_BUILD},libtorchvision.so,libtorchvision.so.1>"
   endif() # TRITON_PYTORCH_ENABLE_TORCHVISION
 
   if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
