@@ -163,7 +163,10 @@ set(PT_LIBS
 )
 
 if (${TRITON_PYTORCH_ENABLE_TORCHVISION})
-  $<IF:${RHEL_BUILD},libtorchvision.so,libtorchvision.so.1>
+  set(PT_LIBS
+      ${PT_LIBS}
+      $<IF:${RHEL_BUILD},libtorchvision.so,libtorchvision.so.1>
+  )
 endif() # TRITON_PYTORCH_ENABLE_TORCHVISION
 
 if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
