@@ -1622,6 +1622,7 @@ ModelInstanceState::Execute(
     }
 
     if (model_outputs_.isTuple()) {
+      std::cout << "^^^^^^^^^^^^ Inside model_outputs_.isTuple() ^^^^^^^^^^^^" << std::endl;
       auto model_outputs_tuple = model_outputs_.toTuple();
       size_t op_index = 0;
       for (auto& m_op : model_outputs_tuple->elements()) {
@@ -1637,12 +1638,30 @@ ModelInstanceState::Execute(
         } else {
           auto tensor_output = m_op.toTensor();
           output_tensors->push_back(m_op);
+
+          auto shape = tensor_output.sizes();
+          std::cout << "  Device: " << (tensor_output.device().is_cuda() ? "GPU" : "CPU") << std::endl;
+          std::cout << "  Shape: [";
+          for (size_t dim = 0; dim < shape.size(); ++dim) {
+            if (dim > 0) std::cout << ", ";
+            std::cout << shape[dim];
+          }
         }
         op_index++;
       }
     } else if (model_outputs_.isTensor()) {
+      std::cout << "^^^^^^^^^^^^ Inside model_outputs_.isTensor() ^^^^^^^^^^^^" << std::endl;
       output_tensors->push_back(model_outputs_);
+      auto shape = model_outputs_.sizes();
+      std::cout << "  Device: " << (model_outputs_.device().is_cuda() ? "GPU" : "CPU") << std::endl;
+      std::cout << "  Shape: [";
+      for (size_t dim = 0; dim < shape.size(); ++dim) {
+        if (dim > 0) std::cout << ", ";
+        std::cout << shape[dim];
+      }
+      std::cout << std::endl;
     } else if (model_outputs_.isList()) {
+      std::cout << "^^^^^^^^^^^^ Inside model_outputs_.isList() ^^^^^^^^^^^^" << std::endl;
       auto list_output = model_outputs_.toList();
       if (list_output.elementType()->kind() != c10::TypeKind::StringType) {
         throw std::invalid_argument(
