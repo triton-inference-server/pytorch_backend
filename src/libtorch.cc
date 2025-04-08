@@ -1640,11 +1640,16 @@ ModelInstanceState::Execute(
           output_tensors->push_back(m_op);
 
           auto shape = tensor_output.sizes();
-          std::cout << "  Device: " << (tensor_output.device().is_cuda() ? "GPU" : "CPU") << std::endl;
-          std::cout << "  Shape: [";
-          for (size_t dim = 0; dim < shape.size(); ++dim) {
-            if (dim > 0) std::cout << ", ";
-            std::cout << shape[dim];
+          //std::cout << "  Device: " << (tensor_output.device().is_cuda() ? "GPU" : "CPU") << std::endl;
+          //std::cout << "  Shape: [";
+          //for (size_t dim = 0; dim < shape.size(); ++dim) {
+          //  if (dim > 0) std::cout << ", ";
+          //  std::cout << shape[dim];
+          //}
+          //std::cout << "]" << std::endl;
+
+          if (op_index == 1) {
+            std::cout << "  Contents of OUTPUT_1: " << tensor_output << std::endl;
           }
         }
         op_index++;
@@ -1652,14 +1657,15 @@ ModelInstanceState::Execute(
     } else if (model_outputs_.isTensor()) {
       std::cout << "^^^^^^^^^^^^ Inside model_outputs_.isTensor() ^^^^^^^^^^^^" << std::endl;
       output_tensors->push_back(model_outputs_);
-      auto shape = model_outputs_.sizes();
-      std::cout << "  Device: " << (model_outputs_.device().is_cuda() ? "GPU" : "CPU") << std::endl;
+      auto tensor_output = model_outputs_.toTensor();
+      auto shape = tensor_output.sizes();
+      std::cout << "  Device: " << (tensor_output.device().is_cuda() ? "GPU" : "CPU") << std::endl;
       std::cout << "  Shape: [";
       for (size_t dim = 0; dim < shape.size(); ++dim) {
         if (dim > 0) std::cout << ", ";
         std::cout << shape[dim];
       }
-      std::cout << std::endl;
+      std::cout << "]" << std::endl;
     } else if (model_outputs_.isList()) {
       std::cout << "^^^^^^^^^^^^ Inside model_outputs_.isList() ^^^^^^^^^^^^" << std::endl;
       auto list_output = model_outputs_.toList();
