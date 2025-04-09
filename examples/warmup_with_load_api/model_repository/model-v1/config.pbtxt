@@ -1,0 +1,22 @@
+name: "model-v1"
+backend: "pytorch"
+max_batch_size: 1
+input [
+  {
+    name: "x"
+    data_type: TYPE_FP32
+    dims: [ -1, 186 ]
+  },
+  {
+    name: "mask"
+    data_type: TYPE_INT64
+    dims: [ -1 ]
+  }
+]
+output [
+  {
+    name: "output"
+    data_type: TYPE_FP32
+    dims: [ -1 ]
+  }
+]

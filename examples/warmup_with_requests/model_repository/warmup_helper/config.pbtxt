@@ -1,0 +1,34 @@
+name: "warmup_helper"
+backend: "python"
+
+input [
+  {
+    name: "MODELS"
+    data_type: TYPE_STRING
+    dims: [ -1 ]
+  },
+  {
+    name: "FEATURE_DIMS"
+    data_type: TYPE_INT32
+    dims: [ -1 ]
+  },
+  {
+    name: "GROUP_SIZE_MIN"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  },
+  {
+    name: "GROUP_SIZE_MAX"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  }
+]
+output [
+  {
+    name: "REQUEST_COUNT"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  }
+]
+
+instance_group [{ kind: KIND_CPU }]

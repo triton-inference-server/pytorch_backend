@@ -1,0 +1,2 @@
+tritonclient[all]==2.55.0
+numpy >=1.21,<2

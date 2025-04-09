@@ -1,0 +1,22 @@
+name: "warmup_helper"
+backend: "python"
+model_transaction_policy {
+  decoupled: True
+}
+
+input [
+  {
+    name: "INPUT"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  }
+]
+output [
+  {
+    name: "OUTPUT"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  }
+]
+
+instance_group [{ kind: KIND_CPU }]
