@@ -509,11 +509,12 @@ else()
     set(PT_LIB_PATHS ${PT_LIB_PATHS} "${TRITON_PYTORCH_LIB_PATHS}/${plib}")
   ENDFOREACH(plib)
 
-  install(
-    FILES
-      ${PT_LIB_PATHS}
-    DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/pytorch
-  )
+  #install(
+  #  FILES
+  #    ${PT_LIB_PATHS}
+  #  DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/pytorch
+  #)
+  install(DIRECTORY ${TRITON_PYTORCH_LIB_PATHS} DESTINATION lib)
 
   FOREACH(plib ${PT_LIBS})
     install(
