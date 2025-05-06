@@ -180,6 +180,21 @@ key: "ENABLE_WEIGHT_SHARING"
 }
 ```
 
+* `ENABLE_DETERMINISTIC_ALGORITHMS`: Boolean flag to enable deterministic algorithm selection for TorchScript models. By default, deterministic algorithms are disabled.
+
+When this flag is set to `true`, Triton will configure the PyTorch backend to use only deterministic algorithm implementations. This ensures that model outputs are reproducible across runs, at the cost of potential performance degradation. If any operation does not have a deterministic version, an error will be raised.
+
+The section of model config file specifying this parameter will look like:
+
+```
+parameters: {
+  key: "ENABLE_DETERMINISTIC_ALGORITHMS"
+  value: {
+    string_value: "true"
+  }
+}
+```
+
 * `ENABLE_CACHE_CLEANING`: Boolean flag to enable CUDA cache cleaning after each model execution.
 If not specified, cache cleaning is disabled. This flag has no effect if model is on CPU.
 Setting this flag to true will negatively impact the performance due to additional CUDA cache
