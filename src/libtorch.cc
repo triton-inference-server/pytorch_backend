@@ -1,4 +1,4 @@
-// Copyright 2019-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -2105,7 +2105,11 @@ ModelInstanceState::SetInputTensors(
                                       input, nullptr, nullptr, &input_shape,
                                       &input_dims_count, nullptr, nullptr));
 
-        batchn_shape[0] += GetElementCount(input_shape, input_dims_count);
+        int64_t element_cnt = 0;
+        RESPOND_AND_SET_NULL_IF_ERROR(
+            &((*responses)[idx]),
+            GetElementCount(input_shape, input_dims_count, &element_cnt));
+        batchn_shape[0] += element_cnt;
       }
     } else {
       batchn_shape =
@@ -2160,7 +2164,10 @@ ModelInstanceState::SetInputTensors(
                 input, HostPolicyName().c_str(), nullptr, nullptr, &shape,
                 &dims_count, nullptr, &buffer_count));
 
-        const int64_t batch_element_cnt = GetElementCount(shape, dims_count);
+        int64_t batch_element_cnt = 0;
+        RESPOND_AND_SET_NULL_IF_ERROR(
+            &((*responses)[idx]),
+            GetElementCount(shape, dims_count, &batch_element_cnt));
 
         *cuda_copy |= SetStringInputTensor(
             &input_list, input, input_name, buffer_count, batch_element_cnt,
@@ -2347,7 +2354,8 @@ ModelInstanceState::ReadOutputTensors(
           batchn_shape[0] = shape[0];
         }
 
-        const size_t tensor_element_cnt = GetElementCount(batchn_shape);
+        int64_t tensor_element_cnt = 0;
+        RETURN_IF_ERROR(GetElementCount(batchn_shape, &tensor_element_cnt));
 
         // Only need an response tensor for requested outputs.
         if (response != nullptr) {
