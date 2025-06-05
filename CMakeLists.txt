@@ -437,7 +437,6 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
   install(
     FILES
       ${PT_LIB_PATHS}
-      ${CMAKE_CURRENT_BINARY_DIR}/libcusparseLt.so
       ${CMAKE_CURRENT_BINARY_DIR}/LICENSE.pytorch
     DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/pytorch
   )
@@ -468,7 +467,6 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
       "EXECUTE_PROCESS(
         COMMAND ln -sf libpng16.so libpng16.so.16
         COMMAND ln -sf libjpeg.so libjpeg.so.8
-        COMMAND ln -sf libcusparseLt.so libcusparseLt.so.0
         RESULT_VARIABLE LINK_STATUS
         WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/backends/pytorch)
       if(LINK_STATUS AND NOT LINK_STATUS EQUAL 0)
