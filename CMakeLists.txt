@@ -207,15 +207,6 @@ else()
   )
 endif()
 set(OPENCV_LIBS
-    "libopencv_video.so"
-    "libopencv_videoio.so"
-    "libopencv_highgui.so"
-    "libopencv_imgcodecs.so"
-    "libopencv_imgproc.so"
-    "libopencv_core.so"
-    "libopencv_calib3d.so"
-    "libopencv_flann.so"
-    "libopencv_features2d.so"
     $<IF:$<BOOL:${RHEL_BUILD}>,libjpeg.so.62,libjpeg.so>
     $<IF:$<BOOL:${RHEL_BUILD}>,libpng16.so.16,libpng16.so>
 )
@@ -248,7 +239,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libtorch_cuda_linalg.so libtorch_cuda_linalg.so
     COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libtorch_global_deps.so libtorch_global_deps.so
     COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libcaffe2_nvrtc.so libcaffe2_nvrtc.so
-    # TODO: Revisit when not needed by making it part of cuda base container.
+    # TODO:Revisit when not needed by making it part of cuda base container.
     COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/cuda/lib64/libcusparseLt.so libcusparseLt.so;
     COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then if [ ${RHEL_BUILD} = 'ON' ]; then docker cp -a -L pytorch_backend_ptlib:/usr/local/lib64/libtorchvision.so libtorchvision.so; else docker cp -a -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libtorchvision.so.1 libtorchvision.so.1; fi; fi"
     COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then docker cp pytorch_backend_ptlib:/opt/pytorch/vision/torchvision/csrc include/torchvision/torchvision; fi"
@@ -257,15 +248,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/pytorch/LICENSE LICENSE.pytorch
     COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/include include/torch
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/pytorch/torch/csrc/jit/codegen include/torch/torch/csrc/jit/.
-    COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libopencv_videoio.so libopencv_videoio.so
-    COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libopencv_highgui.so libopencv_highgui.so
-    COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libopencv_video.so libopencv_video.so
-    COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libopencv_imgcodecs.so libopencv_imgcodecs.so
-    COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libopencv_imgproc.so libopencv_imgproc.so
-    COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libopencv_core.so libopencv_core.so
-    COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libopencv_calib3d.so libopencv_calib3d.so
-    COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libopencv_features2d.so libopencv_features2d.so
-    COMMAND docker cp -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libopencv_flann.so libopencv_flann.so
+
     COMMAND /bin/sh -c "if [ ${RHEL_BUILD} = 'ON' ]; then docker cp -L pytorch_backend_ptlib:/usr/lib64/libjpeg.so.62 libjpeg.so.62; else docker cp -L pytorch_backend_ptlib:/usr/local/lib/libjpeg.so.62 libjpeg.so.62 && docker cp pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libjpeg.so.8.2.2 libjpeg.so; fi;"
     COMMAND /bin/sh -c "if [ ${RHEL_BUILD} = 'ON' ]; then docker cp -L pytorch_backend_ptlib:/usr/lib64/libpng16.so.16 libpng16.so.16; else docker cp -L pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libpng16.so libpng16.so; fi;"
     COMMAND /bin/sh -c "if [ -f libmkl_def.so.1 ]; then patchelf --add-needed libmkl_gnu_thread.so.1 libmkl_def.so.1; fi"
@@ -482,19 +465,9 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     )
   ENDFOREACH(plib)
 
-  set(OPENCV_VERSION "406")
   install(
     CODE
       "EXECUTE_PROCESS(
-        COMMAND ln -sf libopencv_video.so libopencv_video.so.${OPENCV_VERSION}
-        COMMAND ln -sf libopencv_videoio.so libopencv_videoio.so.${OPENCV_VERSION}
-        COMMAND ln -sf libopencv_highgui.so libopencv_highgui.so.${OPENCV_VERSION}
-        COMMAND ln -sf libopencv_imgcodecs.so libopencv_imgcodecs.so.${OPENCV_VERSION}
-        COMMAND ln -sf libopencv_imgproc.so libopencv_imgproc.so.${OPENCV_VERSION}
-        COMMAND ln -sf libopencv_core.so libopencv_core.so.${OPENCV_VERSION}
-        COMMAND ln -sf libopencv_calib3d.so libopencv_calib3d.so.${OPENCV_VERSION}
-        COMMAND ln -sf libopencv_features2d.so libopencv_features2d.so.${OPENCV_VERSION}
-        COMMAND ln -sf libopencv_flann.so libopencv_flann.so.${OPENCV_VERSION}
         COMMAND ln -sf libpng16.so libpng16.so.16
         COMMAND ln -sf libjpeg.so libjpeg.so.8
         COMMAND ln -sf libcusparseLt.so libcusparseLt.so.0
