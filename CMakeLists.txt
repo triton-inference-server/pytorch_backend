@@ -206,7 +206,7 @@ else()
     "libmkl_vml_def.so.1"
   )
 endif()
-set(OPENCV_LIBS
+set(TORCHVISION_LIBS
     $<IF:$<BOOL:${RHEL_BUILD}>,libjpeg.so.62,libjpeg.so>
     $<IF:$<BOOL:${RHEL_BUILD}>,libpng16.so.16,libpng16.so>
 )
@@ -222,7 +222,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     OUTPUT
       ${PT_LIBS}
       ${LIBTORCH_LIBS}
-      ${OPENCV_LIBS}
+      ${TORCHVISION_LIBS}
       LICENSE.pytorch
       include/torch
       include/torchvision
@@ -264,7 +264,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMENT "Extracting pytorch and torchvision libraries and includes from ${TRITON_PYTORCH_DOCKER_IMAGE}"
     VERBATIM
   )
-  add_custom_target(ptlib_target DEPENDS ${PT_LIBS} ${LIBTORCH_LIBS} ${OPENCV_LIBS})
+  add_custom_target(ptlib_target DEPENDS ${PT_LIBS} ${LIBTORCH_LIBS} ${TORCHVISION_LIBS})
   add_library(ptlib SHARED IMPORTED GLOBAL)
   add_dependencies(ptlib ptlib_target)
 
@@ -430,7 +430,7 @@ install(
 
 if (${TRITON_PYTORCH_DOCKER_BUILD})
   set(PT_LIB_PATHS "")
-  FOREACH(plib ${PT_LIBS} ${LIBTORCH_LIBS} ${OPENCV_LIBS})
+  FOREACH(plib ${PT_LIBS} ${LIBTORCH_LIBS} ${TORCHVISION_LIBS})
     set(PT_LIB_PATHS ${PT_LIB_PATHS} "${CMAKE_CURRENT_BINARY_DIR}/${plib}")
   ENDFOREACH(plib)
 
@@ -450,7 +450,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     )
   endif() # TRITON_PYTORCH_ENABLE_TORCHTRT
 
-  FOREACH(plib ${PT_LIBS} ${LIBTORCH_LIBS} ${OPENCV_LIBS})
+  FOREACH(plib ${PT_LIBS} ${LIBTORCH_LIBS} ${TORCHVISION_LIBS})
     install(
       CODE
         "EXECUTE_PROCESS(
