@@ -179,7 +179,6 @@ endif() # TRITON_PYTORCH_ENABLE_TORCHTRT
 if (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
   set(LIBS_ARCH "aarch64")
   set(LIBTORCH_LIBS
-      "libopenblas.so.0"
       "libnvpl_blas_core.so.0"
       "libnvpl_blas_ilp64_gomp.so.0"
       "libnvpl_blas_ilp64_seq.so.0"
