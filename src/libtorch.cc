@@ -1606,8 +1606,6 @@ ModelInstanceState::Execute(
           std::get<1>(model_state_->EnabledTensorExprFuser()));
     }
 
-    torch::NoGradGuard no_grad;
-
     // If input is a dictionary, prepare dictionary from 'input_tensors'.
     if (is_dict_input_) {
       torch::Dict<std::string, torch::Tensor> input_dict;
