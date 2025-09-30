@@ -532,15 +532,17 @@ ModelState::ParseParameters()
         TRITONSERVER_ErrorDelete(err);
       }
     } else {
-      if (inter_op_thread_count > 0) {
+      if ((inter_op_thread_count > 0) &&
+          (inter_op_thread_count != at::get_num_interop_threads()) &&
+          (at::get_num_interop_threads() ==  std::thread::hardware_concurrency())) {
         at::set_num_interop_threads(inter_op_thread_count);
-        LOG_MESSAGE(
-            TRITONSERVER_LOG_INFO,
-            (std::string("Inter op thread count is set to ") +
-             std::to_string(inter_op_thread_count) + " for model instance '" +
-             Name() + "'")
-                .c_str());
       }
+      LOG_MESSAGE(
+        TRITONSERVER_LOG_INFO,
+          (std::string("Inter op thread count is set to ") +
+           std::to_string(at::get_num_interop_threads()) + " for model instance '" +
+           Name() + "'")
+             .c_str());
     }
   }
 
