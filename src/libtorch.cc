@@ -108,6 +108,10 @@ class ModelState : public BackendModel {
   bool EnabledCacheCleaning() { return enable_cache_cleaning_; }
 
   bool EnabledWeightSharing() { return enable_weight_sharing_; }
+  bool EnableDeterministicAlgorithms()
+  {
+    return enable_deterministic_algorithms_;
+  }
   const std::map<std::string, std::pair<int64_t, int64_t>>& ModelOutputs()
   {
     return model_outputs_;
@@ -135,6 +139,9 @@ class ModelState : public BackendModel {
 
   // Flag to indicate whether weight sharing is enabled. Defaults to false.
   bool enable_weight_sharing_;
+
+  // Flag to indicate whether deterministic algorithms are enabled.
+  bool enable_deterministic_algorithms_;
 
   // Flag pairs to indicate if various JIT settings are set and
   // enabled respectively. Defaults to (false, true). Default behavior
@@ -233,6 +240,7 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     : BackendModel(triton_model), enable_optimized_execution_(true),
       enable_inference_mode_(true), enable_cudnn_(true),
       enable_cache_cleaning_(false), enable_weight_sharing_(false),
+      enable_deterministic_algorithms_(false),
       enable_tensor_fuser_pair_({false, true}),
       enable_jit_profiling_pair_({false, true}),
       enable_jit_executor_pair_({false, true})
@@ -451,6 +459,26 @@ ModelState::ParseParameters()
           TRITONSERVER_LOG_INFO,
           (std::string("Weight sharing is ") +
            (enable_weight_sharing_ ? "enabled" : "disabled") +
+           " for model instance '" + Name() + "'")
+              .c_str());
+    }
+
+    // If `ENABLE_DETERMINISTIC_ALGORITHMS` is not present in 'parameters' then
+    // no update is made to 'enable_deterministic_algorithms_'.
+    err = ParseParameter(
+        params, "ENABLE_DETERMINISTIC_ALGORITHMS",
+        &enable_deterministic_algorithms_);
+    if (err != nullptr) {
+      if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
+        return err;
+      } else {
+        TRITONSERVER_ErrorDelete(err);
+      }
+    } else {
+      LOG_MESSAGE(
+          TRITONSERVER_LOG_INFO,
+          (std::string("Deterministic algorithms are ") +
+           (enable_deterministic_algorithms_ ? "enabled" : "disabled") +
            " for model instance '" + Name() + "'")
               .c_str());
     }
@@ -1587,6 +1615,10 @@ ModelInstanceState::Execute(
 
     // enable/disable cudnn
     at::globalContext().setUserEnabledCuDNN(model_state_->EnabledCudnn());
+
+    // enable/disable deterministic algorithms
+    at::globalContext().setDeterministicAlgorithms(
+        model_state_->EnableDeterministicAlgorithms(), false /* warn_only */);
 
     // JIT. No change is made unless parameter is explicitly set.
     if (std::get<0>(model_state_->EnabledJitProfiling())) {
