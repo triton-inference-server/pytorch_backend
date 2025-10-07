@@ -517,15 +517,15 @@ ModelState::ParseParameters()
       if (intra_op_thread_count > 0) {
         // at::set_num_threads() does not throw if called more than once, but issues warnings.
         // std::call_once() is useful to limit these.
-        std::call_once(pytorch_intraop_threads_flag, [this, intra_op_thread_count](){
+        std::call_once(pytorch_intraop_threads_flag, [intra_op_thread_count](){
           at::set_num_threads(intra_op_thread_count);
-          LOG_MESSAGE(
-              TRITONSERVER_LOG_INFO,
-              (std::string("Intra op thread count is set to ") +
-               std::to_string(intra_op_thread_count) + " for model instance '" +
-               this->Name() + "'")
-                  .c_str());
         });
+        LOG_MESSAGE(
+            TRITONSERVER_LOG_INFO,
+            (std::string("Intra op thread count is set to ") +
+             std::to_string(at::get_num_threads()) + " for model instance '" +
+             Name() + "'")
+                .c_str());
       }
     }
 
@@ -545,26 +545,19 @@ ModelState::ParseParameters()
       if (inter_op_thread_count > 0) {
         // at::set_num_interop_threads() throws if called more than once.
         // std::call_once() should prevent this, but try/catch is additionally used for safety.
-        std::call_once(pytorch_interop_threads_flag, [this, inter_op_thread_count](){
+        std::call_once(pytorch_interop_threads_flag, [inter_op_thread_count](){
           try {
             at::set_num_interop_threads(inter_op_thread_count);
-            LOG_MESSAGE(
-                TRITONSERVER_LOG_INFO,
-                (std::string("Inter op thread count is set to ") +
-                 std::to_string(inter_op_thread_count) + " for model instance '" +
-                 Name() + "'")
-                    .c_str());
           } catch (const c10::Error& e) {
-            int current_inter_op_thread_count = at::get_num_interop_threads();
-            bool current_is_requested = inter_op_thread_count == current_inter_op_thread_count;
-            LOG_MESSAGE(
-                TRITONSERVER_LOG_INFO,
-                (std::string("Inter op thread count is already set to ") +
-                 std::to_string(current_inter_op_thread_count) +
-                 (current_is_requested ? "" : " and cannot be changed. Setting ignored") +
-                 " for model instance '" + this->Name() + "'").c_str());
+            // do nothing
           }
         });
+        LOG_MESSAGE(
+            TRITONSERVER_LOG_INFO,
+            (std::string("Inter op thread count is set to ") +
+             std::to_string(at::get_num_interop_threads()) + " for model instance '" +
+             Name() + "'")
+                .c_str());
       }
     }
   }
