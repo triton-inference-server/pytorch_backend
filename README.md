@@ -218,9 +218,10 @@ key: "INTER_OP_THREAD_COUNT"
 }
 ```
 
-**NOTE**: This parameter is set globally for the PyTorch backend.
-The value from the first model config file that specifies this parameter will be used.
-Subsequent values from other model config files, if different, will be ignored.
+> [!NOTE]
+> This parameter is set globally for the PyTorch backend.
+> The value from the first model config file that specifies this parameter will be used.
+> Subsequent values from other model config files, if different, will be ignored.
 
 * `INTRA_OP_THREAD_COUNT`:
 
@@ -242,9 +243,10 @@ key: "INTRA_OP_THREAD_COUNT"
 }
 ```
 
-**NOTE**: This parameter is set globally for the PyTorch backend.
-The value from the first model config file that specifies this parameter will be used.
-Subsequent values from other model config files, if different, will be ignored.
+> [!NOTE]
+> This parameter is set globally for the PyTorch backend.
+> The value from the first model config file that specifies this parameter will be used.
+> Subsequent values from other model config files, if different, will be ignored.
 
 * Additional Optimizations: Three additional boolean parameters are available to disable
 certain Torch optimizations that can sometimes cause latency regressions in models with
