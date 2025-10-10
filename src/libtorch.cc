@@ -28,6 +28,7 @@
 
 #include <cstdint>
 #include <exception>
+#include <mutex>
 
 #include "libtorch_utils.h"
 #include "triton/backend/backend_common.h"
@@ -65,6 +66,11 @@
 //
 // PyTorch C++ (LibTorch) Backend that implements the TRITONBACKEND API.
 //
+
+namespace {
+std::once_flag pytorch_interop_threads_flag;
+std::once_flag pytorch_intraop_threads_flag;
+}  // namespace
 
 namespace triton { namespace backend { namespace pytorch {
 
@@ -509,11 +515,15 @@ ModelState::ParseParameters()
       }
     } else {
       if (intra_op_thread_count > 0) {
-        at::set_num_threads(intra_op_thread_count);
+        // at::set_num_threads() does not throw if called more than once, but
+        // issues warnings. std::call_once() is useful to limit these.
+        std::call_once(pytorch_intraop_threads_flag, [intra_op_thread_count]() {
+          at::set_num_threads(intra_op_thread_count);
+        });
         LOG_MESSAGE(
             TRITONSERVER_LOG_INFO,
             (std::string("Intra op thread count is set to ") +
-             std::to_string(intra_op_thread_count) + " for model instance '" +
+             std::to_string(at::get_num_threads()) + " for model instance '" +
              Name() + "'")
                 .c_str());
       }
@@ -533,12 +543,22 @@ ModelState::ParseParameters()
       }
     } else {
       if (inter_op_thread_count > 0) {
-        at::set_num_interop_threads(inter_op_thread_count);
+        // at::set_num_interop_threads() throws if called more than once.
+        // std::call_once() should prevent this, but try/catch is additionally
+        // used for safety.
+        std::call_once(pytorch_interop_threads_flag, [inter_op_thread_count]() {
+          try {
+            at::set_num_interop_threads(inter_op_thread_count);
+          }
+          catch (const c10::Error& e) {
+            // do nothing
+          }
+        });
         LOG_MESSAGE(
             TRITONSERVER_LOG_INFO,
             (std::string("Inter op thread count is set to ") +
-             std::to_string(inter_op_thread_count) + " for model instance '" +
-             Name() + "'")
+             std::to_string(at::get_num_interop_threads()) +
+             " for model instance '" + Name() + "'")
                 .c_str());
       }
     }
