@@ -135,9 +135,11 @@ model_repository/
 
 The `model.pt` is the TorchScript model file.
 
-### Parameters
+## Configuration
 
 Triton exposes some flags to control the execution mode of the TorchScript models through the `Parameters` section of the model's `config.pbtxt` file.
+
+### Parameters
 
 * `DISABLE_OPTIMIZED_EXECUTION`:
   Boolean flag to disable the optimized execution of TorchScript models.
@@ -154,7 +156,7 @@ Triton exposes some flags to control the execution mode of the TorchScript model
 
   The section of model config file specifying this parameter will look like:
 
-  ```proto
+  ```yaml
   parameters: {
     key: "DISABLE_OPTIMIZED_EXECUTION"
     value: { string_value: "true" }
@@ -173,7 +175,7 @@ Triton exposes some flags to control the execution mode of the TorchScript model
 
   To enable inference mode, use the configuration example below:
 
-  ```proto
+  ```yaml
   parameters: {
     key: "INFERENCE_MODE"
     value: { string_value: "true" }
@@ -193,7 +195,7 @@ Triton exposes some flags to control the execution mode of the TorchScript model
 
   To disable cuDNN, use the configuration example below:
 
-  ```proto
+  ```yaml
   parameters: {
     key: "DISABLE_CUDNN"
     value: { string_value: "true" }
@@ -208,7 +210,7 @@ Triton exposes some flags to control the execution mode of the TorchScript model
 
   To enable weight sharing, use the configuration example below:
 
-  ```proto
+  ```yaml
   parameters: {
     key: "ENABLE_WEIGHT_SHARING"
     value: { string_value: "true" }
@@ -226,7 +228,7 @@ Triton exposes some flags to control the execution mode of the TorchScript model
 
   To enable cleaning of the CUDA cache after every execution, use the configuration example below:
 
-  ```proto
+  ```yaml
   parameters: {
     key: "ENABLE_CACHE_CLEANING"
     value: { string_value: "true" }
@@ -249,7 +251,7 @@ Triton exposes some flags to control the execution mode of the TorchScript model
 
   To set the inter-op thread count, use the configuration example below:
 
-  ```proto
+  ```yaml
   parameters: {
     key: "INTER_OP_THREAD_COUNT"
     value: { string_value: "1" }
@@ -275,7 +277,7 @@ Triton exposes some flags to control the execution mode of the TorchScript model
 
   To set the intra-op thread count, use the configuration example below:
 
-  ```proto
+  ```yaml
   parameters: {
     key: "INTRA_OP_THREAD_COUNT"
     value: { string_value: "1" }
@@ -291,9 +293,7 @@ Triton exposes some flags to control the execution mode of the TorchScript model
 
     `ENABLE_JIT_PROFILING`
 
-### Support
-
-#### Model Instance Group Kind
+### Model Instance Group Kind
 
 The PyTorch backend supports the following kinds of
 [Model Instance Groups](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#instance-groups)
@@ -318,6 +318,15 @@ where the input tensors are placed as follows:
 
   > [!IMPORTANT]
   > If a device is not specified in the model, the backend uses the first available GPU device.
+
+To set the model instance group, use the configuration example below:
+
+```yaml
+instance_group {
+   count: 2
+   kind: KIND_GPU
+}
+```
 
 ### Customization
 
@@ -347,7 +356,7 @@ The following PyTorch settings may be customized by setting parameters on the
 
 For example:
 
-```proto
+```yaml
 parameters: {
   key: "NUM_THREADS"
   value: { string_value: "4" }
@@ -358,7 +367,7 @@ parameters: {
 }
 ```
 
-### Important Notes
+## Important Notes
 
 * The execution of PyTorch model on GPU is asynchronous in nature.
   See
