@@ -156,7 +156,7 @@ Triton exposes some flags to control the execution mode of the TorchScript model
 
   The section of model config file specifying this parameter will look like:
 
-  ```yaml
+  ```proto
   parameters: {
     key: "DISABLE_OPTIMIZED_EXECUTION"
     value: { string_value: "true" }
@@ -175,7 +175,7 @@ Triton exposes some flags to control the execution mode of the TorchScript model
 
   To enable inference mode, use the configuration example below:
 
-  ```yaml
+  ```proto
   parameters: {
     key: "INFERENCE_MODE"
     value: { string_value: "true" }
@@ -195,7 +195,7 @@ Triton exposes some flags to control the execution mode of the TorchScript model
 
   To disable cuDNN, use the configuration example below:
 
-  ```yaml
+  ```proto
   parameters: {
     key: "DISABLE_CUDNN"
     value: { string_value: "true" }
@@ -210,7 +210,7 @@ Triton exposes some flags to control the execution mode of the TorchScript model
 
   To enable weight sharing, use the configuration example below:
 
-  ```yaml
+  ```proto
   parameters: {
     key: "ENABLE_WEIGHT_SHARING"
     value: { string_value: "true" }
@@ -228,7 +228,7 @@ Triton exposes some flags to control the execution mode of the TorchScript model
 
   To enable cleaning of the CUDA cache after every execution, use the configuration example below:
 
-  ```yaml
+  ```proto
   parameters: {
     key: "ENABLE_CACHE_CLEANING"
     value: { string_value: "true" }
@@ -251,7 +251,7 @@ Triton exposes some flags to control the execution mode of the TorchScript model
 
   To set the inter-op thread count, use the configuration example below:
 
-  ```yaml
+  ```proto
   parameters: {
     key: "INTER_OP_THREAD_COUNT"
     value: { string_value: "1" }
@@ -277,7 +277,7 @@ Triton exposes some flags to control the execution mode of the TorchScript model
 
   To set the intra-op thread count, use the configuration example below:
 
-  ```yaml
+  ```proto
   parameters: {
     key: "INTRA_OP_THREAD_COUNT"
     value: { string_value: "1" }
@@ -321,7 +321,7 @@ where the input tensors are placed as follows:
 
 To set the model instance group, use the configuration example below:
 
-```yaml
+```proto
 instance_group {
    count: 2
    kind: KIND_GPU
@@ -356,7 +356,7 @@ The following PyTorch settings may be customized by setting parameters on the
 
 For example:
 
-```yaml
+```proto
 parameters: {
   key: "NUM_THREADS"
   value: { string_value: "4" }
