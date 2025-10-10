@@ -46,9 +46,7 @@ Ask questions or report problems using
 
 Be sure to read all the information below as well as the
 [general Triton documentation](https://github.com/triton-inference-server/server#triton-inference-server)
-available in the
-[Triton Server](https://github.com/triton-inference-server/server)
-repository.
+available in the [Triton Server](https://github.com/triton-inference-server/server) repository.
 
 ## Build the PyTorch Backend
 
@@ -102,6 +100,40 @@ make install
 ```
 
 ## Using the PyTorch Backend
+
+### PyTorch 2.0 Models
+
+The model repository should look like:
+
+```bash
+model_repository/
+`-- model_directory
+    |-- 1
+    |   |-- model.py
+    |   `-- [model.pt]
+    `-- config.pbtxt
+```
+
+The `model.py` contains the class definition of the PyTorch model.
+The class should extend the
+[`torch.nn.Module`](https://pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module).
+The `model.pt` may be optionally provided which contains the saved
+[`state_dict`](https://pytorch.org/tutorials/beginner/saving_loading_models.html#saving-loading-model-for-inference)
+of the model.
+
+### TorchScript Models
+
+The model repository should look like:
+
+```bash
+model_repository/
+`-- model_directory
+    |-- 1
+    |   `-- model.pt
+    `-- config.pbtxt
+```
+
+The `model.pt` is the TorchScript model file.
 
 ### Parameters
 
@@ -253,7 +285,6 @@ Triton exposes some flags to control the execution mode of the TorchScript model
 * **Additional Optimizations**:
 
   Three additional boolean parameters are available to disable certain Torch optimizations that can sometimes cause latency regressions in models with complex execution modes and dynamic shapes.
-
   If not specified, all are enabled by default.
 
     `ENABLE_JIT_EXECUTOR`
@@ -287,40 +318,6 @@ where the input tensors are placed as follows:
 
   > [!IMPORTANT]
   > If a device is not specified in the model, the backend uses the first available GPU device.
-
-### PyTorch 2.0 Models
-
-The model repository should look like:
-
-```bash
-model_repository/
-`-- model_directory
-    |-- 1
-    |   |-- model.py
-    |   `-- [model.pt]
-    `-- config.pbtxt
-```
-
-The `model.py` contains the class definition of the PyTorch model.
-The class should extend the
-[`torch.nn.Module`](https://pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module).
-The `model.pt` may be optionally provided which contains the saved
-[`state_dict`](https://pytorch.org/tutorials/beginner/saving_loading_models.html#saving-loading-model-for-inference)
-of the model.
-
-### TorchScript Models
-
-The model repository should look like:
-
-```bash
-model_repository/
-`-- model_directory
-    |-- 1
-    |   `-- model.pt
-    `-- config.pbtxt
-```
-
-The `model.pt` is the TorchScript model file.
 
 ### Customization
 
