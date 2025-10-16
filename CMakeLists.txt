@@ -161,8 +161,14 @@ set(PT_LIBS
     "libtorch_cuda_linalg.so"
     "libtorch_global_deps.so"
     "libjpeg.so.62"
-    $<IF:$<BOOL:${TRITON_PYTORCH_NVSHMEM}>,libtorch_nvshmem.so,>
 )
+
+if (${TRITON_PYTORCH_NVSHMEM})
+  set(PT_LIBS
+      ${PT_LIBS}
+      "libtorch_nvshmem.so"
+  )
+endif() # TRITON_PYTORCH_NVSHMEM
 
 if (${TRITON_PYTORCH_ENABLE_TORCHVISION})
   set(PT_LIBS
