@@ -103,23 +103,23 @@ make install
 
 ### PyTorch 2.0 Models
 
+PyTorch 2.0 features are available.
+However, Triton's PyTorch backend requires a serialized representation of the model in the form a `model.pt` file.
+The serialized representation of the model can be generated using PyTorch's
+[`torch.save()`](https://docs.pytorch.org/tutorials/beginner/saving_loading_models.html#id1)
+function to generate the `model.pt` file.
+
 The model repository should look like:
 
 ```bash
 model_repository/
 `-- model_directory
     |-- 1
-    |   |-- model.py
-    |   `-- [model.pt]
+    |   `-- model.pt
     `-- config.pbtxt
 ```
 
-The `model.py` contains the class definition of the PyTorch model.
-The class should extend the
-[`torch.nn.Module`](https://pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module).
-The `model.pt` may be optionally provided which contains the saved
-[`state_dict`](https://pytorch.org/tutorials/beginner/saving_loading_models.html#saving-loading-model-for-inference)
-of the model.
+Where `model.pt` is the serialized representation of the model.
 
 ### TorchScript Models
 
@@ -138,6 +138,17 @@ The `model.pt` is the TorchScript model file.
 ## Configuration
 
 Triton exposes some flags to control the execution mode of the TorchScript models through the `Parameters` section of the model's `config.pbtxt` file.
+
+### Configuration Options
+
+* `default_model_name`:
+  Instructs the Triton PyTorch backend to load the model from a file of the given name.
+
+  The model config specifying the option would look like:
+
+  ```proto
+  default_model_name: "another_file_name.pt"
+  ```
 
 ### Parameters
 
