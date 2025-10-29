@@ -248,23 +248,23 @@ complex execution modes and dynamic shapes. If not specified, all are enabled by
 
 ### PyTorch 2.0 Models
 
+PyTorch 2.0 features are available.
+However, Triton's PyTorch backend requires a serialized representation of the model in the form a `model.pt` file.
+The serialized representation of the model can be generated using PyTorch's
+[`torch.save()`](https://docs.pytorch.org/tutorials/beginner/saving_loading_models.html#id1)
+function to generate the `model.pt` file.
+
 The model repository should look like:
 
 ```bash
 model_repository/
 `-- model_directory
     |-- 1
-    |   |-- model.py
-    |   `-- [model.pt]
+    |   `-- model.pt
     `-- config.pbtxt
 ```
 
-The `model.py` contains the class definition of the PyTorch model.
-The class should extend the
-[`torch.nn.Module`](https://pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module).
-The `model.pt` may be optionally provided which contains the saved
-[`state_dict`](https://pytorch.org/tutorials/beginner/saving_loading_models.html#saving-loading-model-for-inference)
-of the model.
+Where `model.pt` is the serialized representation of the model.
 
 ### TorchScript Models
 
@@ -279,6 +279,210 @@ model_repository/
 ```
 
 The `model.pt` is the TorchScript model file.
+
+## Configuration
+
+Triton exposes some flags to control the execution mode of the TorchScript models through the `Parameters` section of the model's `config.pbtxt` file.
+
+### Configuration Options
+
+* `default_model_name`:
+  Instructs the Triton PyTorch backend to load the model from a file of the given name.
+
+  The model config specifying the option would look like:
+
+  ```proto
+  default_model_name: "another_file_name.pt"
+  ```
+
+### Parameters
+
+* `DISABLE_OPTIMIZED_EXECUTION`:
+  Boolean flag to disable the optimized execution of TorchScript models.
+  By default, the optimized execution is always enabled.
+
+  The initial calls to a loaded TorchScript model take a significant amount of time.
+  Due to this longer model warmup
+  ([pytorch #57894](https://github.com/pytorch/pytorch/issues/57894)),
+  Triton also allows execution of models without these optimizations.
+  In some models, optimized execution does not benefit performance
+  ([pytorch #19978](https://github.com/pytorch/pytorch/issues/19978))
+  and in other cases impacts performance negatively
+  ([pytorch #53824](https://github.com/pytorch/pytorch/issues/53824)).
+
+  The section of model config file specifying this parameter will look like:
+
+  ```proto
+  parameters: {
+    key: "DISABLE_OPTIMIZED_EXECUTION"
+    value: { string_value: "true" }
+  }
+  ```
+
+* `INFERENCE_MODE`:
+
+  Boolean flag to enable the Inference Mode execution of TorchScript models.
+  By default, the inference mode is enabled.
+
+  [InferenceMode](https://pytorch.org/cppdocs/notes/inference_mode.html) is a new RAII guard analogous to `NoGradMode` to be used when you are certain your operations will have no interactions with autograd.
+  Compared to `NoGradMode`, code run under this mode gets better performance by disabling autograd.
+
+  Please note that in some models, InferenceMode might not benefit performance and in fewer cases might impact performance negatively.
+
+  To enable inference mode, use the configuration example below:
+
+  ```proto
+  parameters: {
+    key: "INFERENCE_MODE"
+    value: { string_value: "true" }
+  }
+  ```
+
+* `DISABLE_CUDNN`:
+
+  Boolean flag to disable the cuDNN library.
+  By default, cuDNN is enabled.
+
+  [cuDNN](https://developer.nvidia.com/cudnn) is a GPU-accelerated library of primitives for deep neural networks.
+  It provides highly tuned implementations for standard routines.
+
+  Typically, models run with cuDNN enabled execute faster.
+  However there are some exceptions where using cuDNN can be slower, cause higher memory usage, or result in errors.
+
+  To disable cuDNN, use the configuration example below:
+
+  ```proto
+  parameters: {
+    key: "DISABLE_CUDNN"
+    value: { string_value: "true" }
+  }
+  ```
+
+* `ENABLE_WEIGHT_SHARING`:
+
+  Boolean flag to enable model instances on the same device to share weights.
+  This optimization should not be used with stateful models.
+  If not specified, weight sharing is disabled.
+
+  To enable weight sharing, use the configuration example below:
+
+  ```proto
+  parameters: {
+    key: "ENABLE_WEIGHT_SHARING"
+    value: { string_value: "true" }
+  }
+  ```
+
+* `ENABLE_CACHE_CLEANING`:
+
+  Boolean flag to enable CUDA cache cleaning after each model execution.
+  If not specified, cache cleaning is disabled.
+  This flag has no effect if model is on CPU.
+
+  Setting this flag to true will likely negatively impact the performance due to additional CUDA cache cleaning operation after each model execution.
+  Therefore, you should only use this flag if you serve multiple models with Triton and encounter CUDA out-of-memory issues during model executions.
+
+  To enable cleaning of the CUDA cache after every execution, use the configuration example below:
+
+  ```proto
+  parameters: {
+    key: "ENABLE_CACHE_CLEANING"
+    value: { string_value: "true" }
+  }
+  ```
+
+* `INTER_OP_THREAD_COUNT`:
+
+  PyTorch allows using multiple CPU threads during TorchScript model inference.
+  One or more inference threads execute a model’s forward pass on the given inputs.
+  Each inference thread invokes a JIT interpreter that executes the ops of a model inline, one by one.
+
+  This parameter sets the size of this thread pool.
+  The default value of this setting is the number of cpu cores.
+
+  > [!TIP]
+  > Refer to
+  > [CPU Threading TorchScript](https://pytorch.org/docs/stable/notes/cpu_threading_torchscript_inference.html)
+  > on how to set this parameter properly.
+
+  To set the inter-op thread count, use the configuration example below:
+
+  ```proto
+  parameters: {
+    key: "INTER_OP_THREAD_COUNT"
+    value: { string_value: "1" }
+  }
+  ```
+
+> [!NOTE]
+> This parameter is set globally for the PyTorch backend.
+> The value from the first model config file that specifies this parameter will be used.
+> Subsequent values from other model config files, if different, will be ignored.
+
+* `INTRA_OP_THREAD_COUNT`:
+
+  In addition to the inter-op parallelism, PyTorch can also utilize multiple threads within the ops (intra-op parallelism).
+  This can be useful in many cases, including element-wise ops on large tensors, convolutions, GEMMs, embedding lookups and others.
+
+  The default value for this setting is the number of CPU cores.
+
+  > [!TIP]
+  > Refer to
+  > [CPU Threading TorchScript](https://pytorch.org/docs/stable/notes/cpu_threading_torchscript_inference.html)
+  > on how to set this parameter properly.
+
+  To set the intra-op thread count, use the configuration example below:
+
+  ```proto
+  parameters: {
+    key: "INTRA_OP_THREAD_COUNT"
+    value: { string_value: "1" }
+  }
+  ```
+
+* **Additional Optimizations**:
+
+  Three additional boolean parameters are available to disable certain Torch optimizations that can sometimes cause latency regressions in models with complex execution modes and dynamic shapes.
+  If not specified, all are enabled by default.
+
+    `ENABLE_JIT_EXECUTOR`
+
+    `ENABLE_JIT_PROFILING`
+
+### Model Instance Group Kind
+
+The PyTorch backend supports the following kinds of
+[Model Instance Groups](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#instance-groups)
+where the input tensors are placed as follows:
+
+* `KIND_GPU`:
+
+  Inputs are prepared on the GPU device associated with the model instance.
+
+* `KIND_CPU`:
+
+  Inputs are prepared on the CPU.
+
+* `KIND_MODEL`:
+
+  Inputs are prepared on the CPU.
+  When loading the model, the backend does not choose the GPU device for the model;
+  instead, it respects the device(s) specified in the model and uses them as they are during inference.
+
+  This is useful when the model internally utilizes multiple GPUs, as demonstrated in
+  [this example model](https://github.com/triton-inference-server/server/blob/main/qa/L0_libtorch_instance_group_kind_model/gen_models.py).
+
+  > [!IMPORTANT]
+  > If a device is not specified in the model, the backend uses the first available GPU device.
+
+To set the model instance group, use the configuration example below:
+
+```proto
+instance_group {
+   count: 2
+   kind: KIND_GPU
+}
+```
 
 ### Customization
 
