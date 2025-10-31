@@ -151,16 +151,26 @@ endif() # TRITON_ENABLE_NVTX
 #
 configure_file(src/libtriton_pytorch.ldscript libtriton_pytorch.ldscript COPYONLY)
 
-set(PT_LIBS
-    "libc10.so"
-    "libc10_cuda.so"
-    "libtorch.so"
-    "libtorch_cpu.so"
-    "libtorch_cuda.so"
-    "libtorch_cuda_linalg.so"
-    "libtorch_global_deps.so"
-    "libjpeg.so.62"
-)
+if(NOT CMAKE_SYSTEM_PROCESSOR STREQUAL "ppc64le")
+  set(PT_LIBS
+      "libc10.so"
+      "libc10_cuda.so"
+      "libtorch.so"
+      "libtorch_cpu.so"
+      "libtorch_cuda.so"
+      "libtorch_cuda_linalg.so"
+      "libtorch_global_deps.so"
+      "libjpeg.so.62"
+ )
+ else()
+  set(PT_LIBS
+      "libc10.so"
+      "libtorch.so"
+      "libtorch_cpu.so"
+      "libtorch_global_deps.so"
+      "libjpeg.so.62"
+    )
+endif()
 
 if (${TRITON_PYTORCH_ENABLE_TORCHVISION})
   set(PT_LIBS
