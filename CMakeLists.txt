@@ -282,7 +282,7 @@ add_library(
   src/libtorch_utils.h
   src/model_instance_state.cc
   src/model_state.cc
-  src/string_utilities.cc
+  src/string_utils.cc
 )
 
 add_library(
