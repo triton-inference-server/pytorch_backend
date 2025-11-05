@@ -25,6 +25,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "model_instance_state.hh"
+
 #include "string_utilities.hh"
 
 #ifdef TRITON_PYTORCH_ENABLE_TORCHVISION
