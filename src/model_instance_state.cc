@@ -26,7 +26,7 @@
 
 #include "model_instance_state.hh"
 
-#include "string_utilities.hh"
+#include "string_utils.hh"
 
 #ifdef TRITON_PYTORCH_ENABLE_TORCHVISION
 // Suppress warnings in torch headers
