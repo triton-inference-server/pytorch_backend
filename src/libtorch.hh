@@ -27,7 +27,7 @@
 #include "model_instance_state.hh"
 #include "model_state.hh"
 #include "naming_convention.hh"
-#include "string_utilities.hh"
+#include "string_utils.hh"
 
 //
 // PyTorch C++ (LibTorch) Backend that implements the TRITONBACKEND API.
