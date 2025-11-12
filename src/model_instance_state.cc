@@ -241,6 +241,27 @@ ModelInstanceState::Create(
 }
 
 void
+ModelInstanceState::CreateCudaEvents(const int32_t& device_id)
+{
+#ifdef TRITON_ENABLE_GPU
+  // Need to set the CUDA context so that the context that events are
+  // created on match with contexts that events are recorded with.
+  THROW_IF_BACKEND_INSTANCE_ERROR(ConvertCUDAStatusToTritonError(
+      cudaSetDevice(device_id), TRITONSERVER_ERROR_INTERNAL,
+      "Failed to set the device"));
+  THROW_IF_BACKEND_INSTANCE_ERROR(ConvertCUDAStatusToTritonError(
+      cudaEventCreate(&compute_input_start_event_), TRITONSERVER_ERROR_INTERNAL,
+      "Failed to create cuda event"));
+  THROW_IF_BACKEND_INSTANCE_ERROR(ConvertCUDAStatusToTritonError(
+      cudaEventCreate(&compute_infer_start_event_), TRITONSERVER_ERROR_INTERNAL,
+      "Failed to create cuda event"));
+  THROW_IF_BACKEND_INSTANCE_ERROR(ConvertCUDAStatusToTritonError(
+      cudaEventCreate(&compute_output_start_event_),
+      TRITONSERVER_ERROR_INTERNAL, "Failed to create cuda event"));
+#endif
+}
+
+void
 ModelInstanceState::Execute(
     std::vector<TRITONBACKEND_Response*>* responses,
     const uint32_t response_count,
@@ -1228,6 +1249,12 @@ ModelInstanceState::SetInputTensors(
   *cuda_copy |= collector->Finalize();
 
   return nullptr;
+}
+
+ModelState*
+ModelInstanceState::StateForModel() const
+{
+  return model_state_;
 }
 
 TRITONSERVER_Error*

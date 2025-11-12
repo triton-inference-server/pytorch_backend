@@ -87,7 +87,6 @@ bool SetStringBuffer(
     const size_t tensor_element_count, cudaStream_t stream,
     std::string* serialized, bool state);
 
-bool SetStringInputTensor(
     torch::List<std::string>* input_list, TRITONBACKEND_Input* input,
     const char* name, const uint32_t buffer_count,
     const size_t request_element_cnt, TRITONBACKEND_Response** response,
