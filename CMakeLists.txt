@@ -60,7 +60,10 @@ set(TRITON_REPO_ORGANIZATION "https://github.com/triton-inference-server" CACHE 
 set(TRITON_BACKEND_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/backend repo")
 set(TRITON_CORE_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/core repo")
 set(TRITON_COMMON_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/common repo")
-
+set(TRITON_BUILD_VARIANT "all" CACHE STRING "Build variant: cpu or all")
+if(NOT TRITON_BUILD_VARIANT STREQUAL "cpu" AND NOT TRITON_BUILD_VARIANT STREQUAL "all")
+  message(FATAL_ERROR "Invalid TRITON_BUILD_VARIANT: ${TRITON_BUILD_VARIANT}. Allowed values: cpu, all")
+endif()
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
@@ -151,7 +154,15 @@ endif() # TRITON_ENABLE_NVTX
 # Shared library implementing the Triton Backend API
 #
 configure_file(src/libtriton_pytorch.ldscript libtriton_pytorch.ldscript COPYONLY)
-
+if (TRITON_BUILD_VARIANT STREQUAL "cpu")
+set(PT_LIBS
+    "libc10.so"
+    "libtorch.so"
+    "libtorch_cpu.so"
+    "libtorch_global_deps.so"
+    "libjpeg.so.62"
+)
+else()
 set(PT_LIBS
     "libc10.so"
     "libc10_cuda.so"
@@ -162,7 +173,7 @@ set(PT_LIBS
     "libtorch_global_deps.so"
     "libjpeg.so.62"
 )
-
+endif()
 if (${TRITON_PYTORCH_NVSHMEM})
   set(PT_LIBS
       ${PT_LIBS}
@@ -198,6 +209,9 @@ if (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
       "libnvpl_lapack_lp64_gomp.so.0"
       "libnvpl_lapack_lp64_seq.so.0"
   )
+elseif (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "ppc64le")
+  set(LIBS_ARCH "powerpc64le")
+  set(LIBTORCH_LIBS)
 else()
   set(LIBS_ARCH "x86_64")
   set(LIBTORCH_LIBS
@@ -239,13 +253,15 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker create --name pytorch_backend_ptlib ${TRITON_PYTORCH_DOCKER_IMAGE}
     COMMAND /bin/sh -c "for i in ${LIBTORCH_LIBS_STR} ; do echo copying $i && docker cp -L pytorch_backend_ptlib:${LIBTORCH_LIBS_PATH}/$i $i ; done"
     COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libc10.so libc10.so
-    COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libc10_cuda.so libc10_cuda.so
     COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libtorch.so libtorch.so
     COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libtorch_cpu.so libtorch_cpu.so
-    COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libtorch_cuda.so libtorch_cuda.so
-    COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libtorch_cuda_linalg.so libtorch_cuda_linalg.so
     COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libtorch_global_deps.so libtorch_global_deps.so
-    COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libcaffe2_nvrtc.so libcaffe2_nvrtc.so
+    COMMAND /bin/sh -c "if [ \"${TRITON_BUILD_VARIANT}\" != \"cpu\" ]; then \
+      docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libc10_cuda.so libc10_cuda.so && \
+      docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libtorch_cuda.so libtorch_cuda.so && \
+      docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libtorch_cuda_linalg.so libtorch_cuda_linalg.so && \
+      docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libcaffe2_nvrtc.so libcaffe2_nvrtc.so; \
+    fi"
     COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_NVSHMEM} = 'ON' ]; then docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libtorch_nvshmem.so libtorch_nvshmem.so; fi"
     COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then if [ ${RHEL_BUILD} = 'ON' ]; then docker cp -a -L pytorch_backend_ptlib:/usr/local/lib64/libtorchvision.so libtorchvision.so; else docker cp -a -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libtorchvision.so.1 libtorchvision.so.1; fi; fi"
     COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then docker cp pytorch_backend_ptlib:/opt/pytorch/vision/torchvision/csrc include/torchvision/torchvision; fi"
