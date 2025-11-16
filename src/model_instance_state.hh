@@ -73,6 +73,10 @@ class ModelInstanceState : public BackendModelInstance {
   // Map from configuration name for an output to the index of
   // that output in the model.
   std::unordered_map<std::string, int> output_index_map_;
+
+  // If the output is a dictionary of tensors.
+  std::unordered_map<std::string, int> output_dict_key_to_index_;
+  bool is_dict_output_;
   std::unordered_map<std::string, TRITONSERVER_DataType> output_dtype_map_;
 
   // If the input to the tensor is a dictionary of tensors.

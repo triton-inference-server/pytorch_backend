@@ -51,7 +51,7 @@ namespace triton::backend::pytorch {
 ModelInstanceState::ModelInstanceState(
     ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
     : BackendModelInstance(model_state, triton_model_instance),
-      model_state_(model_state), device_(torch::kCPU), is_dict_input_(false),
+      model_state_(model_state), device_(torch::kCPU), is_dict_input_(false), is_dict_output_(false),
       device_cnt_(0)
 {
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
@@ -345,6 +345,18 @@ ModelInstanceState::Execute(
             list_output.elementType()->str() + "]");
       }
       output_tensors->push_back(model_outputs_);
+    } else if (model_outputs_.isGenericDict()) {
+      is_dict_output_ = true;
+      auto dict_output = model_outputs_.toGenericDict();
+      output_dict_key_to_index_.clear();
+      
+      int index = 0;
+      for (auto it = dict_output.begin(); it != dict_output.end(); ++it) {
+        std::string key = it->key().toStringRef();
+        output_tensors->push_back(it->value());
+        output_dict_key_to_index_[key] = index;
+        index++;
+      }
     } else {
       throw std::invalid_argument(
           "output must be of type Tensor, List[str] or Tuple containing one of "
@@ -872,7 +884,17 @@ ModelInstanceState::ReadOutputTensors(
   // The serialized string buffer must be valid until output copies are done
   std::vector<std::unique_ptr<std::string>> string_buffer;
   for (auto& output : model_state_->ModelOutputs()) {
-    int op_index = output_index_map_[output.first];
+    // Use dict key mapping if available
+    int op_index;
+    if (is_dict_output_) {
+      auto it = output_dict_key_to_index_.find(output.first);
+      if (it == output_dict_key_to_index_.end()) {
+        continue;  // Skip outputs not in dict
+      }
+      op_index = it->second;
+    } else {
+      op_index = output_index_map_[output.first];
+    }
     auto name = output.first;
     auto output_tensor_pair = output.second;
 
