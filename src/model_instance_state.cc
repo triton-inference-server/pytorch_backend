@@ -51,7 +51,7 @@ namespace triton::backend::pytorch {
 ModelInstanceState::ModelInstanceState(
     ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
     : BackendModelInstance(model_state, triton_model_instance),
-      model_state_(model_state), device_(torch::kCPU), is_dict_input_(false)
+      model_state_(model_state), device_(torch::kCPU), is_dict_input_(false),
       dict_output_validated_(false),
       device_cnt_(0)
 {
