@@ -26,6 +26,9 @@
 
 #pragma once
 
+#include <atomic>
+#include <mutex>
+
 #include <stdint.h>
 
 #include <cstdint>
@@ -75,8 +78,11 @@ class ModelInstanceState : public BackendModelInstance {
   std::unordered_map<std::string, int> output_index_map_;
 
   // If the output is a dictionary of tensors.
-  std::unordered_map<std::string, int> output_dict_key_to_index_;
-  bool is_dict_output_;
+  std::atomic<bool> dict_output_validated_;
+  std::mutex dict_validation_mutex_;
+  std::vector<std::string> output_dict_keys_;
+  std::unordered_map<std::string, size_t> output_dict_key_to_index_;
+
   std::unordered_map<std::string, TRITONSERVER_DataType> output_dtype_map_;
 
   // If the input to the tensor is a dictionary of tensors.
@@ -96,6 +102,9 @@ class ModelInstanceState : public BackendModelInstance {
   int device_cnt_;
 
  public:
+  TRITONSERVER_Error* ValidateAndCacheDictOutput(
+      const c10::Dict<c10::IValue, c10::IValue>& dict_output);
+
   virtual ~ModelInstanceState();
 
   // Clear CUDA cache
