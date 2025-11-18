@@ -1,39 +1,92 @@
 ---
-BasedOnStyle: Google
 
+Language: Cpp
 IndentWidth: 2
-ColumnLimit: 80
-ContinuationIndentWidth: 4
+ColumnLimit: 120
 UseTab: Never
 MaxEmptyLinesToKeep: 2
 
 SortIncludes: true
 CompactNamespaces: true
-ReflowComments: true
+ReflowComments: false
 
 DerivePointerAlignment: false
 PointerAlignment: Left
+QualifierAlignment: Left
+ReferenceAlignment: Left
+RequiresClausePosition: OwnLine
 
-AllowShortIfStatementsOnASingleLine: false
+BinPackArguments: false
+BinPackParameters: OnePerLine
+
+AllowAllArgumentsOnNextLine: true
+AllowAllParametersOfDeclarationOnNextLine: true
+AllowBreakBeforeNoexceptSpecifier: OnlyWithParen
 AllowShortBlocksOnASingleLine: false
-AllowShortFunctionsOnASingleLine: Inline
+AllowShortFunctionsOnASingleLine: None
+AllowShortCompoundRequirementOnASingleLine: false
+AllowShortEnumsOnASingleLine: false
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLambdasOnASingleLine: Empty
+AllowShortLoopsOnASingleLine: true
 
-AlwaysBreakAfterReturnType: TopLevelDefinitions
+BracedInitializerIndentWidth: 4
+
 AlignAfterOpenBracket: AlwaysBreak
-BreakBeforeBraces: Custom
-BraceWrapping:
-  AfterClass: false
-  AfterControlStatement: false
-  AfterEnum: false
-  AfterFunction: true
-  AfterNamespace: false
-  AfterStruct: false
-  AfterUnion: false
-  BeforeCatch: true
+AlignArrayOfStructures: None
+AlignConsecutiveAssignments: None
+AlignConsecutiveMacros: None
+AlignOperands: AlignAfterOperator
+AlignTrailingComments:
+  Kind: Never
 
-BinPackArguments: true
-BinPackParameters: true
-ConstructorInitializerAllOnOneLineOrOnePerLine: false
+BreakAfterAttributes: Always
+BreakAfterReturnType: All
+BreakBeforeBinaryOperators: NonAssignment
+BreakBeforeBraces: Allman
+BreakBeforeTernaryOperators: true
+BreakConstructorInitializers: BeforeComma
+BreakFunctionDefinitionParameters: true
+BreakInheritanceList: BeforeComma
+BreakTemplateDeclarations: Yes
+
+BraceWrapping:
+  AfterCaseLabel: true
+  AfterClass: true
+  AfterControlStatement: Always
+  AfterEnum: true
+  AfterExternBlock: true
+  AfterFunction: true
+  AfterNamespace: true
+  AfterStruct: true
+  AfterUnion: true
+  BeforeCatch: true
+  BeforeElse: true
+  BeforeLambdaBody: true
+  BeforeWhile: true
+  IndentBraces: false
+  SplitEmptyFunction: false
+  SplitEmptyNamespace: false
+  SplitEmptyRecord: false
+
+PackConstructorInitializers: Never
+
+SpaceAroundPointerQualifiers: Default
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeSquareBrackets: false
+SpaceBeforeCaseColon: false
+SpaceBeforeCtorInitializerColon: true
+SpaceBeforeParens: ControlStatements
+# SpaceInEmptyBraces: Always # Requires clang-format 22
+SpacesInAngles: Never
+SpaceInEmptyBlock: true
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+
+NamespaceIndentation: All
 
 IndentCaseLabels: true
 
+FixNamespaceComments: false
+
+Cpp11BracedListStyle: true
