@@ -48,16 +48,16 @@
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #pragma warning(push, 0)
 #include <torchvision/ops/ops.h>
-#include <torchvision/vision.h>  // Torchvision header
+#include <torchvision/vision.h> // Torchvision header
 #pragma warning(pop)
 #pragma GCC diagnostic pop
-#endif  // TRITON_PYTORCH_ENABLE_TORCHVISION
+#endif // TRITON_PYTORCH_ENABLE_TORCHVISION
 
 #ifdef TRITON_ENABLE_GPU
 #include <c10/cuda/CUDACachingAllocator.h>
 #include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime_api.h>
-#endif  // TRITON_ENABLE_GPU
+#endif // TRITON_ENABLE_GPU
 
 // for thread control
 // https://pytorch.org/docs/stable/notes/cpu_threading_torchscript_inference.html#runtime-api
@@ -65,42 +65,67 @@
 #include <ATen/Parallel.h>
 
 
-namespace triton::backend::pytorch {
+namespace triton::backend::pytorch
+{
 
-void FillStringTensor(torch::List<std::string>* input_list, const size_t cnt);
+  void
+  FillStringTensor(torch::List<std::string>* input_list, const size_t cnt);
 
-// This function will return a tensor's contents as a contiguous
-// chunk in system memory. In some cases this will require copying the data.
-// If that  happens, 'contiguous_buffer' will be set to hold the contiguous
-// chunk and 'cuda_copy' will be set to indicate whether CUDA copy is
-// conducted.  The data copy can be avoided if the input is already in
-// a contiguous chunk and the input is located in memory type and id
-// specified.
-TRITONSERVER_Error* GetContiguousInputContent(
-    TRITONBACKEND_Input* rinput, const uint32_t buffer_count,
-    const char** content, size_t* content_byte_size,
-    std::vector<char>* contiguous_buffer, cudaStream_t stream, bool* cuda_copy);
+  // This function will return a tensor's contents as a contiguous
+  // chunk in system memory. In some cases this will require copying the data.
+  // If that  happens, 'contiguous_buffer' will be set to hold the contiguous
+  // chunk and 'cuda_copy' will be set to indicate whether CUDA copy is
+  // conducted.  The data copy can be avoided if the input is already in
+  // a contiguous chunk and the input is located in memory type and id
+  // specified.
+  TRITONSERVER_Error*
+  GetContiguousInputContent(
+      TRITONBACKEND_Input* rinput,
+      const uint32_t buffer_count,
+      const char** content,
+      size_t* content_byte_size,
+      std::vector<char>* contiguous_buffer,
+      cudaStream_t stream,
+      bool* cuda_copy);
 
-bool SetStringBuffer(
-    torch::List<torch::jit::IValue>* tensor, TRITONBACKEND_Response** response,
-    TRITONBACKEND_Output* response_output, TRITONBACKEND_State* response_state,
-    const size_t tensor_element_count, cudaStream_t stream,
-    std::string* serialized, bool state);
+  bool
+  SetStringBuffer(
+      torch::List<torch::jit::IValue>* tensor,
+      TRITONBACKEND_Response** response,
+      TRITONBACKEND_Output* response_output,
+      TRITONBACKEND_State* response_state,
+      const size_t tensor_element_count,
+      cudaStream_t stream,
+      std::string* serialized,
+      bool state);
 
-bool SetStringInputTensor(
-    torch::List<std::string>* input_list, TRITONBACKEND_Input* input,
-    const char* name, const uint32_t buffer_count,
-    const size_t request_element_cnt, TRITONBACKEND_Response** response,
-    cudaStream_t stream, const char* host_policy_name);
+  bool
+  SetStringInputTensor(
+      torch::List<std::string>* input_list,
+      TRITONBACKEND_Input* input,
+      const char* name,
+      const uint32_t buffer_count,
+      const size_t request_element_cnt,
+      TRITONBACKEND_Response** response,
+      cudaStream_t stream,
+      const char* host_policy_name);
 
-bool SetStringOutputBuffer(
-    torch::List<torch::jit::IValue>* tensor, TRITONBACKEND_Response** response,
-    TRITONBACKEND_Output* response_output, const size_t tensor_element_count,
-    cudaStream_t stream, std::string* serialized);
+  bool
+  SetStringOutputBuffer(
+      torch::List<torch::jit::IValue>* tensor,
+      TRITONBACKEND_Response** response,
+      TRITONBACKEND_Output* response_output,
+      const size_t tensor_element_count,
+      cudaStream_t stream,
+      std::string* serialized);
 
-bool SetStringStateBuffer(
-    torch::List<torch::jit::IValue>* tensor, TRITONBACKEND_Response** response,
-    TRITONBACKEND_State* response_state, const size_t tensor_element_count,
-    cudaStream_t stream, std::string* serialized);
+  bool
+  SetStringStateBuffer(
+      torch::List<torch::jit::IValue>* tensor,
+      TRITONBACKEND_Response** response,
+      TRITONBACKEND_State* response_state,
+      const size_t tensor_element_count,
+      cudaStream_t stream,
+      std::string* serialized);
 
-}  // namespace triton::backend::pytorch
+} // namespace triton::backend::pytorch

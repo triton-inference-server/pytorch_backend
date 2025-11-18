@@ -33,27 +33,32 @@
 // PyTorch C++ (LibTorch) Backend that implements the TRITONBACKEND API.
 //
 
-namespace triton::backend::pytorch {
+namespace triton::backend::pytorch
+{
 
-extern "C" {
+  extern "C"
+  {
 
-TRITONSERVER_Error* TRITONBACKEND_Initialize(TRITONBACKEND_Backend* backend);
+    TRITONSERVER_Error*
+    TRITONBACKEND_Initialize(TRITONBACKEND_Backend* backend);
 
-TRITONSERVER_Error* TRITONBACKEND_ModelInitialize(TRITONBACKEND_Model* model);
+    TRITONSERVER_Error*
+    TRITONBACKEND_ModelInitialize(TRITONBACKEND_Model* model);
 
-TRITONSERVER_Error* TRITONBACKEND_ModelFinalize(TRITONBACKEND_Model* model);
+    TRITONSERVER_Error*
+    TRITONBACKEND_ModelFinalize(TRITONBACKEND_Model* model);
 
-TRITONSERVER_Error* TRITONBACKEND_ModelInstanceInitialize(
-    TRITONBACKEND_ModelInstance* instance);
+    TRITONSERVER_Error*
+    TRITONBACKEND_ModelInstanceInitialize(TRITONBACKEND_ModelInstance* instance);
 
-TRITONSERVER_Error* TRITONBACKEND_ModelInstanceFinalize(
-    TRITONBACKEND_ModelInstance* instance);
+    TRITONSERVER_Error*
+    TRITONBACKEND_ModelInstanceFinalize(TRITONBACKEND_ModelInstance* instance);
 
-TRITONSERVER_Error* TRITONBACKEND_ModelInstanceExecute(
-    TRITONBACKEND_ModelInstance* instance, TRITONBACKEND_Request** requests,
-    const uint32_t request_count);
+    TRITONSERVER_Error*
+    TRITONBACKEND_ModelInstanceExecute(
+        TRITONBACKEND_ModelInstance* instance, TRITONBACKEND_Request** requests, const uint32_t request_count);
 
-}  // extern "C"
+  } // extern "C"
 
 
-}  // namespace triton::backend::pytorch
+} // namespace triton::backend::pytorch

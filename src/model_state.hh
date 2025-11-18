@@ -49,83 +49,97 @@
 #include <ATen/Parallel.h>
 
 
-namespace triton::backend::pytorch {
+namespace triton::backend::pytorch
+{
 
-class ModelState : public triton::backend::BackendModel {
- private:
-  // Flag to indicate whether optimized execution is enabled. Defaults to true.
-  bool enable_optimized_execution_;
+  class ModelState : public triton::backend::BackendModel
+  {
+  private:
+    // Flag to indicate whether optimized execution is enabled. Defaults to true.
+    bool enable_optimized_execution_;
 
-  // Flag to indicate whether inference mode is enabled. Defaults to false.
-  bool enable_inference_mode_;
+    // Flag to indicate whether inference mode is enabled. Defaults to false.
+    bool enable_inference_mode_;
 
-  // Flag to indicate whether cudnn is enabled. Defaults to true.
-  bool enable_cudnn_;
+    // Flag to indicate whether cudnn is enabled. Defaults to true.
+    bool enable_cudnn_;
 
-  // Flag to indicate whether cache cleaning after each run is enabled.
-  // Defaults to false.
-  bool enable_cache_cleaning_;
+    // Flag to indicate whether cache cleaning after each run is enabled.
+    // Defaults to false.
+    bool enable_cache_cleaning_;
 
-  // Flag to indicate whether weight sharing is enabled. Defaults to false.
-  bool enable_weight_sharing_;
+    // Flag to indicate whether weight sharing is enabled. Defaults to false.
+    bool enable_weight_sharing_;
 
-  // Flag pairs to indicate if various JIT settings are set and
-  // enabled respectively. Defaults to (false, true). Default behavior
-  // is to do nothing if not explicitly set.
-  std::pair<bool, bool> enable_tensor_fuser_pair_;
-  std::pair<bool, bool> enable_jit_profiling_pair_;
-  std::pair<bool, bool> enable_jit_executor_pair_;
+    // Flag pairs to indicate if various JIT settings are set and
+    // enabled respectively. Defaults to (false, true). Default behavior
+    // is to do nothing if not explicitly set.
+    std::pair<bool, bool> enable_tensor_fuser_pair_;
+    std::pair<bool, bool> enable_jit_profiling_pair_;
+    std::pair<bool, bool> enable_jit_executor_pair_;
 
-  // Model mapping for shared TorchScript model across all instances on the
-  // same device. The key is a pair of isGPU and device index.
-  std::map<
-      std::pair<bool, int64_t>, std::shared_ptr<torch::jit::script::Module>>
-      torch_models_;
+    // Model mapping for shared TorchScript model across all instances on the
+    // same device. The key is a pair of isGPU and device index.
+    std::map<std::pair<bool, int64_t>, std::shared_ptr<torch::jit::script::Module>> torch_models_;
 
-  // model_outputs is a map that contains unique outputs that the model must
-  // provide. The first pair is the model output index and the second is
-  // the index in the model state, -1 is used if one is not required.
-  // In the model configuration, the output in the state configuration
-  // can have intersection with the outputs section of the model. If an output
-  // is specified both in the output section and state section, it indicates
-  // that the backend must return the output state to the client too.
-  std::map<std::string, std::pair<int64_t, int64_t>> model_outputs_;
+    // model_outputs is a map that contains unique outputs that the model must
+    // provide. The first pair is the model output index and the second is
+    // the index in the model state, -1 is used if one is not required.
+    // In the model configuration, the output in the state configuration
+    // can have intersection with the outputs section of the model. If an output
+    // is specified both in the output section and state section, it indicates
+    // that the backend must return the output state to the client too.
+    std::map<std::string, std::pair<int64_t, int64_t>> model_outputs_;
 
- public:
-  virtual ~ModelState() = default;
+  public:
+    virtual ~ModelState() = default;
 
-  static TRITONSERVER_Error* Create(
-      TRITONBACKEND_Model* triton_model, ModelState** state);
+    static TRITONSERVER_Error*
+    Create(TRITONBACKEND_Model* triton_model, ModelState** state);
 
-  bool EnabledCacheCleaning();
+    bool
+    EnabledCacheCleaning();
 
-  bool EnabledCudnn();
+    bool
+    EnabledCudnn();
 
-  bool EnabledInferenceMode();
+    bool
+    EnabledInferenceMode();
 
-  const std::pair<bool, bool>& EnabledJitExecutor() const;
+    const std::pair<bool, bool>&
+    EnabledJitExecutor() const;
 
-  const std::pair<bool, bool>& EnabledJitProfiling() const;
+    const std::pair<bool, bool>&
+    EnabledJitProfiling() const;
 
-  bool EnabledOptimizedExecution();
+    bool
+    EnabledOptimizedExecution();
 
-  const std::pair<bool, bool>& EnabledTensorExprFuser() const;
+    const std::pair<bool, bool>&
+    EnabledTensorExprFuser() const;
 
-  bool EnabledWeightSharing();
+    bool
+    EnabledWeightSharing();
 
-  TRITONSERVER_Error* LoadModel(
-      const std::string& artifact_name, const torch::Device device,
-      std::string* model_path, const TRITONSERVER_InstanceGroupKind& kind,
-      std::shared_ptr<torch::jit::script::Module>* torch_model);
+    TRITONSERVER_Error*
+    LoadModel(
+        const std::string& artifact_name,
+        const torch::Device device,
+        std::string* model_path,
+        const TRITONSERVER_InstanceGroupKind& kind,
+        std::shared_ptr<torch::jit::script::Module>* torch_model);
 
-  const std::map<std::string, std::pair<int64_t, int64_t>>& ModelOutputs();
+    const std::map<std::string, std::pair<int64_t, int64_t>>&
+    ModelOutputs();
 
- private:
-  ModelState(TRITONBACKEND_Model* triton_model);
+  private:
+    ModelState(TRITONBACKEND_Model* triton_model);
 
-  TRITONSERVER_Error* AutoCompleteConfig();
+    TRITONSERVER_Error*
+    AutoCompleteConfig();
 
-  TRITONSERVER_Error* ParseParameters();
-};
+    TRITONSERVER_Error*
+    ParseParameters();
+  };
 
-}  // namespace triton::backend::pytorch
+} // namespace triton::backend::pytorch

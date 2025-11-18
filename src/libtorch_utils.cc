@@ -26,154 +26,183 @@
 
 #include "libtorch_utils.h"
 
-namespace triton { namespace backend { namespace pytorch {
-
-TRITONSERVER_DataType
-ConvertTorchTypeToDataType(const torch::ScalarType& stype)
+namespace triton
 {
-  switch (stype) {
-    case torch::kBool:
-      return TRITONSERVER_TYPE_BOOL;
-    case torch::kByte:
-      return TRITONSERVER_TYPE_UINT8;
-    case torch::kChar:
-      return TRITONSERVER_TYPE_INT8;
-    case torch::kShort:
-      return TRITONSERVER_TYPE_INT16;
-    case torch::kInt:
-      return TRITONSERVER_TYPE_INT32;
-    case torch::kLong:
-      return TRITONSERVER_TYPE_INT64;
-    case torch::kHalf:
-      return TRITONSERVER_TYPE_FP16;
-    case torch::kFloat:
-      return TRITONSERVER_TYPE_FP32;
-    case torch::kDouble:
-      return TRITONSERVER_TYPE_FP64;
-    default:
-      break;
-  }
+  namespace backend
+  {
+    namespace pytorch
+    {
 
-  return TRITONSERVER_TYPE_INVALID;
-}
+      TRITONSERVER_DataType
+      ConvertTorchTypeToDataType(
+          const torch::ScalarType& stype)
+      {
+        switch (stype)
+        {
+          case torch::kBool:
+            return TRITONSERVER_TYPE_BOOL;
+          case torch::kByte:
+            return TRITONSERVER_TYPE_UINT8;
+          case torch::kChar:
+            return TRITONSERVER_TYPE_INT8;
+          case torch::kShort:
+            return TRITONSERVER_TYPE_INT16;
+          case torch::kInt:
+            return TRITONSERVER_TYPE_INT32;
+          case torch::kLong:
+            return TRITONSERVER_TYPE_INT64;
+          case torch::kHalf:
+            return TRITONSERVER_TYPE_FP16;
+          case torch::kFloat:
+            return TRITONSERVER_TYPE_FP32;
+          case torch::kDouble:
+            return TRITONSERVER_TYPE_FP64;
+          default:
+            break;
+        }
 
-std::pair<bool, torch::ScalarType>
-ConvertDataTypeToTorchType(const TRITONSERVER_DataType dtype)
-{
-  torch::ScalarType type = torch::kInt;
-  switch (dtype) {
-    case TRITONSERVER_TYPE_BOOL:
-      type = torch::kBool;
-      break;
-    case TRITONSERVER_TYPE_UINT8:
-      type = torch::kByte;
-      break;
-    case TRITONSERVER_TYPE_INT8:
-      type = torch::kChar;
-      break;
-    case TRITONSERVER_TYPE_INT16:
-      type = torch::kShort;
-      break;
-    case TRITONSERVER_TYPE_INT32:
-      type = torch::kInt;
-      break;
-    case TRITONSERVER_TYPE_INT64:
-      type = torch::kLong;
-      break;
-    case TRITONSERVER_TYPE_FP16:
-      type = torch::kHalf;
-      break;
-    case TRITONSERVER_TYPE_FP32:
-      type = torch::kFloat;
-      break;
-    case TRITONSERVER_TYPE_FP64:
-      type = torch::kDouble;
-      break;
-    case TRITONSERVER_TYPE_UINT16:
-    case TRITONSERVER_TYPE_UINT32:
-    case TRITONSERVER_TYPE_UINT64:
-    case TRITONSERVER_TYPE_BYTES:
-    default:
-      return std::make_pair(false, type);
-  }
+        return TRITONSERVER_TYPE_INVALID;
+      }
 
-  return std::make_pair(true, type);
-}
+      std::pair<bool, torch::ScalarType>
+      ConvertDataTypeToTorchType(
+          const TRITONSERVER_DataType dtype)
+      {
+        torch::ScalarType type = torch::kInt;
+        switch (dtype)
+        {
+          case TRITONSERVER_TYPE_BOOL:
+            type = torch::kBool;
+            break;
+          case TRITONSERVER_TYPE_UINT8:
+            type = torch::kByte;
+            break;
+          case TRITONSERVER_TYPE_INT8:
+            type = torch::kChar;
+            break;
+          case TRITONSERVER_TYPE_INT16:
+            type = torch::kShort;
+            break;
+          case TRITONSERVER_TYPE_INT32:
+            type = torch::kInt;
+            break;
+          case TRITONSERVER_TYPE_INT64:
+            type = torch::kLong;
+            break;
+          case TRITONSERVER_TYPE_FP16:
+            type = torch::kHalf;
+            break;
+          case TRITONSERVER_TYPE_FP32:
+            type = torch::kFloat;
+            break;
+          case TRITONSERVER_TYPE_FP64:
+            type = torch::kDouble;
+            break;
+          case TRITONSERVER_TYPE_UINT16:
+          case TRITONSERVER_TYPE_UINT32:
+          case TRITONSERVER_TYPE_UINT64:
+          case TRITONSERVER_TYPE_BYTES:
+          default:
+            return std::make_pair(false, type);
+        }
 
-std::pair<bool, torch::ScalarType>
-ModelConfigDataTypeToTorchType(const std::string& data_type_str)
-{
-  torch::ScalarType type = torch::kInt;
+        return std::make_pair(true, type);
+      }
 
-  // Must start with "TYPE_".
-  if (data_type_str.rfind("TYPE_", 0) != 0) {
-    return std::make_pair(false, type);
-  }
+      std::pair<bool, torch::ScalarType>
+      ModelConfigDataTypeToTorchType(
+          const std::string& data_type_str)
+      {
+        torch::ScalarType type = torch::kInt;
 
-  const std::string dtype = data_type_str.substr(strlen("TYPE_"));
+        // Must start with "TYPE_".
+        if (data_type_str.rfind("TYPE_", 0) != 0)
+        {
+          return std::make_pair(false, type);
+        }
 
-  if (dtype == "BOOL") {
-    type = torch::kBool;
-  } else if (dtype == "UINT8") {
-    type = torch::kByte;
-  } else if (dtype == "INT8") {
-    type = torch::kChar;
-  } else if (dtype == "INT16") {
-    type = torch::kShort;
-  } else if (dtype == "INT32") {
-    type = torch::kInt;
-  } else if (dtype == "INT64") {
-    type = torch::kLong;
-  } else if (dtype == "FP16") {
-    type = torch::kHalf;
-  } else if (dtype == "FP32") {
-    type = torch::kFloat;
-  } else if (dtype == "FP64") {
-    type = torch::kDouble;
-  } else {
-    return std::make_pair(false, type);
-  }
+        const std::string dtype = data_type_str.substr(strlen("TYPE_"));
 
-  return std::make_pair(true, type);
-}
+        if (dtype == "BOOL")
+        {
+          type = torch::kBool;
+        }
+        else if (dtype == "UINT8")
+        {
+          type = torch::kByte;
+        }
+        else if (dtype == "INT8")
+        {
+          type = torch::kChar;
+        }
+        else if (dtype == "INT16")
+        {
+          type = torch::kShort;
+        }
+        else if (dtype == "INT32")
+        {
+          type = torch::kInt;
+        }
+        else if (dtype == "INT64")
+        {
+          type = torch::kLong;
+        }
+        else if (dtype == "FP16")
+        {
+          type = torch::kHalf;
+        }
+        else if (dtype == "FP32")
+        {
+          type = torch::kFloat;
+        }
+        else if (dtype == "FP64")
+        {
+          type = torch::kDouble;
+        }
+        else
+        {
+          return std::make_pair(false, type);
+        }
 
-TRITONSERVER_Error*
-ParseParameter(
-    triton::common::TritonJson::Value& params, const std::string& mkey,
-    bool* value)
-{
-  std::string value_str;
-  RETURN_IF_ERROR(GetParameterValue(params, mkey, &value_str));
-  RETURN_IF_ERROR(ParseBoolValue(value_str, value));
+        return std::make_pair(true, type);
+      }
 
-  return nullptr;
-}
+      TRITONSERVER_Error*
+      ParseParameter(
+          triton::common::TritonJson::Value& params, const std::string& mkey, bool* value)
+      {
+        std::string value_str;
+        RETURN_IF_ERROR(GetParameterValue(params, mkey, &value_str));
+        RETURN_IF_ERROR(ParseBoolValue(value_str, value));
 
-TRITONSERVER_Error*
-ParseParameter(
-    triton::common::TritonJson::Value& params, const std::string& mkey,
-    int* value)
-{
-  std::string value_str;
-  RETURN_IF_ERROR(GetParameterValue(params, mkey, &value_str));
-  RETURN_IF_ERROR(ParseIntValue(value_str, value));
+        return nullptr;
+      }
 
-  return nullptr;
-}
+      TRITONSERVER_Error*
+      ParseParameter(
+          triton::common::TritonJson::Value& params, const std::string& mkey, int* value)
+      {
+        std::string value_str;
+        RETURN_IF_ERROR(GetParameterValue(params, mkey, &value_str));
+        RETURN_IF_ERROR(ParseIntValue(value_str, value));
+
+        return nullptr;
+      }
 
 
 #ifdef TRITON_ENABLE_GPU
-TRITONSERVER_Error*
-ConvertCUDAStatusToTritonError(
-    cudaError_t cuda_error, TRITONSERVER_Error_Code code, const char* msg)
-{
-  if (cuda_error != cudaSuccess) {
-    return TRITONSERVER_ErrorNew(
-        code,
-        (std::string(msg) + ": " + cudaGetErrorString(cuda_error)).c_str());
-  }
-  return nullptr;  // success
-}
+      TRITONSERVER_Error*
+      ConvertCUDAStatusToTritonError(
+          cudaError_t cuda_error, TRITONSERVER_Error_Code code, const char* msg)
+      {
+        if (cuda_error != cudaSuccess)
+        {
+          return TRITONSERVER_ErrorNew(code, (std::string(msg) + ": " + cudaGetErrorString(cuda_error)).c_str());
+        }
+        return nullptr; // success
+      }
 #endif
 
-}}}  // namespace triton::backend::pytorch
+    }
+  }
+} // namespace triton::backend::pytorch

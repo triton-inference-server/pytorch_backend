@@ -27,14 +27,16 @@
 #pragma once
 
 
-namespace triton::backend::pytorch {
+namespace triton::backend::pytorch
+{
 
-// The naming convention followed for inputs/outputs in the model configuration.
-// Outputs don't support FORWARD_ARGUMENT.
-enum class NamingConvention {
-  NAMED_INDEX,
-  FORWARD_ARGUMENT,
-  STRICT_CONFIG_ORDERING
-};
+  // The naming convention followed for inputs/outputs in the model configuration.
+  // Outputs don't support FORWARD_ARGUMENT.
+  enum class NamingConvention
+  {
+    NAMED_INDEX,
+    FORWARD_ARGUMENT,
+    STRICT_CONFIG_ORDERING
+  };
 
-}  // namespace triton::backend::pytorch
+} // namespace triton::backend::pytorch
