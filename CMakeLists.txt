@@ -78,10 +78,10 @@ else()
     message(WARNING "TRITON_PYTORCH_ENABLE_TORCHTRT is on, but TRITON_PYTORCH_LIB_PATHS does not contain Torch-TRT package")
   endif()
 
-    # Look for installed Torchvision package in lib paths
-  find_library( LIBTORCHVISION libtorchvision.so libtorchvision.so.1 PATHS ${TRITON_PYTORCH_LIB_PATHS} )
+    # Look for installed TorchVision package in lib paths
+  find_library(LIBTORCHVISION libtorchvision.so libtorchvision.so.1 PATHS ${TRITON_PYTORCH_LIB_PATHS})
   if(NOT ${LIBTORCHVISION})
-    message(WARNING "TRITON_PYTORCH_ENABLE_TORCHVISION is on, but TRITON_PYTORCH_LIB_PATHS does not contain Torchvision package")
+    message(WARNING "TRITON_PYTORCH_ENABLE_TORCHVISION is on, but TRITON_PYTORCH_LIB_PATHS does not contain TorchVision package")
   endif(NOT ${LIBTORCHVISION})
 endif()
 
@@ -103,6 +103,27 @@ if(LINUX)
     endif(${CMAKE_SYSTEM_PROCESSOR} MATCHES "x86_64")
   endif(${DISTRO_ID_LIKE} MATCHES "rhel|centos")
 endif(LINUX)
+
+message(TRACE "CMAKE_HOST_SYSTEM_PROCESSOR: ${CMAKE_HOST_SYSTEM_PROCESSOR}")
+message(TRACE "TRITON_ENABLE_GPU: ${TRITON_ENABLE_GPU}")
+message(TRACE "TRITON_ENABLE_STATS: ${TRITON_ENABLE_STATS}")
+message(TRACE "TRITON_ENABLE_NVTX: ${TRITON_ENABLE_NVTX}")
+message(TRACE "TRITON_PYTORCH_ENABLE_TORCHTRT: ${TRITON_PYTORCH_ENABLE_TORCHTRT}")
+message(TRACE "TRITON_PYTORCH_ENABLE_TORCHVISION: ${TRITON_PYTORCH_ENABLE_TORCHVISION}")
+message(TRACE "TRITON_PYTORCH_NVSHMEM: ${TRITON_PYTORCH_NVSHMEM}")
+message(TRACE "TRITON_PYTORCH_DOCKER_IMAGE: ${TRITON_PYTORCH_DOCKER_IMAGE}")
+message(TRACE "TRITON_PYTORCH_INCLUDE_PATHS: ${TRITON_PYTORCH_INCLUDE_PATHS}")
+message(TRACE "TRITON_PYTORCH_LIB_PATHS: ${TRITON_PYTORCH_LIB_PATHS}")
+message(TRACE "TRITON_REPO_ORGANIZATION: ${TRITON_REPO_ORGANIZATION}")
+message(TRACE "TRITON_BACKEND_REPO_TAG: ${TRITON_BACKEND_REPO_TAG}")
+message(TRACE "TRITON_CORE_REPO_TAG: ${TRITON_CORE_REPO_TAG}")
+message(TRACE "TRITON_COMMON_REPO_TAG: ${TRITON_COMMON_REPO_TAG}")
+message(TRACE "TRITON_PYTORCH_DOCKER_BUILD: ${TRITON_PYTORCH_DOCKER_BUILD}")
+message(TRACE "RHEL_BUILD: ${RHEL_BUILD}")
+message(TRACE "LIB_DIR: ${LIB_DIR}")
+message(TRACE "LIBTORCH_LIBS_PATH: ${LIBTORCH_LIBS_PATH}")
+message(TRACE "PY_INSTALL_PATH: ${PY_INSTALL_PATH}")
+
 
 #
 # Dependencies
@@ -161,6 +182,11 @@ set(PT_LIBS
     "libtorch_cuda_linalg.so"
     "libtorch_global_deps.so"
     "libjpeg.so.62"
+    "libshm.so"
+    "libbackend_with_compiler.so"
+    "libaoti_custom_ops.so"
+    "libtorch_python.so"
+    "libcaffe2_nvrtc.so"
 )
 
 if (${TRITON_PYTORCH_NVSHMEM})
@@ -180,6 +206,7 @@ endif() # TRITON_PYTORCH_ENABLE_TORCHVISION
 if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
   set(PT_LIBS
       ${PT_LIBS}
+      "libtorchtrt.so"
       "libtorchtrt_runtime.so"
   )
 endif() # TRITON_PYTORCH_ENABLE_TORCHTRT
@@ -218,6 +245,9 @@ set(TORCHVISION_LIBS
     $<IF:$<BOOL:${RHEL_BUILD}>,libpng16.so.16,libpng16.so>
 )
 
+message(TRACE "LIBS_ARCH: ${LIBS_ARCH}")
+message(TRACE "LIBTORCH_LIBS: ${LIBTORCH_LIBS}")
+
 # The patchelf commands ensure the MKL libraries are loaded correctly during runtime
 # Without these, the framework/backend complains of missing libraries / symbols and
 # in some cases leads to segmentation faults.
@@ -246,11 +276,16 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libtorch_cuda_linalg.so libtorch_cuda_linalg.so
     COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libtorch_global_deps.so libtorch_global_deps.so
     COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libcaffe2_nvrtc.so libcaffe2_nvrtc.so
+    COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libshm.so libshm.so
+    COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libbackend_with_compiler.so libbackend_with_compiler.so
+    COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libaoti_custom_ops.so libaoti_custom_ops.so
+    COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libtorch_python.so libtorch_python.so
     COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_NVSHMEM} = 'ON' ]; then docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libtorch_nvshmem.so libtorch_nvshmem.so; fi"
     COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then if [ ${RHEL_BUILD} = 'ON' ]; then docker cp -a -L pytorch_backend_ptlib:/usr/local/lib64/libtorchvision.so libtorchvision.so; else docker cp -a -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libtorchvision.so.1 libtorchvision.so.1; fi; fi"
     COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then docker cp pytorch_backend_ptlib:/opt/pytorch/vision/torchvision/csrc include/torchvision/torchvision; fi"
-    COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHTRT} = 'ON' ]; then docker cp pytorch_backend_ptlib:/usr/local/lib/python3.12/dist-packages/torch_tensorrt/lib/libtorchtrt_runtime.so libtorchtrt_runtime.so; fi"
-    COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch_tensorrt/bin/torchtrtc torchtrtc || echo "error ignored..." || true
+    COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHTRT} = 'ON' ]; then docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch_tensorrt/lib/libtorchtrt.so libtorchtrt.so; fi"
+    COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHTRT} = 'ON' ]; then docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch_tensorrt/lib/libtorchtrt_runtime.so libtorchtrt_runtime.so; fi"
+    COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHTRT} = 'ON' ]; then docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch_tensorrt/bin/torchtrtc torchtrtc; fi"
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/pytorch/LICENSE LICENSE.pytorch
     COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/include include/torch
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/pytorch/torch/csrc/jit/codegen include/torch/torch/csrc/jit/.
@@ -405,6 +440,9 @@ else()
   ENDFOREACH(p)
 endif() # TRITON_PYTORCH_DOCKER_BUILD
 
+message(TRACE "TRITON_PYTORCH_LDFLAGS: ${TRITON_PYTORCH_LDFLAGS}")
+message(TRACE "TRITON_PYTORCH_LIBS: ${TRITON_PYTORCH_LIBS}")
+
 target_link_libraries(
   triton-pytorch-backend
   PRIVATE
@@ -429,6 +467,7 @@ endif() # TRITON_ENABLE_GPU
 #
 include(GNUInstallDirs)
 set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/TritonPyTorchBackend)
+message(TRACE "INSTALL_CONFIGDIR: ${INSTALL_CONFIGDIR}")
 
 install(
   TARGETS
@@ -444,6 +483,8 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
   FOREACH(plib ${PT_LIBS} ${LIBTORCH_LIBS} ${TORCHVISION_LIBS})
     set(PT_LIB_PATHS ${PT_LIB_PATHS} "${CMAKE_CURRENT_BINARY_DIR}/${plib}")
   ENDFOREACH(plib)
+
+  message(TRACE "PT_LIB_PATHS: ${PT_LIB_PATHS}")
 
   install(
     FILES
@@ -488,6 +529,8 @@ else()
   FOREACH(plib ${PT_LIBS})
     set(PT_LIB_PATHS ${PT_LIB_PATHS} "${TRITON_PYTORCH_LIB_PATHS}/${plib}")
   ENDFOREACH(plib)
+
+  message(TRACE "PT_LIB_PATHS: ${PT_LIB_PATHS}")
 
   install(
     FILES
