@@ -52,6 +52,7 @@ ModelInstanceState::ModelInstanceState(
     ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
     : BackendModelInstance(model_state, triton_model_instance),
       model_state_(model_state), device_(torch::kCPU), is_dict_input_(false),
+      dict_output_validated_(false),
       device_cnt_(0)
 {
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
@@ -148,6 +149,47 @@ ModelInstanceState::ModelInstanceState(
   THROW_IF_BACKEND_INSTANCE_ERROR(ValidateInputs(expected_input_cnt));
   THROW_IF_BACKEND_INSTANCE_ERROR(ValidateOutputs());
 }
+
+TRITONSERVER_Error*
+ModelInstanceState::ValidateAndCacheDictOutput(
+    const c10::Dict<c10::IValue, c10::IValue>& dict_output)
+{
+  if (dict_output_validated_.load(std::memory_order_acquire)) {
+    return nullptr;
+  }
+  std::lock_guard<std::mutex> lock(dict_validation_mutex_);
+  if (dict_output_validated_.load(std::memory_order_acquire)) {
+    return nullptr;
+  }
+  if (dict_output.size() == 0) {
+    return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INVALID_ARG, "Empty dict");
+  }
+  std::vector<std::string> temp_keys;
+  std::unordered_map<std::string, size_t> temp_index;
+  size_t idx = 0;
+  for (auto it = dict_output.begin(); it != dict_output.end(); ++it) {
+    std::string key = it->key().toStringRef();
+    if (!it->value().isTensor()) {
+      return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INVALID_ARG, "Not tensor");
+    }
+    temp_keys.push_back(key);
+    temp_index[key] = idx++;
+  }
+  std::vector<std::string> missing;
+  for (auto& output : model_state_->ModelOutputs()) {
+    if (temp_index.find(output.first) == temp_index.end()) {
+      missing.push_back(output.first);
+    }
+  }
+  if (!missing.empty()) {
+    return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INVALID_ARG, "Missing keys");
+  }
+  output_dict_keys_ = std::move(temp_keys);
+  output_dict_key_to_index_ = std::move(temp_index);
+  dict_output_validated_.store(true, std::memory_order_release);
+  return nullptr;
+}
+
 
 ModelInstanceState::~ModelInstanceState()
 {
@@ -345,6 +387,18 @@ ModelInstanceState::Execute(
             list_output.elementType()->str() + "]");
       }
       output_tensors->push_back(model_outputs_);
+    } else if (model_outputs_.isGenericDict()) {
+      auto dict_output = model_outputs_.toGenericDict();
+      if (!dict_output_validated_.load(std::memory_order_acquire)) {
+        TRITONSERVER_Error* err = ValidateAndCacheDictOutput(dict_output);
+        if (err != nullptr) {
+          SendErrorForResponses(responses, request_count, err);
+          return;
+        }
+      }
+      for (const auto& key : output_dict_keys_) {
+        output_tensors->push_back(dict_output.at(key));
+      }
     } else {
       throw std::invalid_argument(
           "output must be of type Tensor, List[str] or Tuple containing one of "
@@ -872,7 +926,14 @@ ModelInstanceState::ReadOutputTensors(
   // The serialized string buffer must be valid until output copies are done
   std::vector<std::unique_ptr<std::string>> string_buffer;
   for (auto& output : model_state_->ModelOutputs()) {
+    // Use dict key mapping if available
     int op_index = output_index_map_[output.first];
+    if (dict_output_validated_.load(std::memory_order_acquire)) {
+      auto it = output_dict_key_to_index_.find(output.first);
+      if (it != output_dict_key_to_index_.end()) {
+        op_index = it->second;
+      }
+    }
     auto name = output.first;
     auto output_tensor_pair = output.second;
 

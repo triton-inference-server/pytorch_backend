@@ -192,7 +192,6 @@ set(PT_LIBS
 if (${TRITON_PYTORCH_NVSHMEM})
   set(PT_LIBS
       ${PT_LIBS}
-      "libtorch_nvshmem.so"
   )
 endif() # TRITON_PYTORCH_NVSHMEM
 
