@@ -1,4 +1,4 @@
-// Copyright 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -24,23 +24,36 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#pragma once
+#include "naming_convention.hh"
 
+#include <stdint.h>
 #include <ostream>
 
 namespace triton::backend::pytorch
 {
-  // The naming convention followed for inputs/outputs in the model configuration.
-  // Outputs don't support FORWARD_ARGUMENT.
-  enum class NamingConvention
-  {
-    NAMED_INDEX,
-    FORWARD_ARGUMENT,
-    STRICT_CONFIG_ORDERING,
-  };
-
   std::ostream&
   operator<<(
       std::ostream& out,
-      const NamingConvention& value) noexcept;
+      const NamingConvention& value) noexcept
+  {
+    switch (value)
+    {
+      case NamingConvention::NAMED_INDEX:
+        out << "NAMED_INDEX";
+        break;
+
+      case NamingConvention::FORWARD_ARGUMENT:
+        out << "FORWARD_ARGUMENT";
+        break;
+
+      case NamingConvention::STRICT_CONFIG_ORDERING:
+        out << "STRICT_CONFIG_ORDERING";
+        break;
+
+      default:
+        out << "UNKNOWN(" << static_cast<uint32_t>(value) << ")";
+        break;
+    }
+    return out;
+  }
 }

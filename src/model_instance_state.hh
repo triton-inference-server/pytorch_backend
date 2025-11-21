@@ -1,4 +1,4 @@
-// Copyright 2019-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -45,7 +45,6 @@
 #include "triton/backend/backend_output_responder.h"
 #include "triton/common/nvtx.h"
 #include "triton/core/tritonbackend.h"
-
 
 namespace triton::backend::pytorch {
 
@@ -138,7 +137,7 @@ class ModelInstanceState : public BackendModelInstance {
 
   // Get the naming convention for inputs/outputs from the model configuration
   TRITONSERVER_Error* GetNamingConvention(
-      NamingConvention* naming_convention,
+      triton::backend::pytorch::NamingConvention* naming_convention,
       const std::vector<std::string>& allowed_io);
 
   TRITONSERVER_Error* ReadOutputTensors(

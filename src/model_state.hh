@@ -1,4 +1,4 @@
-// Copyright 2019-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -47,7 +47,6 @@
 // https://pytorch.org/docs/stable/notes/cpu_threading_torchscript_inference.html#runtime-api
 // https://github.com/pytorch/pytorch/blob/v2.2.1-rc3/aten/src/ATen/Parallel.h#L133
 #include <ATen/Parallel.h>
-
 
 namespace triton::backend::pytorch {
 

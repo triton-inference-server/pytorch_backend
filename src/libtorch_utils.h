@@ -1,4 +1,4 @@
-// Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -29,6 +29,9 @@
 #include "triton/backend/backend_common.h"
 #include "triton/core/tritonserver.h"
 
+#include <string>
+#include <utility>
+
 // Suppress warnings in torch headers
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-compare"
@@ -41,32 +44,43 @@
 #pragma warning(pop)
 #pragma GCC diagnostic pop
 
-namespace triton { namespace backend { namespace pytorch {
+namespace triton::backend::pytorch
+{
+    TRITONSERVER_DataType
+    ConvertTorchTypeToDataType(
+        const torch::ScalarType& ttype);
 
-TRITONSERVER_DataType ConvertTorchTypeToDataType(
-    const torch::ScalarType& ttype);
-std::pair<bool, torch::ScalarType> ConvertDataTypeToTorchType(
-    const TRITONSERVER_DataType dtype);
-std::pair<bool, torch::ScalarType> ModelConfigDataTypeToTorchType(
-    const std::string& data_type_str);
+    std::pair<bool, torch::ScalarType>
+    ConvertDataTypeToTorchType(
+        const TRITONSERVER_DataType dtype);
+
+    std::pair<bool, torch::ScalarType>
+    ModelConfigDataTypeToTorchType(
+        const std::string& data_type_str);
 
 #ifdef TRITON_ENABLE_GPU
-TRITONSERVER_Error* ConvertCUDAStatusToTritonError(
-    cudaError_t cuda_error, TRITONSERVER_Error_Code code, const char* msg);
+    TRITONSERVER_Error*
+    ConvertCUDAStatusToTritonError(
+        cudaError_t cuda_error,
+        TRITONSERVER_Error_Code code,
+        const char* msg);
 #endif
 
-// If the key 'mkey' is present in 'params' then update 'value' with the
-// value associated with that key. If 'mkey' is not present in 'params' then
-// no update is made to 'value'.
-TRITONSERVER_Error* ParseParameter(
-    triton::common::TritonJson::Value& params, const std::string& mkey,
-    bool* value);
+    // If the key 'mkey' is present in 'params' then update 'value' with the
+    // value associated with that key. If 'mkey' is not present in 'params' then
+    // no update is made to 'value'.
+    TRITONSERVER_Error*
+    ParseParameter(
+        triton::common::TritonJson::Value& params,
+        const std::string& mkey,
+        bool* value);
 
-// If the key 'mkey' is present in 'params' then update 'value' with the
-// value associated with that key. If 'mkey' is not present in 'params' then
-// 'value' is set to 'default_value'.
-TRITONSERVER_Error* ParseParameter(
-    triton::common::TritonJson::Value& params, const std::string& mkey,
-    int* value);
-
-}}}  // namespace triton::backend::pytorch
+    // If the key 'mkey' is present in 'params' then update 'value' with the
+    // value associated with that key. If 'mkey' is not present in 'params' then
+    // 'value' is set to 'default_value'.
+    TRITONSERVER_Error*
+    ParseParameter(
+        triton::common::TritonJson::Value& params,
+        const std::string& mkey,
+        int* value);
+}

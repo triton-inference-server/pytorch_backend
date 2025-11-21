@@ -1,4 +1,4 @@
-// Copyright 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -26,21 +26,35 @@
 
 #pragma once
 
-#include <ostream>
+#include "libtorch.hh"
+
+#include <exception>
+#include <memory>
 
 namespace triton::backend::pytorch
 {
-  // The naming convention followed for inputs/outputs in the model configuration.
-  // Outputs don't support FORWARD_ARGUMENT.
-  enum class NamingConvention
+  class triton_exception
+    : public std::exception
   {
-    NAMED_INDEX,
-    FORWARD_ARGUMENT,
-    STRICT_CONFIG_ORDERING,
-  };
+    private:
 
-  std::ostream&
-  operator<<(
-      std::ostream& out,
-      const NamingConvention& value) noexcept;
+      std::shared_ptr<TRITONSERVER_Error> error_;
+
+    public:
+
+      explicit triton_exception(
+          TRITONSERVER_Error* error);
+
+      triton_exception();
+
+      triton_exception(const triton_exception&) = default;
+
+      ~triton_exception() = default;
+
+      TRITONSERVER_Error*
+      get_error() const noexcept;
+
+      const char*
+      what() const noexcept override;
+  };
 }
