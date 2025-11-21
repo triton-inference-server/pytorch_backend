@@ -103,4 +103,4 @@ bool SetStringStateBuffer(
     TRITONBACKEND_State* response_state, const size_t tensor_element_count,
     cudaStream_t stream, std::string* serialized);
 
-}  // namespace triton::backend::pytorch
+}
