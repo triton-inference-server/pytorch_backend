@@ -24,7 +24,10 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#define ENABLE_DEBUG_TRACE_FUNCTION_CALL 1
+
 #include "inductor_model.hh"
+#include "libtorch.hh"
 #include "libtorch_utils.h"
 #include "triton_utils.hh"
 
@@ -44,6 +47,7 @@ namespace triton::backend::pytorch
       bool allow_optional)
     : BackendModel{backend_model, allow_optional}
   {
+    DEBUG_TRACE_FUNCTION_CALL();
     if (!backend_model)
       THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
                              "Argument `backend_model` cannot be `null`.");
@@ -85,6 +89,7 @@ namespace triton::backend::pytorch
   InductorModel::Create(
       TRITONBACKEND_Model *triton_model)
   {
+    DEBUG_TRACE_FUNCTION_CALL();
     if (!triton_model)
       THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
                             "Argument `triton_model` cannot be `null`.");
@@ -219,6 +224,7 @@ namespace triton::backend::pytorch
   std::vector<std::string>
   InductorModel::GetModelCallSpec()
   {
+    DEBUG_TRACE_FUNCTION_CALL();
     if (!model_loader_)
     {
       THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
@@ -232,6 +238,7 @@ namespace triton::backend::pytorch
       const std::vector<torch::Tensor> &inputs,
       void* stream_handle)
   {
+    DEBUG_TRACE_FUNCTION_CALL();
     if (!model_loader_)
     {
       THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
@@ -273,6 +280,7 @@ namespace triton::backend::pytorch
       uint32_t device_count,
       TRITONSERVER_InstanceGroupKind kind)
   {
+    DEBUG_TRACE_FUNCTION_CALL();
     if (device_count == 0)
       THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INVALID_ARG,
                              "Argument `device_count` must be greater than zero.");
@@ -384,6 +392,7 @@ namespace triton::backend::pytorch
   void
   InductorModel::ParseParameters()
   {
+    DEBUG_TRACE_FUNCTION_CALL();
     triton::common::TritonJson::Value parameters;
     if (!ModelConfig().Find("parameters", &parameters))
     {

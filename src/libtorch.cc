@@ -25,6 +25,9 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "libtorch.hh"
+#include "model_instance_state.hh"
+#include "model_state.hh"
+#include "triton/backend/backend_common.h"
 
 //
 // PyTorch C++ (LibTorch) Backend that implements the TRITONBACKEND API.
@@ -90,10 +93,15 @@ TRITONBACKEND_ModelInitialize(TRITONBACKEND_Model* model)
   uint64_t version;
   RETURN_IF_ERROR(TRITONBACKEND_ModelVersion(model, &version));
 
+  TRITONBACKEND_ArtifactType artifact_type;
+  const char* location;
+  RETURN_IF_ERROR(
+      TRITONBACKEND_ModelRepository(model, &artifact_type, &location));
+
   LOG_MESSAGE(
       TRITONSERVER_LOG_INFO,
       (std::string("TRITONBACKEND_ModelInitialize: ") + name + " (version " +
-       std::to_string(version) + ")")
+       std::to_string(version) + ") location=" + std::string(location))
           .c_str());
 
   // Create a ModelState object and associate it with the

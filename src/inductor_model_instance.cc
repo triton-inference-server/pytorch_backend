@@ -24,10 +24,14 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#define ENABLE_DEBUG_TRACE_FUNCTION_CALL 1
+
 #include "inductor_model_instance.hh"
+#include "libtorch.hh"
 #include "libtorch_utils.h"
 #include "string_utils.hh"
 #include "triton_utils.hh"
+#include "triton/backend/backend_common.h"
 #include "triton/backend/backend_model_instance.h"
 #include "triton/backend/backend_output_responder.h"
 #include "triton/common/nvtx.h"
@@ -40,6 +44,7 @@ namespace triton::backend::pytorch
     : BackendModelInstance{model.get(), triton_model_instance}
     , model_{model}
   {
+    DEBUG_TRACE_FUNCTION_CALL();
 #ifdef TRITON_ENABLE_GPU
     if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU)
     {
@@ -133,6 +138,7 @@ namespace triton::backend::pytorch
 
   InductorModelInstance::~InductorModelInstance()
   {
+    DEBUG_TRACE_FUNCTION_CALL();
     model_.reset();
     ClearCache();
 
@@ -170,6 +176,7 @@ namespace triton::backend::pytorch
       const std::string& io_name,
       uint32_t index)
   {
+    DEBUG_TRACE_FUNCTION_CALL();
     std::string deliminator{"__"};
 
     if (is_dictionary_input_)
@@ -221,6 +228,7 @@ namespace triton::backend::pytorch
   void
   InductorModelInstance::ClearCache()
   {
+    DEBUG_TRACE_FUNCTION_CALL();
 #ifdef TRITON_ENABLE_GPU
     if (device_.is_cuda() ||
         (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL && device_count_ > 0))
@@ -257,6 +265,7 @@ namespace triton::backend::pytorch
   InductorModelInstance::CreateCudaEvents(
       int32_t device_id)
   {
+    DEBUG_TRACE_FUNCTION_CALL();
 #ifdef TRITON_ENABLE_GPU
     // Need to set the CUDA context so that the context that events are created on match with contexts that events
     // are recorded with.
@@ -309,6 +318,7 @@ namespace triton::backend::pytorch
       std::vector<torch::Tensor>& input_tensors,
       std::vector<torch::Tensor>& output_tensors)
   {
+    DEBUG_TRACE_FUNCTION_CALL();
     NVTX_RANGE(nvtx_, "Execute " + Name());
 
     std::vector<torch::Tensor> model_outputs;
@@ -371,6 +381,7 @@ namespace triton::backend::pytorch
       const triton::backend::cudaEvent_t& start_event,
       const triton::backend::cudaEvent_t& end_event)
   {
+    DEBUG_TRACE_FUNCTION_CALL();
     float duration{0};
 #ifdef TRITON_ENABLE_GPU
     if (auto err = ConvertCUDAStatusToTritonError(cudaEventElapsedTime(&duration, start_event, end_event),
@@ -388,6 +399,7 @@ namespace triton::backend::pytorch
   triton::backend::cudaStream_t
   InductorModelInstance::GetCudaStreamByInstanceKind()
   {
+    DEBUG_TRACE_FUNCTION_CALL();
 #ifdef TRITON_ENABLE_GPU
     if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU)
       return stream_;
@@ -403,6 +415,7 @@ namespace triton::backend::pytorch
   InductorModelInstance::GetNamingConvention(
       const std::vector<std::string>& allowed_ios)
   {
+    DEBUG_TRACE_FUNCTION_CALL();
     // Rules for (non-Dictionary) input tensor names:
     // 1. Must be in 'allowed_inputs' (arguments in the forward function)
     // 2. Must follow the naming convention i.e. <name>__<index>
@@ -558,6 +571,7 @@ namespace triton::backend::pytorch
       TRITONBACKEND_Request **requests,
       const uint32_t request_count)
   {
+    DEBUG_TRACE_FUNCTION_CALL();
     TRITON_LOG_VERBOSE("TRITONBACKEND_ModelExecute: Running " << Name() << " with " << request_count << " requests");
 
 #ifdef TRITON_ENABLE_GPU
@@ -857,6 +871,9 @@ namespace triton::backend::pytorch
     {
       float compute_input_duration = GetCudaEventElapsedTime(compute_input_start_event_, compute_infer_start_event_);
       float compute_infer_duration = GetCudaEventElapsedTime(compute_infer_start_event_, compute_output_start_event_);
+
+      compute_start_ns = exec_start_ns + (compute_input_duration * 1e6);
+      compute_end_ns = compute_start_ns + compute_infer_duration;
     }
 #endif
 
@@ -909,6 +926,7 @@ namespace triton::backend::pytorch
       uint32_t request_count,
       std::vector<TRITONBACKEND_Response*>& responses)
   {
+    DEBUG_TRACE_FUNCTION_CALL();
     NVTX_RANGE(nvtx_, "ReadOutputTensors " + Name());
 
     triton::backend::BackendOutputResponder responder{requests,
@@ -917,7 +935,7 @@ namespace triton::backend::pytorch
                                                       model_->MaxBatchSize(),
                                                       model_->TritonMemoryManager(),
                                                       model_->EnablePinnedOutput(),
-                                                      GetCudaStreamByInstanceKind()};
+                                                      this->GetCudaStreamByInstanceKind()};
 
     bool cuda_copy{false};
     std::vector<std::shared_ptr<std::string>> string_buffers;
@@ -1122,8 +1140,9 @@ namespace triton::backend::pytorch
       const triton::backend::cudaStream_t& stream,
       const int& device_id)
   {
+    DEBUG_TRACE_FUNCTION_CALL();
 #ifdef TRITON_ENABLE_GPU
-    at::cuda::CUDAStream torch_stream{at::cuda::getStreamFromExternal(stream, device_id`)};
+    at::cuda::CUDAStream torch_stream{at::cuda::getStreamFromExternal(stream, device_id)};
     // This function replaces the default stream with the stream we created.
     // It is not necessary to change the current device to the desired device when
     // replacing the default stream for that device. See the documentation here:
@@ -1143,6 +1162,7 @@ namespace triton::backend::pytorch
       std::vector<torch::Tensor>* input_tensors,
       bool* cuda_copy)
   {
+    DEBUG_TRACE_FUNCTION_CALL();
     if (!requests)
       THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INVALID_ARG,
                             "Argument 'requests' cannot be nullptr.");
@@ -1433,6 +1453,7 @@ namespace triton::backend::pytorch
       const std::string& control_kind,
       bool required)
   {
+    DEBUG_TRACE_FUNCTION_CALL();
     std::string tensor_name;
     std::string tensor_dtype;
     if (auto err = GetBooleanSequenceControlProperties(sequence_batching,
@@ -1489,6 +1510,7 @@ namespace triton::backend::pytorch
   InductorModelInstance::ValidateInputs(
       const size_t expected_input_count)
   {
+    DEBUG_TRACE_FUNCTION_CALL();
     std::vector<std::string> allowed_inputs = model_->GetModelCallSpec();
 
     if (allowed_inputs.size() != expected_input_count)
@@ -1660,6 +1682,7 @@ namespace triton::backend::pytorch
   void
   InductorModelInstance::ValidateOutputs()
   {
+    DEBUG_TRACE_FUNCTION_CALL();
     triton::common::TritonJson::Value ios;
     if (auto err = model_->ModelConfig().MemberAsArray("output", &ios))
     {

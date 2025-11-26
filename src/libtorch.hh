@@ -57,3 +57,126 @@ TRITONSERVER_Error* TRITONBACKEND_ModelInstanceExecute(
 
 
 }  // namespace triton::backend::pytorch
+
+#ifndef ENABLE_DEBUG_TRACE_ERROR
+#define ENABLE_DEBUG_TRACE_ERROR 0
+#endif
+
+#ifndef ENABLE_DEBUG_TRACE_FUNCTION_CALL
+#define ENABLE_DEBUG_TRACE_FUNCTION_CALL 0
+#endif
+
+#ifndef ENABLE_DEBUG_TRACE_INFO
+#define ENABLE_DEBUG_TRACE_INFO 0
+#endif
+
+#if ENABLE_DEBUG_TRACE_ERROR || ENABLE_DEBUG_TRACE_FUNCTION_CALL || ENABLE_DEBUG_TRACE_INFO
+
+#include <cstring>
+#include <iostream>
+#include <string>
+#include <sstream>
+#include <thread>
+
+struct __debug_trace_prefix__
+{
+  std::string _prefix;
+
+  __debug_trace_prefix__(
+      const char* func_name)
+  {
+    auto idx1 = ::strchr(func_name, ' ');
+    auto idx2 = ::strchr(func_name, '(');
+
+    if (idx1 && idx2 && idx1 < idx2)
+    {
+      func_name = idx1 + 1;
+      if (*func_name == '*')
+      {
+        func_name += 1;
+      }
+    }
+
+    std::stringstream ss;
+    ss << "  <debug> "
+       << " ["
+       << std::this_thread::get_id()
+       << "] "
+       << func_name
+       << ": ";
+
+    _prefix = ss.str();
+  }
+
+  std::string print() { return _prefix; }
+};
+
+struct __debug_func_printer__
+{
+  const char* _func_name;
+
+  __debug_func_printer__(
+      const char* func_name)
+    : _func_name{func_name}
+  {
+    std::stringstream out;
+    out << std::endl
+        << __debug_trace_prefix__(_func_name).print()
+        << "entered."
+        << std::endl;
+    std::cerr << out.str();
+  }
+
+  ~__debug_func_printer__()
+  {
+    std::stringstream out;
+    out << std::endl
+        << __debug_trace_prefix__(_func_name).print()
+        << "exited."
+        << std::endl;
+    std::cerr << out.str();
+  }
+};
+#endif
+
+#if ENABLE_DEBUG_TRACE_ERROR
+#define DEBUG_TRACE_ERROR(string) { \
+  std::stringstream out; \
+  out << __debug_trace_prefix__(__PRETTY_FUNCTION__).print() << "ERROR: " << string << std::endl; \
+  std::cerr << out.str(); \
+}
+#define DEBUG_TRACE_ERROR_WHEN(condition,string) { \
+  if (condition) { \
+    std::stringstream out; \
+    out << __debug_trace_prefix__(__PRETTY_FUNCTION__).print() << "ERROR: " << string << std::endl; \
+    std::cerr << out.str(); \
+  } \
+}
+#else
+#define DEBUG_TRACE_ERROR(string) { }
+#define DEBUG_TRACE_ERROR_WHEN(condition,string) { }
+#endif
+
+#if ENABLE_DEBUG_TRACE_FUNCTION_CALL
+#define DEBUG_TRACE_FUNCTION_CALL() __debug_func_printer__ __H__(__PRETTY_FUNCTION__);
+#else
+#define DEBUG_TRACE_FUNCTION_CALL() { }
+#endif
+
+#if ENABLE_DEBUG_TRACE_INFO
+#define DEBUG_TRACE_INFO(string) { \
+  std::stringstream out; \
+  out << __debug_trace_prefix__(__PRETTY_FUNCTION__).print() << "INFO: " << string << std::endl; \
+  std::cerr << out.str(); \
+}
+#define DEBUG_TRACE_INFO_WHEN(condition,string) { \
+  if (condition) { \
+    std::stringstream out; \
+    out << __debug_trace_prefix__(__PRETTY_FUNCTION__).print() << "INFO: " << string << std::endl; \
+    std::cerr << out.str(); \
+  } \
+}
+#else
+#define DEBUG_TRACE_INFO(string) { }
+#define DEBUG_TRACE_INFO_WHEN(condition,string) { }
+#endif
