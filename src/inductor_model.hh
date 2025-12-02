@@ -26,6 +26,10 @@
 
 #pragma once
 
+#include "triton/backend/backend_common.h"
+#include "triton/backend/backend_input_collector.h"
+#include "triton/backend/backend_model.h"
+#include "triton/backend/backend_output_responder.h"
 #include "triton/core/tritonbackend.h"
 #include "triton/core/tritonserver.h"
 

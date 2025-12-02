@@ -766,9 +766,12 @@ namespace triton::backend::pytorch
                                             request_count,
                                             all_response_failed,
                                             TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INVALID_ARG,
-                                                                  std::string("The output " + std::string(name.first) + " in the model configuration refers to "
-                                                                              " an output indexwhich doesn't exist. This model has " + std::to_string(max_index)
-                                                                              + " outputs.").c_str()));
+                                                                  std::string("The output " + std::string(name.first)
+                                                                              + " in the model configuration refers to "
+                                                                                "an output indexwhich doesn't exist. "
+                                                                                "This model has "
+                                                                              + std::to_string(max_index) + " outputs.")
+                                            .c_str()));
           invalid_index = true;
           break;
         }
