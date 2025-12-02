@@ -50,7 +50,7 @@ namespace triton::backend::pytorch
   using TritonBatchOutput = triton::backend::BatchOutput;
   using TritonBatchInput = triton::backend::BatchInput;
   using TritonBackendModel = triton::backend::BackendModel;
-  using TritonJsonValue = TritonJsonValue;
+  using TritonJsonValue = triton::common::TritonJson::Value;
 
   InductorModel::InductorModel(
       TRITONBACKEND_Model *backend_model,
