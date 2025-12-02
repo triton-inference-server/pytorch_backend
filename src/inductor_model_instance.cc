@@ -72,7 +72,7 @@ namespace triton::backend::pytorch
       // with caution.
       for (int i = 0; i < device_cnt_; i++)
       {
-        triton::backend::cudaStream_t stream;
+        cudaStream_t stream;
         if (auto err = CreateCudaStream(i, 0 /* cuda_stream_priority */, &stream))
           throw triton::backend::BackendModelInstanceException(err);
 
@@ -302,7 +302,7 @@ namespace triton::backend::pytorch
 #endif
   }
 
-  triton::backend::cudaStream_t
+  cudaStream_t
   InductorModelInstance::CudaStream()
   {
     return BackendModelInstance::CudaStream();
@@ -381,8 +381,8 @@ namespace triton::backend::pytorch
 
   float
   InductorModelInstance::GetCudaEventElapsedTime(
-      const triton::backend::cudaEvent_t& start_event,
-      const triton::backend::cudaEvent_t& end_event)
+      const cudaEvent_t& start_event,
+      const cudaEvent_t& end_event)
   {
     DEBUG_TRACE_FUNCTION_CALL();
     float duration{0};
@@ -399,7 +399,7 @@ namespace triton::backend::pytorch
     return duration;
   }
 
-  triton::backend::cudaStream_t
+  cudaStream_t
   InductorModelInstance::GetCudaStreamByInstanceKind()
   {
     DEBUG_TRACE_FUNCTION_CALL();
@@ -1127,7 +1127,7 @@ namespace triton::backend::pytorch
     if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU ||
         (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL && device_count_ > 0))
     {
-      triton::backend::cudaEvent_t& cuda_event = *(reinterpret_cast<triton::backend::cudaEvent_t*>(cuda_event_ptr));
+      cudaEvent_t& cuda_event = *(reinterpret_cast<cudaEvent_t*>(cuda_event_ptr));
       if (auto err = ConvertCUDAStatusToTritonError(cudaEventRecord(cuda_event, GetCudaStreamByInstanceKind()),
                                                     TRITONSERVER_ERROR_INTERNAL,
                                                     "Failed to record CUDA event"))
@@ -1143,7 +1143,7 @@ namespace triton::backend::pytorch
 
   void
   InductorModelInstance::SetCurrentCudaStream(
-      const triton::backend::cudaStream_t& stream,
+      const cudaStream_t& stream,
       const int& device_id)
   {
     DEBUG_TRACE_FUNCTION_CALL();

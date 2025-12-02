@@ -48,6 +48,10 @@
 #pragma warning(pop)
 #pragma GCC diagnostic pop
 
+#ifdef TRITON_ENABLE_GPU
+#include <cuda_runtime_api.h>
+#endif
+
 namespace triton::backend::pytorch
 {
   using TritonInductorModel = triton::backend::pytorch::InductorModel;
@@ -61,9 +65,9 @@ namespace triton::backend::pytorch
 
       uint32_t batch_input_count_{0};
 #ifdef TRITON_ENABLE_GPU
-      triton::backend::cudaEvent_t compute_infer_start_event_;
-      triton::backend::cudaEvent_t compute_input_start_event_;
-      triton::backend::cudaEvent_t compute_output_start_event_;
+      cudaEvent_t compute_infer_start_event_;
+      cudaEvent_t compute_input_start_event_;
+      cudaEvent_t compute_output_start_event_;
 #endif
       torch::Device device_{torch::kCPU};
       int device_count_{0};
@@ -75,7 +79,7 @@ namespace triton::backend::pytorch
       std::unordered_map<std::string, TRITONSERVER_DataType> output_dtype_map_;
       std::unordered_map<std::string, int> output_index_map_;
 #ifdef TRITON_ENABLE_GPU
-      std::vector<triton::backend::cudaStream_t> stream_vector_;
+      std::vector<cudaStream_t> stream_vector_;
 #endif
 
     public:
@@ -113,7 +117,7 @@ namespace triton::backend::pytorch
       ArtifactFilename() const;
 
       [[nodiscard]]
-      triton::backend::cudaStream_t
+      cudaStream_t
       CudaStream();
 
       [[nodiscard]]
@@ -162,11 +166,11 @@ namespace triton::backend::pytorch
 
       float
       GetCudaEventElapsedTime(
-        const triton::backend::cudaEvent_t& start_event,
-        const triton::backend::cudaEvent_t& end_event);
+        const cudaEvent_t& start_event,
+        const cudaEvent_t& end_event);
 
       [[nodiscard]]
-      triton::backend::cudaStream_t
+      cudaStream_t
       GetCudaStreamByInstanceKind();
 
       [[nodiscard]]
@@ -190,7 +194,7 @@ namespace triton::backend::pytorch
 
       void
       SetCurrentCudaStream(
-        const triton::backend::cudaStream_t& stream,
+        const cudaStream_t& stream,
         const int& device_id);
 
       TRITONSERVER_Error*
