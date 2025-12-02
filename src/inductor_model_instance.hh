@@ -31,6 +31,7 @@
 #include "triton/backend/backend_common.h"
 #include "triton/backend/backend_input_collector.h"
 #include "triton/backend/backend_model.h"
+#include "triton/backend/backend_model_instance.h"
 #include "triton/backend/backend_output_responder.h"
 #include "triton/common/triton_json.h"
 #include "triton/core/tritonbackend.h"
