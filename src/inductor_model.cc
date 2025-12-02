@@ -34,6 +34,12 @@
 #include <exception>
 #include <mutex>
 
+#ifdef TRITON_ENABLE_GPU
+#include <c10/cuda/CUDACachingAllocator.h>
+#include <c10/cuda/CUDAGuard.h>
+#include <cuda_runtime_api.h>
+#endif  // TRITON_ENABLE_GPU
+
 namespace
 {
   std::once_flag pytorch_interop_threads_flag;

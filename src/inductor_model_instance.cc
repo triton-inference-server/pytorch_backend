@@ -36,6 +36,12 @@
 #include "triton/backend/backend_output_responder.h"
 #include "triton/common/nvtx.h"
 
+#ifdef TRITON_ENABLE_GPU
+#include <c10/cuda/CUDACachingAllocator.h>
+#include <c10/cuda/CUDAGuard.h>
+#include <cuda_runtime_api.h>
+#endif  // TRITON_ENABLE_GPU
+
 namespace triton::backend::pytorch
 {
   InductorModelInstance::InductorModelInstance(
