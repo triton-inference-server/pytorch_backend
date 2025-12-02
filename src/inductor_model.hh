@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include "libtorch_utils.h"
 #include "triton/backend/backend_common.h"
 #include "triton/backend/backend_input_collector.h"
 #include "triton/backend/backend_model.h"

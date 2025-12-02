@@ -104,7 +104,7 @@ namespace triton::backend::pytorch
       THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
                             "Argument `triton_model` cannot be `null`.");
 
-    auto imodel_ptr = new InductorModel(triton_model);
+    auto imodel_ptr = new InductorModel{triton_model};
     std::shared_ptr<InductorModel> imodel{imodel_ptr};
 
     bool auto_complete_config = false;
