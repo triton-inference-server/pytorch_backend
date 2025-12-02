@@ -31,14 +31,13 @@
 #include "libtorch_utils.h"
 #include "triton_utils.hh"
 
-#include <exception>
 #include <mutex>
 
 #ifdef TRITON_ENABLE_GPU
 #include <c10/cuda/CUDACachingAllocator.h>
 #include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime_api.h>
-#endif  // TRITON_ENABLE_GPU
+#endif
 
 namespace
 {
@@ -48,6 +47,11 @@ namespace
 
 namespace triton::backend::pytorch
 {
+  using TritonBatchOutput = triton::backend::BatchOutput;
+  using TritonBatchInput = triton::backend::BatchInput;
+  using TritonBackendModel = triton::backend::BackendModel;
+  using TritonJsonValue = TritonJsonValue;
+
   InductorModel::InductorModel(
       TRITONBACKEND_Model *backend_model,
       bool allow_optional)
@@ -66,16 +70,16 @@ namespace triton::backend::pytorch
                     "Skipping auto-complete for model '" << Name() << "'.");
   }
 
-  const std::vector<BatchInput>&
+  const std::vector<triton::backend::BatchInput>&
   InductorModel::BatchInputs() const
   {
-    return BackendModel::BatchInputs();
+    return TritonBackendModel::BatchInputs();
   }
 
-  const std::vector<BatchOutput>&
+  const std::vector<triton::backend::BatchOutput>&
   InductorModel::BatchOutputs() const
   {
-    return BackendModel::BatchOutputs();
+    return TritonBackendModel::BatchOutputs();
   }
 
   bool
@@ -118,15 +122,15 @@ namespace triton::backend::pytorch
     }
 
     auto &model_outputs = imodel->model_outputs_;
-    triton::common::TritonJson::Value sequence_batching;
+    TritonJsonValue sequence_batching;
     if (imodel->ModelConfig().Find("sequence_batching", &sequence_batching))
     {
-      triton::common::TritonJson::Value states;
+      TritonJsonValue states;
       if (sequence_batching.Find("state", &states))
       {
         for (size_t i = 0; i < states.ArraySize(); i += 1)
         {
-          triton::common::TritonJson::Value state;
+          TritonJsonValue state;
           if (auto err = states.IndexAsObject(i, &state))
           {
             THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
@@ -155,7 +159,7 @@ namespace triton::backend::pytorch
       }
     }
 
-    triton::common::TritonJson::Value outputs;
+    TritonJsonValue outputs;
     if (auto err = imodel->ModelConfig().MemberAsArray("output", &outputs))
     {
       THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
@@ -163,7 +167,7 @@ namespace triton::backend::pytorch
     }
     for (size_t i = 0; i < outputs.ArraySize(); i += 1)
     {
-      triton::common::TritonJson::Value output;
+      TritonJsonValue output;
       if (auto err = outputs.IndexAsObject(i, &output))
       {
         THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
@@ -211,20 +215,20 @@ namespace triton::backend::pytorch
   bool
   InductorModel::EnablePinnedInput() const
   {
-    return BackendModel::EnablePinnedInput();
+    return TritonBackendModel::EnablePinnedInput();
   }
 
   bool
   InductorModel::EnablePinnedOutput() const
   {
-    return BackendModel::EnablePinnedOutput();
+    return TritonBackendModel::EnablePinnedOutput();
   }
 
-  const BatchOutput *
+  const triton::backend::BatchOutput*
   InductorModel::FindBatchOutput(
       const std::string &output_name) const
   {
-    return BackendModel::FindBatchOutput(output_name);
+    return TritonBackendModel::FindBatchOutput(output_name);
   }
 
   std::vector<std::string>
@@ -270,14 +274,14 @@ namespace triton::backend::pytorch
   InductorModel::IsInputRagged(
       const std::string &input_name) const
   {
-    return BackendModel::IsInputRagged(input_name);
+    return TritonBackendModel::IsInputRagged(input_name);
   }
 
   bool
   InductorModel::IsInputOptional(
       const std::string &input_name) const
   {
-    return BackendModel::IsInputOptional(input_name);
+    return TritonBackendModel::IsInputOptional(input_name);
   }
 
   void InductorModel::LoadModel(
@@ -332,19 +336,19 @@ namespace triton::backend::pytorch
 
     torch::InferenceMode infer_guard{InferenceModeEnabled()};
 
-    torch::inductor::AOTIModelPackageLoader *model_loader{nullptr};
+    TorchModelLoader *model_loader{nullptr};
     if (kind == TRITONSERVER_INSTANCEGROUPKIND_MODEL)
     {
-      model_loader = new torch::inductor::AOTIModelPackageLoader{/*model_package_path=*/local_file_path,
-                                                                 /*model_name=*/local_name};
+      model_loader = new TorchModelLoader{/*model_package_path=*/local_file_path,
+                                         /*model_name=*/local_name};
     }
     else
     {
-      model_loader = new torch::inductor::AOTIModelPackageLoader{/*model_package_path=*/local_file_path,
-                                                                 /*model_name=*/local_name,
-                                                                 /*run_single_threaded=*/device_count <= 1,
-                                                                 /*num_runners=*/device_count,
-                                                                 /*device_index=*/device.index()};
+      model_loader = new TorchModelLoader{/*model_package_path=*/local_file_path,
+                                         /*model_name=*/local_name,
+                                         /*run_single_threaded=*/device_count <= 1,
+                                         /*num_runners=*/device_count,
+                                         /*device_index=*/device.index()};
     }
 
     model_loader_.reset(model_loader);
@@ -362,7 +366,7 @@ namespace triton::backend::pytorch
   int
   InductorModel::MaxBatchSize() const
   {
-    return BackendModel::MaxBatchSize();
+    return TritonBackendModel::MaxBatchSize();
   }
 
   const std::map<std::string, std::pair<int64_t, int64_t>> &
@@ -380,7 +384,7 @@ namespace triton::backend::pytorch
   const std::string&
   InductorModel::Name() const
   {
-    return BackendModel::Name();
+    return TritonBackendModel::Name();
   }
 
   bool
@@ -399,7 +403,7 @@ namespace triton::backend::pytorch
   InductorModel::ParseParameters()
   {
     DEBUG_TRACE_FUNCTION_CALL();
-    triton::common::TritonJson::Value parameters;
+    TritonJsonValue parameters;
     if (!ModelConfig().Find("parameters", &parameters))
     {
       bool disable_optimized_execution{false};
@@ -519,45 +523,45 @@ namespace triton::backend::pytorch
   const std::string&
   InductorModel::RepositoryPath() const
   {
-    return BackendModel::RepositoryPath();
+    return TritonBackendModel::RepositoryPath();
   }
 
   void
   InductorModel::SetMaxBatchSize(
       int value)
   {
-    BackendModel::SetMaxBatchSize(value);
+    TritonBackendModel::SetMaxBatchSize(value);
   }
 
   TRITONSERVER_Error*
   InductorModel::SupportsFirstDimBatching(
       bool *value_out)
   {
-    return BackendModel::SupportsFirstDimBatching(value_out);
+    return TritonBackendModel::SupportsFirstDimBatching(value_out);
   }
 
   TRITONBACKEND_MemoryManager*
   InductorModel::TritonMemoryManager()
   {
-    return BackendModel::TritonMemoryManager();
+    return TritonBackendModel::TritonMemoryManager();
   }
 
   TRITONBACKEND_Model*
   InductorModel::TritonModel()
   {
-    return BackendModel::TritonModel();
+    return TritonBackendModel::TritonModel();
   }
 
   TRITONSERVER_Server*
   InductorModel::TritonServer()
   {
-    return BackendModel::TritonServer();
+    return TritonBackendModel::TritonServer();
   }
 
   uint64_t
   InductorModel::Version() const
   {
-    return BackendModel::Version();
+    return TritonBackendModel::Version();
   }
 
   bool

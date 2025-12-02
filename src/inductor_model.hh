@@ -26,9 +26,7 @@
 
 #pragma once
 
-#include "triton/backend/backend_common.h"
-#include "triton/backend/backend_input_collector.h"
-#include "triton/backend/backend_model.h"
+#include "triton/core/tritonbackend.h"
 #include "triton/core/tritonserver.h"
 
 #include <exception>
@@ -56,7 +54,7 @@ namespace triton::backend::pytorch
   constexpr char INDUCTOR_MODEL_ARTIFACT_NAME_DEFAULT[] = "model.pt2";
   constexpr char INDUCTOR_MODEL_NAME_DEFAULT[] = "model";
 
-  using inductor_loader = torch::inductor::AOTIModelPackageLoader;
+  using TorchModelLoader = torch::inductor::AOTIModelPackageLoader;
 
   class InductorModel
     : public triton::backend::BackendModel
@@ -69,11 +67,11 @@ namespace triton::backend::pytorch
       bool cudnn_enabled_{true};
       bool inference_mode_enabled_{true};
       bool is_dictionary_input_{false};
-      std::shared_ptr<inductor_loader> model_loader_{nullptr};
+      std::shared_ptr<TorchModelLoader> model_loader_{nullptr};
       std::string model_name_;
       std::map<std::string, std::pair<int64_t, int64_t>> model_outputs_;
       std::string model_path_;
-      std::map<std::pair<bool, int64_t>, std::shared_ptr<inductor_loader>> model_package_loaders_;
+      std::map<std::pair<bool, int64_t>, std::shared_ptr<TorchModelLoader>> model_package_loaders_;
       bool optimized_execution_enabled_{true};
       bool weight_sharing_enabled_{false};
 
@@ -148,11 +146,11 @@ namespace triton::backend::pytorch
       /** triton::backend::BackendModel implementation **/
 
       [[nodiscard]]
-      const std::vector<BatchInput>&
+      const std::vector<triton::backend::BatchInput>&
       BatchInputs() const;
 
       [[nodiscard]]
-      const std::vector<BatchOutput>&
+      const std::vector<triton::backend::BatchOutput>&
       BatchOutputs() const;
 
       [[nodiscard]]
@@ -164,7 +162,7 @@ namespace triton::backend::pytorch
       EnablePinnedOutput() const;
 
       [[nodiscard]]
-      const BatchOutput*
+      const triton::backend::BatchOutput*
       FindBatchOutput(
         const std::string& output_name) const;
 

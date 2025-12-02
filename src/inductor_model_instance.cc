@@ -31,16 +31,13 @@
 #include "libtorch_utils.h"
 #include "string_utils.hh"
 #include "triton_utils.hh"
-#include "triton/backend/backend_common.h"
-#include "triton/backend/backend_model_instance.h"
-#include "triton/backend/backend_output_responder.h"
 #include "triton/common/nvtx.h"
 
 #ifdef TRITON_ENABLE_GPU
 #include <c10/cuda/CUDACachingAllocator.h>
 #include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime_api.h>
-#endif  // TRITON_ENABLE_GPU
+#endif
 
 namespace triton::backend::pytorch
 {
@@ -417,7 +414,7 @@ namespace triton::backend::pytorch
     return nullptr;
   }
 
-  pytorch::NamingConvention
+  triton::backend::pytorch::NamingConvention
   InductorModelInstance::GetNamingConvention(
       const std::vector<std::string>& allowed_ios)
   {
@@ -1707,7 +1704,7 @@ namespace triton::backend::pytorch
                              << "' must define at least one output, none were specified.");
     }
 
-    pytorch::NamingConvention naming_convention = GetNamingConvention({});
+    auto naming_convention = GetNamingConvention({});
 
     for (size_t i = 0; i < ios.ArraySize(); i++)
     {

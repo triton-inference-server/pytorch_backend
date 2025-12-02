@@ -28,7 +28,8 @@
 
 #include "inductor_model.hh"
 #include "naming_convention.hh"
-#include "triton/backend/backend_model_instance.h"
+#include "triton/core/tritonbackend.h"
+#include "triton/core/tritonserver.h"
 
 #include <memory>
 #include <string>
@@ -49,9 +50,11 @@ namespace triton::backend::pytorch
     private:
 
       uint32_t batch_input_count_{0};
+#ifdef TRITON_ENABLE_GPU
       triton::backend::cudaEvent_t compute_infer_start_event_;
       triton::backend::cudaEvent_t compute_input_start_event_;
       triton::backend::cudaEvent_t compute_output_start_event_;
+#endif
       torch::Device device_{torch::kCPU};
       int device_count_{0};
       std::unordered_map<std::string, int> input_index_map_;
@@ -61,7 +64,9 @@ namespace triton::backend::pytorch
       std::string model_path_;
       std::unordered_map<std::string, TRITONSERVER_DataType> output_dtype_map_;
       std::unordered_map<std::string, int> output_index_map_;
+#ifdef TRITON_ENABLE_GPU
       std::vector<triton::backend::cudaStream_t> stream_vector_;
+#endif
 
     public:
 
@@ -155,7 +160,7 @@ namespace triton::backend::pytorch
       GetCudaStreamByInstanceKind();
 
       [[nodiscard]]
-      pytorch::NamingConvention
+      triton::backend::pytorch::NamingConvention
       GetNamingConvention(
         const std::vector<std::string>& allowed_ios);
 

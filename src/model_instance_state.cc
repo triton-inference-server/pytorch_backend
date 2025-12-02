@@ -408,7 +408,7 @@ ModelInstanceState::GetCudaStreamByInstanceKind()
 
 TRITONSERVER_Error*
 ModelInstanceState::GetNamingConvention(
-    NamingConvention* naming_convention,
+    triton::backend::pytorch::NamingConvention* naming_convention,
     const std::vector<std::string>& allowed_ios)
 {
   DEBUG_TRACE_FUNCTION_CALL();
@@ -1392,7 +1392,7 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
         "specified.");
   }
 
-  NamingConvention naming_convention;
+  triton::backend::pytorch::NamingConvention naming_convention;
   RETURN_IF_ERROR(GetNamingConvention(&naming_convention, allowed_inputs));
 
   for (size_t i = 0; i < ios.ArraySize(); i++) {

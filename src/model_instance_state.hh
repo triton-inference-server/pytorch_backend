@@ -138,7 +138,7 @@ class ModelInstanceState : public BackendModelInstance {
 
   // Get the naming convention for inputs/outputs from the model configuration
   TRITONSERVER_Error* GetNamingConvention(
-      NamingConvention* naming_convention,
+      triton::backend::pytorch::NamingConvention* naming_convention,
       const std::vector<std::string>& allowed_io);
 
   TRITONSERVER_Error* ReadOutputTensors(
