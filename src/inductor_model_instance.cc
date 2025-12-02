@@ -1,4 +1,4 @@
-// Copyright 2025, NVIDIA CORPORATION&  AFFILIATES. All rights reserved.
+// Copyright 2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -42,7 +42,7 @@
 namespace triton::backend::pytorch
 {
   InductorModelInstance::InductorModelInstance(
-      std::shared_ptr<pytorch::InductorModel> model,
+      std::shared_ptr<TritonInductorModel> model,
       TRITONBACKEND_ModelInstance *triton_model_instance)
     : BackendModelInstance{model.get(), triton_model_instance}
     , model_{model}
@@ -73,7 +73,7 @@ namespace triton::backend::pytorch
       for (int i = 0; i < device_cnt_; i++)
       {
         triton::backend::cudaStream_t stream;
-        if (auto err = CreateCudaStream(i, 0 /* cuda_stream_priority */,& stream))
+        if (auto err = CreateCudaStream(i, 0 /* cuda_stream_priority */, &stream))
           throw triton::backend::BackendModelInstanceException(err);
 
         stream_vec_.push_back(stream);
@@ -90,13 +90,13 @@ namespace triton::backend::pytorch
 
     size_t expected_input_count{0};
 
-    triton::common::TritonJson::Value inputs;
+    TritonJsonValue inputs;
     if (model_->ModelConfig().Find("input", &inputs))
     {
       expected_input_count = inputs.ArraySize();
     }
 
-    triton::common::TritonJson::Value config_batch_inputs;
+    TritonJsonValue config_batch_inputs;
     if (model_->ModelConfig().Find("batch_input", &config_batch_inputs))
     {
       batch_input_count_ = config_batch_inputs.ArraySize();
@@ -105,7 +105,7 @@ namespace triton::backend::pytorch
 
     // If this is a sequence model then make sure that the required inputs are
     // present in the model and have the correct shape and datatype.
-    triton::common::TritonJson::Value sequence_batching;
+    TritonJsonValue sequence_batching;
     if (model_->ModelConfig().Find("sequence_batching", &sequence_batching))
     {
       if (ValidateBooleanSequenceControl(sequence_batching, "CONTROL_SEQUENCE_START", false /* required */))
@@ -126,7 +126,7 @@ namespace triton::backend::pytorch
       }
 
       // Add the state inputs to the expected count.
-      triton::common::TritonJson::Value states;
+      TritonJsonValue states;
       if (sequence_batching.Find("state", &states))
       {
         expected_input_count += states.ArraySize();
@@ -174,7 +174,7 @@ namespace triton::backend::pytorch
 
   void
   InductorModelInstance::AddInputToMap(
-      pytorch::NamingConvention naming_convention,
+      TritonNamingConvention naming_convention,
       const std::vector<std::string>& allowed_inputs,
       const std::string& io_name,
       uint32_t index)
@@ -190,7 +190,7 @@ namespace triton::backend::pytorch
     {
       switch (naming_convention)
       {
-        case pytorch::NamingConvention::FORWARD_ARGUMENT:
+        case TritonNamingConvention::FORWARD_ARGUMENT:
         {
           auto it = std::find(allowed_inputs.begin(), allowed_inputs.end(), io_name);
           if (it != allowed_inputs.end())
@@ -200,7 +200,7 @@ namespace triton::backend::pytorch
         }
         break;
 
-        case pytorch::NamingConvention::NAMED_INDEX:
+        case TritonNamingConvention::NAMED_INDEX:
         {
           int start_pos = io_name.find(deliminator);
           int ip_index = std::atoi(io_name.substr(start_pos + 2).c_str());
@@ -208,7 +208,7 @@ namespace triton::backend::pytorch
         }
         break;
 
-        case pytorch::NamingConvention::STRICT_CONFIG_ORDERING:
+        case TritonNamingConvention::STRICT_CONFIG_ORDERING:
         {
           input_index_map_[io_name] = index;
         }
@@ -216,8 +216,8 @@ namespace triton::backend::pytorch
 
         default:
           THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INVALID_ARG,
-                                "Argument 'naming_convention' value of " << static_cast<uint32_t>(naming_convention)
-                                 << " is invalid or unsupported.");
+                                 "Argument 'naming_convention' value of " << static_cast<uint32_t>(naming_convention)
+                                  << " is invalid or unsupported.");
       }
     }
   }
@@ -241,9 +241,9 @@ namespace triton::backend::pytorch
 #endif
   }
 
-  std::shared_ptr<pytorch::InductorModelInstance>
+  std::shared_ptr<InductorModelInstance>
   InductorModelInstance::Create(
-      std::shared_ptr<pytorch::InductorModel> model,
+      std::shared_ptr<TritonInductorModel> model,
       TRITONBACKEND_ModelInstance *triton_model_instance)
   {
     try
@@ -414,7 +414,7 @@ namespace triton::backend::pytorch
     return nullptr;
   }
 
-  triton::backend::pytorch::NamingConvention
+  TritonNamingConvention
   InductorModelInstance::GetNamingConvention(
       const std::vector<std::string>& allowed_ios)
   {
@@ -430,16 +430,16 @@ namespace triton::backend::pytorch
     // 2. If not, we enforce strict ordering of model outputs.
     std::string deliminator{"__"};
     std::string io_kind{"input"};
-    NamingConvention naming_convention{NamingConvention::FORWARD_ARGUMENT};
+    TritonNamingConvention naming_convention{TritonNamingConvention::FORWARD_ARGUMENT};
 
     if (allowed_ios.size() == 0)
     {
       io_kind = "output";
-      naming_convention = NamingConvention::NAMED_INDEX;
+      naming_convention = TritonNamingConvention::NAMED_INDEX;
     }
 
-    triton::common::TritonJson::Value ios;
-    if (auto err = model_->ModelConfig().MemberAsArray(io_kind.c_str(),& ios))
+    TritonJsonValue ios;
+    if (auto err = model_->ModelConfig().MemberAsArray(io_kind.c_str(), &ios))
     {
       THROW_TRITON_EXCEPTION(err,
                              "Failed to get " << io_kind << " array from model config for model '"
@@ -450,8 +450,8 @@ namespace triton::backend::pytorch
     {
       for (size_t i = 0; i < ios.ArraySize(); i += 1)
       {
-        triton::common::TritonJson::Value io;
-        if (auto err = ios.IndexAsObject(i,& io))
+        TritonJsonValue io;
+        if (auto err = ios.IndexAsObject(i, &io))
         {
           THROW_TRITON_EXCEPTION(err,
                                 "Failed to get " << io_kind << " object at index " << i
@@ -469,18 +469,18 @@ namespace triton::backend::pytorch
         auto it = std::find(allowed_ios.begin(), allowed_ios.end(), io_name);
         if (it == allowed_ios.end())
         {
-          naming_convention = NamingConvention::NAMED_INDEX;
+          naming_convention = TritonNamingConvention::NAMED_INDEX;
           break;
         }
       }
     }
 
-    if (naming_convention == NamingConvention::NAMED_INDEX)
+    if (naming_convention == TritonNamingConvention::NAMED_INDEX)
     {
       for (size_t i = 0; i < ios.ArraySize(); i += 1)
       {
-        triton::common::TritonJson::Value io;
-        if (auto err = ios.IndexAsObject(i,& io))
+        TritonJsonValue io;
+        if (auto err = ios.IndexAsObject(i, &io))
         {
           THROW_TRITON_EXCEPTION(err,
                                  "Failed to get " << io_kind << " object at index " << i
@@ -489,7 +489,7 @@ namespace triton::backend::pytorch
 
         // Validate name.
         std::string io_name;
-        if (auto err = io.MemberAsString("name",& io_name))
+        if (auto err = io.MemberAsString("name", &io_name))
         {
           THROW_TRITON_EXCEPTION(err,
                                  "Failed to get " << io_kind << " name at index " << i
@@ -499,7 +499,7 @@ namespace triton::backend::pytorch
         int start_pos = io_name.find(deliminator);
         if (start_pos == -1)
         {
-          naming_convention = NamingConvention::STRICT_CONFIG_ORDERING;
+          naming_convention = TritonNamingConvention::STRICT_CONFIG_ORDERING;
           break;
         } else
         {
@@ -529,7 +529,7 @@ namespace triton::backend::pytorch
                               "Defaulting to strict ordering of model outputs.");
             }
 
-            naming_convention = NamingConvention::STRICT_CONFIG_ORDERING;
+            naming_convention = TritonNamingConvention::STRICT_CONFIG_ORDERING;
             break;
           }
         }
@@ -545,7 +545,7 @@ namespace triton::backend::pytorch
     return BackendModelInstance::HostPolicyName();
   }
 
-  std::shared_ptr<pytorch::InductorModel>
+  std::shared_ptr<TritonInductorModel>
   InductorModelInstance::InductorModel() const
   {
     return model_;
@@ -643,11 +643,11 @@ namespace triton::backend::pytorch
       if (max_batch_size > 0)
       {
         TRITONBACKEND_Input *input{nullptr};
-        auto err = TRITONBACKEND_RequestInputByIndex(requests[i], 0,& input);
+        auto err = TRITONBACKEND_RequestInputByIndex(requests[i], 0, &input);
         if (!err)
         {
           const int64_t *shape;
-          err = TRITONBACKEND_InputProperties(input, nullptr, nullptr,& shape, nullptr, nullptr, nullptr);
+          err = TRITONBACKEND_InputProperties(input, nullptr, nullptr, &shape, nullptr, nullptr, nullptr);
           total_batch_size += shape[0];
         }
 
@@ -1065,7 +1065,7 @@ namespace triton::backend::pytorch
       //     }
 
       //     int64_t tensor_element_count{0};
-      //     if (auto err = GetElementCount(batch_n_shape,& tensor_element_count))
+      //     if (auto err = GetElementCount(batch_n_shape, &tensor_element_count))
       //     {
       //       THROW_TRITON_EXCEPTION(err,
       //                              "Failed to get element count for output '" << name << "' for request " << idx
@@ -1269,7 +1269,7 @@ namespace triton::backend::pytorch
           }
 
           int64_t element_cnt{0};
-          if (auto err = GetElementCount(input_shape, input_dims_count,& element_cnt))
+          if (auto err = GetElementCount(input_shape, input_dims_count, &element_cnt))
           {
             RESPOND_AND_SET_NULL_IF_ERROR(&((*responses)[idx]),
                                           TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL,
@@ -1347,7 +1347,7 @@ namespace triton::backend::pytorch
       //   {
       //     TRITONBACKEND_Input *input{nullptr};
       //     RESPOND_AND_SET_NULL_IF_ERROR(&((*responses)[idx]),
-      //                                   TRITONBACKEND_RequestInput(requests[idx], input_name,& input));
+      //                                   TRITONBACKEND_RequestInput(requests[idx], input_name, &input));
 
       //     const int64_t *shape;
       //     uint32_t dims_count;
@@ -1364,7 +1364,7 @@ namespace triton::backend::pytorch
 
       //     int64_t batch_element_count = 0;
       //     RESPOND_AND_SET_NULL_IF_ERROR(&((*responses)[idx]),
-      //                                   GetElementCount(shape, dims_count,& batch_element_count));
+      //                                   GetElementCount(shape, dims_count, &batch_element_count));
 
       //     *cuda_copy |= SetStringInputTensor(&input_list,
       //                                        input,
@@ -1397,7 +1397,7 @@ namespace triton::backend::pytorch
     for (const auto& batch_input : model_->BatchInputs())
     {
       std::vector<int64_t> shape;
-      collector->BatchInputShape(batch_input,& shape);
+      collector->BatchInputShape(batch_input, &shape);
 
       for (const auto& input_name : batch_input.TargetNames())
       {
@@ -1452,7 +1452,7 @@ namespace triton::backend::pytorch
 
   bool
   InductorModelInstance::ValidateBooleanSequenceControl(
-      triton::common::TritonJson::Value& sequence_batching,
+      TritonJsonValue& sequence_batching,
       const std::string& control_kind,
       bool required)
   {
@@ -1525,7 +1525,7 @@ namespace triton::backend::pytorch
 
     /* CANNOT VALIDATE INPUTS BY DTYPE DUE TO LACK OF INFORMATION FROM MODEL */
 
-    triton::common::TritonJson::Value ios;
+    TritonJsonValue ios;
     if (auto err = model_->ModelConfig().MemberAsArray("input", &ios))
     {
       THROW_TRITON_EXCEPTION(err,
@@ -1544,8 +1544,8 @@ namespace triton::backend::pytorch
 
     for (size_t i = 0; i < ios.ArraySize(); i += 1)
     {
-      triton::common::TritonJson::Value io;
-      if (auto err = ios.IndexAsObject(i,& io))
+      TritonJsonValue io;
+      if (auto err = ios.IndexAsObject(i, &io))
       {
         THROW_TRITON_EXCEPTION(err,
                                "Failed to get input " << i << " for model instance '" << Name() << "': "
@@ -1585,7 +1585,7 @@ namespace triton::backend::pytorch
         // If a reshape is provided for the input then use that when validating
         // the model shapes.
         std::vector<int64_t> dims;
-        triton::common::TritonJson::Value reshape;
+        TritonJsonValue reshape;
         if (io.Find("reshape", &reshape))
         {
           if (auto err = ParseShape(reshape, "shape", &dims))
@@ -1595,7 +1595,7 @@ namespace triton::backend::pytorch
                                    << Name() << "': " << TRITONSERVER_ErrorMessage(err));
           }
         } else {
-          if (auto err = ParseShape(io, "dims",& dims))
+          if (auto err = ParseShape(io, "dims", &dims))
           {
             THROW_TRITON_EXCEPTION(err,
                                    "Failed to parse dims for input '" << io_name << "' for model instance '"
@@ -1605,15 +1605,15 @@ namespace triton::backend::pytorch
       }
     }
 
-    triton::common::TritonJson::Value sequence_batching;
-    if (model_->ModelConfig().Find("sequence_batching",& sequence_batching))
+    TritonJsonValue sequence_batching;
+    if (model_->ModelConfig().Find("sequence_batching", &sequence_batching))
     {
-      triton::common::TritonJson::Value states;
+      TritonJsonValue states;
       if (sequence_batching.Find("state", &states))
       {
         for (size_t i = 0; i < states.ArraySize(); i += 1)
         {
-          triton::common::TritonJson::Value state;
+          TritonJsonValue state;
           if (auto err = states.IndexAsObject(i, &state))
           {
             THROW_TRITON_EXCEPTION(err,
@@ -1622,7 +1622,7 @@ namespace triton::backend::pytorch
           }
 
           std::string state_name;
-          if (auto err = state.MemberAsString("input_name",& state_name))
+          if (auto err = state.MemberAsString("input_name", &state_name))
           {
             THROW_TRITON_EXCEPTION(err,
                                    "Failed to get input name for sequence state " << i << " for model instance '"
@@ -1663,7 +1663,7 @@ namespace triton::backend::pytorch
       }
     }
 
-    triton::common::TritonJson::Value batch_inputs;
+    TritonJsonValue batch_inputs;
     if (auto err = model_->ModelConfig().MemberAsArray("batch_input", &batch_inputs))
     {
       THROW_TRITON_EXCEPTION(err,
@@ -1686,7 +1686,7 @@ namespace triton::backend::pytorch
   InductorModelInstance::ValidateOutputs()
   {
     DEBUG_TRACE_FUNCTION_CALL();
-    triton::common::TritonJson::Value ios;
+    TritonJsonValue ios;
     if (auto err = model_->ModelConfig().MemberAsArray("output", &ios))
     {
       THROW_TRITON_EXCEPTION(err,
@@ -1708,7 +1708,7 @@ namespace triton::backend::pytorch
 
     for (size_t i = 0; i < ios.ArraySize(); i++)
     {
-      triton::common::TritonJson::Value io;
+      TritonJsonValue io;
       if (auto err = ios.IndexAsObject(i, &io))
       {
         THROW_TRITON_EXCEPTION(err,
@@ -1727,14 +1727,14 @@ namespace triton::backend::pytorch
 
       switch (naming_convention)
       {
-        case NamingConvention::NAMED_INDEX:
+        case TritonNamingConvention::NAMED_INDEX:
         {
           int start_pos = io_name.find(deliminator);
           op_index = std::atoi(io_name.substr(start_pos + 2).c_str());
         }
         break;
 
-        case NamingConvention::STRICT_CONFIG_ORDERING:
+        case TritonNamingConvention::STRICT_CONFIG_ORDERING:
         {
           op_index = i;
         }
@@ -1764,7 +1764,7 @@ namespace triton::backend::pytorch
       if (io_dtype == "TYPE_STRING")
       {
         std::vector<int64_t> dims;
-        triton::common::TritonJson::Value reshape;
+        TritonJsonValue reshape;
 
         if (io.Find("reshape", &reshape))
         {
@@ -1797,6 +1797,134 @@ namespace triton::backend::pytorch
       output_dtype_map_[io_name] = ConvertTorchTypeToDataType(pr.second);
     }
 
-    // CONTINUE HERE <-- model_instance_state.cc @ line 1557
+    TritonJsonValue sequence_batching;
+    if (model_->ModelConfig().Find("sequence_batching", &sequence_batching))
+    {
+      TritonJsonValue states;
+      if (sequence_batching.Find("state", &states))
+      {
+        for (size_t i = 0; i < states.ArraySize(); i += 1)
+        {
+          TritonJsonValue state;
+          if (auto err = states.IndexAsObject(i, &state))
+          {
+            THROW_TRITON_EXCEPTION(err,
+                                   "Failed to get sequence state " << i << " for model instance '" << Name()
+                                   << "': " << TRITONSERVER_ErrorMessage(err));
+          }
+
+          std::string state_name;
+          if (auto err = state.MemberAsString("output_name", &state_name))
+          {
+            THROW_TRITON_EXCEPTION(err,
+                                   "Failed to get output name for sequence state " << i << " for model instance '"
+                                   << Name() << "': " << TRITONSERVER_ErrorMessage(err));
+          }
+
+          std::string state_dtype;
+          if (auto err = state.MemberAsString("data_type", &state_dtype))
+          {
+            THROW_TRITON_EXCEPTION(err,
+                                   "Failed to get data type for sequence state output '" << state_name <<
+                                   "' for model instance '" << Name() << "': " << TRITONSERVER_ErrorMessage(err));
+          }
+
+          std::vector<int64_t> dims;
+          if (auto err = ParseShape(state, "dims", &dims))
+          {
+            THROW_TRITON_EXCEPTION(err,
+                                   "Failed to parse dims for sequence state output '" << state_name << "' for model instance '"
+                                   << Name() << "': " << TRITONSERVER_ErrorMessage(err));
+          }
+
+          int start_pos = state_name.find(deliminator);
+          op_index = std::atoi(state_name.substr(start_pos + 2).c_str());
+
+          const auto pr = ModelConfigDataTypeToTorchType(state_dtype);
+          if (!pr.first && state_dtype != "TYPE_STRING")
+          {
+            THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
+                                   "Unsupported datatype " << state_dtype << " for sequence state output '"
+                                   << state_name << "' for model instance '" << Name() << "'.");
+          }
+
+          // Validate shape for String outputs. Only allow 1 dimension.
+          if (state_dtype == "TYPE_STRING")
+          {
+            if ((dims.size() + (is_batching_supported_ ? 1 : 0)) > 1)
+            {
+              THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
+                                     "Triton only supports 1-dimensional string outputs for sequence state output '"
+                                     << state_name << "' for model instance '" << Name() << "'.");
+            }
+          }
+
+          output_index_map_[state_name] = op_index;
+          output_dtype_map_[state_name] = ConvertTorchTypeToDataType(pr.second);
+        }
+      }
+    }
+
+    bool
+    InductorModelInstance::ValidateTypedSequenceControl(
+        TritonJsonValue& sequence_batching,
+        const std::string& control_kind,
+        TRITONSERVER_DataType expected_dtype,
+        bool required)
+    {
+      DEBUG_TRACE_FUNCTION_CALL();
+      std::string tensor_name;
+      std::string tensor_dtype;
+      if (auto err = GetTypedSequenceControlProperties(sequence_batching,
+                                                       model_->Name(),
+                                                       control_kind,
+                                                       required,
+                                                       &tensor_name,
+                                                       &tensor_dtype))
+      {
+        THROW_TRITON_EXCEPTION(err,
+                               "Failed to validate typed sequence control for model instance '" << Name()
+                               << "': " << TRITONSERVER_ErrorMessage(err));
+      }
+
+      bool have_control{!tensor_name.empty()};
+
+      if (have_control)
+      {
+        std::string deliminator{"__"};
+        int ip_index{0};
+        int start_pos{tensor_name.find(deliminator)};
+
+        if (start_pos == -1)
+        {
+          THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
+                                 "Input '" << tensor_name << "' does not follow <name>__<index> naming convention.");
+        }
+
+        // Check if the index part of the name is not an integer.
+        std::string index_str{tensor_name.substr(start_pos + 2)};
+        for (auto itr = index_str.begin(); itr != index_str.end(); itr++)
+        {
+          if (std::isdigit(*itr) == 0)
+          {
+            THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
+                                   "Input '" << tensor_name << "' does not follow <name>__<index> naming convention.");
+          }
+        }
+
+        // Check if the data type is supported by PyTorch.
+        if (!ModelConfigDataTypeToTorchType(tensor_dtype).first)
+        {
+          THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
+                                 "Unsupported datatype " << tensor_dtype << " for typed sequence control input '"
+                                 << tensor_name << "' for model instance '" << Name() << "'.");
+        }
+
+        ip_index = std::atoi(tensor_name.substr(start_pos + 2).c_str());
+        input_index_map_[tensor_name] = ip_index;
+      }
+
+      return have_control;
+    }
   }
 }

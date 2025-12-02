@@ -44,6 +44,10 @@
 
 namespace triton::backend::pytorch
 {
+  using TritonInductorModel = triton::backend::pytorch::InductorModel;
+  using TritonJsonValue = triton::common::TritonJson::Value;
+  using TritonNamingConvention = triton::backend::pytorch::NamingConvention;
+
   class InductorModelInstance
     : public triton::backend::BackendModelInstance
   {
@@ -60,7 +64,7 @@ namespace triton::backend::pytorch
       std::unordered_map<std::string, int> input_index_map_;
       bool is_batching_supported_{false};
       bool is_dictionary_input_;
-      std::shared_ptr<pytorch::InductorModel> model_{nullptr};
+      std::shared_ptr<TritonInductorModel> model_{nullptr};
       std::string model_path_;
       std::unordered_map<std::string, TRITONSERVER_DataType> output_dtype_map_;
       std::unordered_map<std::string, int> output_index_map_;
@@ -71,7 +75,7 @@ namespace triton::backend::pytorch
     public:
 
       InductorModelInstance(
-        std::shared_ptr<pytorch::InductorModel> model,
+        std::shared_ptr<TritonInductorModel> model,
         TRITONBACKEND_ModelInstance* triton_model_instance);
 
       InductorModelInstance() = delete;
@@ -84,7 +88,7 @@ namespace triton::backend::pytorch
       [[nodiscard]]
       static std::shared_ptr<InductorModelInstance>
       Create(
-        std::shared_ptr<pytorch::InductorModel> model,
+        std::shared_ptr<TritonInductorModel> model,
         TRITONBACKEND_ModelInstance* triton_model_instance);
 
       void
@@ -93,7 +97,7 @@ namespace triton::backend::pytorch
         const uint32_t request_count);
 
       [[nodiscard]]
-      std::shared_ptr<pytorch::InductorModel>
+      std::shared_ptr<TritonInductorModel>
       InductorModel() const;
 
       /** triton::backend::BackendModelInstance implementation **/
@@ -134,7 +138,7 @@ namespace triton::backend::pytorch
 
       void
       AddInputToMap(
-        pytorch::NamingConvention naming_convention,
+        TritonNamingConvention naming_convention,
         const std::vector<std::string>& allowed_inputs,
         const std::string& io_name,
         uint32_t index);
@@ -160,7 +164,7 @@ namespace triton::backend::pytorch
       GetCudaStreamByInstanceKind();
 
       [[nodiscard]]
-      triton::backend::pytorch::NamingConvention
+      TritonNamingConvention
       GetNamingConvention(
         const std::vector<std::string>& allowed_ios);
 
@@ -197,7 +201,7 @@ namespace triton::backend::pytorch
       [[nodiscard]]
       bool
       ValidateBooleanSequenceControl(
-        triton::common::TritonJson::Value& sequence_batching,
+        TritonJsonValue& sequence_batching,
         const std::string& control_kind,
         bool required);
 
@@ -211,9 +215,8 @@ namespace triton::backend::pytorch
       [[nodiscard]]
       bool
       ValidateTypedSequenceControl(
-        triton::common::TritonJson::Value& sequence_batching,
+        TritonJsonValue& sequence_batching,
         const std::string& control_kind,
         bool required);
   };
-
-} // namespace triton::backend::pytorch
+}
