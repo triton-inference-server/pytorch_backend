@@ -37,13 +37,15 @@ conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
 conda create -n pt python=3.12 -y
 conda activate pt
 conda install -c conda-forge conda-pack -y
+conda install pip
 
 # pre install step
 export PYTHONNOUSERSITE=True
 conda install -c conda-forge libstdcxx-ng=15 -y
 
-# install PyTorch
-conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia -y
+# install PyTorch (torch from pip to avoid conda version issues)
+pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu130
+conda install torchaudio pytorch-cuda=13.0 -c pytorch -c nvidia -y
 
 # pack environment
 rm -f pb_exec_env_model.py.tar.gz
