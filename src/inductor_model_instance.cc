@@ -41,6 +41,10 @@
 
 namespace triton::backend::pytorch
 {
+  using TritonInductorModel = triton::backend::pytorch::InductorModel;
+  using TritonJsonValue = triton::common::TritonJson::Value;
+  using TritonNamingConvention = triton::backend::pytorch::NamingConvention;
+  
   InductorModelInstance::InductorModelInstance(
       std::shared_ptr<TritonInductorModel> model,
       TRITONBACKEND_ModelInstance *triton_model_instance)
@@ -48,13 +52,14 @@ namespace triton::backend::pytorch
     , model_{model}
   {
     DEBUG_TRACE_FUNCTION_CALL();
-#ifdef TRITON_ENABLE_GPU
+#ifndef TRITON_ENABLE_GPU
     if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU)
     {
       device_ = torch::Device(torch::kCUDA, DeviceId());
       CreateCudaEvents(DeviceId());
-      device_count_ = model_->DeviceCount();
     }
+
+    device_count_ = torch::cuda::device_count();
 #endif
 
     model_->LoadModel(ArtifactFilename(), device_, device_count_, Kind());
@@ -70,16 +75,16 @@ namespace triton::backend::pytorch
       // timestamps to prevent timestamp skewing. However, in the future, any
       // modifications to the CUDA stream synchronization logic should be handled
       // with caution.
-      for (int i = 0; i < device_cnt_; i++)
+      for (int i = 0; i < device_count_; i++)
       {
         cudaStream_t stream;
         if (auto err = CreateCudaStream(i, 0 /* cuda_stream_priority */, &stream))
           throw triton::backend::BackendModelInstanceException(err);
 
-        stream_vec_.push_back(stream);
+        stream_vector_.push_back(stream);
       }
 
-      if (!stream_vec_.empty())
+      if (!stream_vector_.empty())
       {
         // Create CUDA events on the first device that will be used for collecting
         // inputs/outputs.
@@ -148,7 +153,7 @@ namespace triton::backend::pytorch
 #ifdef TRITON_ENABLE_GPU
     if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL)
     {
-      for (size_t i = 0; i < stream_vec_.size(); i += 1)
+      for (size_t i = 0; i < stream_vector_.size(); i += 1)
       {
         if (auto err = ConvertCUDAStatusToTritonError(cudaSetDevice(i),
                                                       TRITONSERVER_ERROR_INTERNAL,
@@ -158,7 +163,7 @@ namespace triton::backend::pytorch
                            << "': " << TRITONSERVER_ErrorMessage(err));
         }
 
-        if (auto err = ConvertCUDAStatusToTritonError(cudaStreamDestroy(stream_vec_[i]),
+        if (auto err = ConvertCUDAStatusToTritonError(cudaStreamDestroy(stream_vector_[i]),
                                                       TRITONSERVER_ERROR_INTERNAL,
                                                       "Failed to destroy cuda stream"))
         {
@@ -166,7 +171,7 @@ namespace triton::backend::pytorch
                            << "': " << TRITONSERVER_ErrorMessage(err));
         }
 
-        stream_vec_[i] = nullptr;
+        stream_vector_[i] = nullptr;
       }
     }
 #endif
@@ -407,8 +412,8 @@ namespace triton::backend::pytorch
     if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU)
       return stream_;
 
-    if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL && !stream_vec_.empty())
-      return stream_vec_[0];
+    if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL && !stream_vector_.empty())
+      return stream_vector_[0];
 #endif
 
     return nullptr;

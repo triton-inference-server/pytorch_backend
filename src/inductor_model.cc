@@ -291,7 +291,7 @@ namespace triton::backend::pytorch
       TRITONSERVER_InstanceGroupKind kind)
   {
     DEBUG_TRACE_FUNCTION_CALL();
-    if (device_count == 0)
+    if (kind != TRITONSERVER_INSTANCEGROUPKIND_MODEL && !device.is_cpu() && device_count == 0)
       THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INVALID_ARG,
                              "Argument `device_count` must be greater than zero.");
 
