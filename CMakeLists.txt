@@ -199,7 +199,7 @@ endif() # TRITON_PYTORCH_NVSHMEM
 if (${TRITON_PYTORCH_ENABLE_TORCHVISION})
   set(PT_LIBS
       ${PT_LIBS}
-      $<IF:$<BOOL:${RHEL_BUILD}>,libtorchvision.so,libtorchvision.so.1>
+      libtorchvision.so.1
   )
 endif() # TRITON_PYTORCH_ENABLE_TORCHVISION
 
@@ -281,7 +281,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libaoti_custom_ops.so libaoti_custom_ops.so
     COMMAND docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libtorch_python.so libtorch_python.so
     COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_NVSHMEM} = 'ON' ]; then docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch/lib/libtorch_nvshmem.so libtorch_nvshmem.so; fi"
-    COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then if [ ${RHEL_BUILD} = 'ON' ]; then docker cp -a -L pytorch_backend_ptlib:/usr/local/lib64/libtorchvision.so libtorchvision.so; else docker cp -a -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libtorchvision.so.1 libtorchvision.so.1; fi; fi"
+    COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then docker cp -a -L pytorch_backend_ptlib:/usr/local/${LIB_DIR}/libtorchvision.so.1 libtorchvision.so.1; fi;"
     COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then docker cp pytorch_backend_ptlib:/opt/pytorch/vision/torchvision/csrc include/torchvision/torchvision; fi"
     COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHTRT} = 'ON' ]; then docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch_tensorrt/lib/libtorchtrt.so libtorchtrt.so; fi"
     COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHTRT} = 'ON' ]; then docker cp pytorch_backend_ptlib:${PY_INSTALL_PATH}/torch_tensorrt/lib/libtorchtrt_runtime.so libtorchtrt_runtime.so; fi"
@@ -302,7 +302,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND /bin/sh -c "if [ -f libmkl_vml_def.so.1 ]; then patchelf --add-needed libmkl_intel_thread.so.1 libmkl_vml_def.so.1; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_vml_def.so.1 ]; then patchelf --add-needed libmkl_core.so.1 libmkl_vml_def.so.1; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_intel_thread.so.1 ]; then patchelf --add-needed libmkl_intel_lp64.so.1 libmkl_intel_thread.so.1; fi"
-    COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then if [ ${RHEL_BUILD} = 'OFF' ]; then ln -s libtorchvision.so.1 libtorchvision.so; fi; fi;"
+    COMMAND /bin/sh -c "if [ ${TRITON_PYTORCH_ENABLE_TORCHVISION} = 'ON' ]; then ln -s libtorchvision.so.1 libtorchvision.so; fi;"
     COMMAND docker rm pytorch_backend_ptlib
     COMMENT "Extracting pytorch and torchvision libraries and includes from ${TRITON_PYTORCH_DOCKER_IMAGE}"
     VERBATIM
@@ -410,7 +410,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
   if (${TRITON_PYTORCH_ENABLE_TORCHVISION})
     set(TRITON_PYTORCH_LIBS
     ${TRITON_PYTORCH_LIBS}
-    "${CMAKE_CURRENT_BINARY_DIR}/$<IF:$<BOOL:${RHEL_BUILD}>,libtorchvision.so,libtorchvision.so.1>")
+    libtorchvision.so.1 )
   endif() # TRITON_PYTORCH_ENABLE_TORCHVISION
 
   if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
