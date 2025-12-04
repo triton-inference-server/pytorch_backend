@@ -321,14 +321,18 @@ namespace triton::backend::pytorch
                              "PyTorch inductor model file '" << local_file_path << "' is unreachable or inaccessible.");
     }
 
-    auto device_pair = std::make_pair(!device.is_cpu(), device.index());
-    auto mit = model_package_loaders_.find(device_pair);
-    if (mit != model_package_loaders_.end())
+    std::pair<bool, int> device_pair{false, 0};
+    if (weight_sharing_enabled_)
     {
-      // Since the model package loader is already created, reuse it.
-      model_loader_ = mit->second;
-      TRITON_LOG_INFO("Reusing Inductor model loader for instance '" << Name() << "'.");
-      return;
+      device_pair = std::make_pair(!device.is_cpu(), device.index());
+      auto mit = model_package_loaders_.find(device_pair);
+      if (mit != model_package_loaders_.end())
+      {
+        // Since the model package loader is already created, reuse it.
+        model_loader_ = mit->second;
+        TRITON_LOG_INFO("Reusing Inductor model loader for instance '" << Name() << "'.");
+        return;
+      }
     }
 
     std::string model_data_string;
@@ -340,20 +344,20 @@ namespace triton::backend::pytorch
     if (kind == TRITONSERVER_INSTANCEGROUPKIND_MODEL)
     {
       model_loader = new TorchModelLoader{/*model_package_path=*/local_file_path,
-                                         /*model_name=*/local_name};
+                                          /*model_name=*/local_name};
     }
     else
     {
       model_loader = new TorchModelLoader{/*model_package_path=*/local_file_path,
-                                         /*model_name=*/local_name,
-                                         /*run_single_threaded=*/device_count <= 1,
-                                         /*num_runners=*/device_count,
-                                         /*device_index=*/device.index()};
+                                          /*model_name=*/local_name,
+                                          /*run_single_threaded=*/device_count <= 1,
+                                          /*num_runners=*/device_count,
+                                          /*device_index=*/device.index()};
     }
 
     model_loader_.reset(model_loader);
 
-    if (WeightSharingEnabled())
+    if (weight_sharing_enabled_)
     {
       if (!model_package_loaders_.emplace(device_pair, model_loader_).second)
       {

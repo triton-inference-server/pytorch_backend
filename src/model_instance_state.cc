@@ -33,7 +33,7 @@
 
 #ifdef TRITON_PYTORCH_ENABLE_TORCHVISION
 // Suppress warnings in torch headers
-#pragma GCC diagnostic push
+#pragma GCC diagnostic pushValidateOutputs
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #pragma warning(push, 0)
 #include <torchvision/ops/ops.h>

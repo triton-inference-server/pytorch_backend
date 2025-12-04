@@ -44,7 +44,7 @@ namespace triton::backend::pytorch
   using TritonInductorModel = triton::backend::pytorch::InductorModel;
   using TritonJsonValue = triton::common::TritonJson::Value;
   using TritonNamingConvention = triton::backend::pytorch::NamingConvention;
-  
+
   InductorModelInstance::InductorModelInstance(
       std::shared_ptr<TritonInductorModel> model,
       TRITONBACKEND_ModelInstance *triton_model_instance)
@@ -1872,67 +1872,66 @@ namespace triton::backend::pytorch
         }
       }
     }
+  }
 
-    bool
-    InductorModelInstance::ValidateTypedSequenceControl(
-        TritonJsonValue& sequence_batching,
-        const std::string& control_kind,
-        TRITONSERVER_DataType expected_dtype,
-        bool required)
+  bool
+  InductorModelInstance::ValidateTypedSequenceControl(
+      TritonJsonValue& sequence_batching,
+      const std::string& control_kind,
+      bool required)
+  {
+    DEBUG_TRACE_FUNCTION_CALL();
+    std::string tensor_name;
+    std::string tensor_dtype;
+    if (auto err = GetTypedSequenceControlProperties(sequence_batching,
+                                                     model_->Name(),
+                                                     control_kind,
+                                                     required,
+                                                     &tensor_name,
+                                                     &tensor_dtype))
     {
-      DEBUG_TRACE_FUNCTION_CALL();
-      std::string tensor_name;
-      std::string tensor_dtype;
-      if (auto err = GetTypedSequenceControlProperties(sequence_batching,
-                                                       model_->Name(),
-                                                       control_kind,
-                                                       required,
-                                                       &tensor_name,
-                                                       &tensor_dtype))
+      THROW_TRITON_EXCEPTION(err,
+                             "Failed to validate typed sequence control for model instance '" << Name()
+                             << "': " << TRITONSERVER_ErrorMessage(err));
+    }
+
+    bool have_control{!tensor_name.empty()};
+
+    if (have_control)
+    {
+      std::string deliminator{"__"};
+      int ip_index{0};
+      int start_pos{tensor_name.find(deliminator)};
+
+      if (start_pos == -1)
       {
-        THROW_TRITON_EXCEPTION(err,
-                               "Failed to validate typed sequence control for model instance '" << Name()
-                               << "': " << TRITONSERVER_ErrorMessage(err));
+        THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
+                               "Input '" << tensor_name << "' does not follow <name>__<index> naming convention.");
       }
 
-      bool have_control{!tensor_name.empty()};
-
-      if (have_control)
+      // Check if the index part of the name is not an integer.
+      std::string index_str{tensor_name.substr(start_pos + 2)};
+      for (auto itr = index_str.begin(); itr != index_str.end(); itr++)
       {
-        std::string deliminator{"__"};
-        int ip_index{0};
-        int start_pos{tensor_name.find(deliminator)};
-
-        if (start_pos == -1)
+        if (std::isdigit(*itr) == 0)
         {
           THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
                                  "Input '" << tensor_name << "' does not follow <name>__<index> naming convention.");
         }
-
-        // Check if the index part of the name is not an integer.
-        std::string index_str{tensor_name.substr(start_pos + 2)};
-        for (auto itr = index_str.begin(); itr != index_str.end(); itr++)
-        {
-          if (std::isdigit(*itr) == 0)
-          {
-            THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
-                                   "Input '" << tensor_name << "' does not follow <name>__<index> naming convention.");
-          }
-        }
-
-        // Check if the data type is supported by PyTorch.
-        if (!ModelConfigDataTypeToTorchType(tensor_dtype).first)
-        {
-          THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
-                                 "Unsupported datatype " << tensor_dtype << " for typed sequence control input '"
-                                 << tensor_name << "' for model instance '" << Name() << "'.");
-        }
-
-        ip_index = std::atoi(tensor_name.substr(start_pos + 2).c_str());
-        input_index_map_[tensor_name] = ip_index;
       }
 
-      return have_control;
+      // Check if the data type is supported by PyTorch.
+      if (!ModelConfigDataTypeToTorchType(tensor_dtype).first)
+      {
+        THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
+                               "Unsupported datatype " << tensor_dtype << " for typed sequence control input '"
+                               << tensor_name << "' for model instance '" << Name() << "'.");
+      }
+
+      ip_index = std::atoi(tensor_name.substr(start_pos + 2).c_str());
+      input_index_map_[tensor_name] = ip_index;
     }
+
+    return have_control;
   }
 }
