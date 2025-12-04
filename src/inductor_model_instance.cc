@@ -45,6 +45,8 @@ namespace triton::backend::pytorch
   using TritonJsonValue = triton::common::TritonJson::Value;
   using TritonNamingConvention = triton::backend::pytorch::NamingConvention;
 
+  static const std::string DELIMINATOR{"__"};
+
   InductorModelInstance::InductorModelInstance(
       std::shared_ptr<TritonInductorModel> model,
       TRITONBACKEND_ModelInstance *triton_model_instance)
@@ -185,8 +187,6 @@ namespace triton::backend::pytorch
       uint32_t index)
   {
     DEBUG_TRACE_FUNCTION_CALL();
-    std::string deliminator{"__"};
-
     if (is_dictionary_input_)
     {
       input_index_map_[io_name] = index;
@@ -207,7 +207,7 @@ namespace triton::backend::pytorch
 
         case TritonNamingConvention::NAMED_INDEX:
         {
-          int start_pos = io_name.find(deliminator);
+          int start_pos = io_name.find(DELIMINATOR);
           int ip_index = std::atoi(io_name.substr(start_pos + 2).c_str());
           input_index_map_[io_name] = ip_index;
         }
@@ -433,7 +433,6 @@ namespace triton::backend::pytorch
     // Rules for output tensor names:
     // 1. Must follow the naming convention i.e. <name>__<index>
     // 2. If not, we enforce strict ordering of model outputs.
-    std::string deliminator{"__"};
     std::string io_kind{"input"};
     TritonNamingConvention naming_convention{TritonNamingConvention::FORWARD_ARGUMENT};
 
@@ -501,7 +500,7 @@ namespace triton::backend::pytorch
                                  << " from model config for model '" << model_->Name() << "'.");
         }
 
-        int start_pos = io_name.find(deliminator);
+        int start_pos = io_name.find(DELIMINATOR);
         if (start_pos == -1)
         {
           naming_convention = TritonNamingConvention::STRICT_CONFIG_ORDERING;
@@ -1479,19 +1478,17 @@ namespace triton::backend::pytorch
                                                        nullptr,
                                                        nullptr,
                                                        nullptr))
-     {
+    {
       THROW_TRITON_EXCEPTION(err,
                              "Failed to validate boolean sequence control for model instance '" << Name()
                              << "': " << TRITONSERVER_ErrorMessage(err));
     }
 
     bool have_control{!tensor_name.empty()};
-
     if (have_control)
     {
-      std::string deliminator{"__"};
       int ip_index{0};
-      int start_pos{tensor_name.find(deliminator)};
+      int start_pos{tensor_name.find(DELIMINATOR)};
 
       if (start_pos == -1)
       {
@@ -1602,7 +1599,9 @@ namespace triton::backend::pytorch
                                    "Failed to parse reshape shape for input '" << io_name << "' for model instance '"
                                    << Name() << "': " << TRITONSERVER_ErrorMessage(err));
           }
-        } else {
+        }
+        else
+        {
           if (auto err = ParseShape(io, "dims", &dims))
           {
             THROW_TRITON_EXCEPTION(err,
@@ -1702,7 +1701,6 @@ namespace triton::backend::pytorch
                              << TRITONSERVER_ErrorMessage(err));
     }
 
-    std::string deliminator{"__"};
     int op_index{0};
 
     if (ios.ArraySize() == 0)
@@ -1737,7 +1735,7 @@ namespace triton::backend::pytorch
       {
         case TritonNamingConvention::NAMED_INDEX:
         {
-          int start_pos = io_name.find(deliminator);
+          int start_pos = io_name.find(DELIMINATOR);
           op_index = std::atoi(io_name.substr(start_pos + 2).c_str());
         }
         break;
@@ -1845,7 +1843,7 @@ namespace triton::backend::pytorch
                                    << Name() << "': " << TRITONSERVER_ErrorMessage(err));
           }
 
-          int start_pos = state_name.find(deliminator);
+          int start_pos = state_name.find(DELIMINATOR);
           op_index = std::atoi(state_name.substr(start_pos + 2).c_str());
 
           const auto pr = ModelConfigDataTypeToTorchType(state_dtype);
@@ -1899,9 +1897,8 @@ namespace triton::backend::pytorch
 
     if (have_control)
     {
-      std::string deliminator{"__"};
       int ip_index{0};
-      int start_pos{tensor_name.find(deliminator)};
+      int start_pos{tensor_name.find(DELIMINATOR)};
 
       if (start_pos == -1)
       {
