@@ -104,6 +104,13 @@ TRITONBACKEND_ModelInitialize(TRITONBACKEND_Model* model)
        std::to_string(version) + ") location=" + std::string(location))
           .c_str());
 
+  std::cerr << "\e[31m<<< TRITONBACKEND_ModelInitialize: Model {"
+            << " name:'" << name
+            << "', version: " << version
+            << ", type: " << artifact_type
+            << ", location: '" << location << "' } >>>\e[0m"
+            << std::endl;
+
   // Create a ModelState object and associate it with the
   // TRITONBACKEND_Model.
   ModelState* model_state;
