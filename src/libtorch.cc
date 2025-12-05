@@ -25,6 +25,8 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "libtorch.hh"
+#include "inductor_model.hh"
+#include "inductor_model_instance.hh"
 #include "model_instance_state.hh"
 #include "model_state.hh"
 #include "triton/backend/backend_common.h"
@@ -111,12 +113,57 @@ TRITONBACKEND_ModelInitialize(TRITONBACKEND_Model* model)
             << ", location: '" << location << "' } >>>\e[0m"
             << std::endl;
 
-  // Create a ModelState object and associate it with the
-  // TRITONBACKEND_Model.
-  ModelState* model_state;
-  RETURN_IF_ERROR(ModelState::Create(model, &model_state));
-  RETURN_IF_ERROR(
-      TRITONBACKEND_ModelSetState(model, reinterpret_cast<void*>(model_state)));
+  auto model_dir = JoinPath(location, std::to_string(version));
+  std::set<std::string> dir_files;
+  bool is_inductor{false};
+  if (GetDirectoryContents(model_dir, &dir_files).IsOk()) {
+    std::cerr << "\e[33m[<<<< Model Directory Contents >>>>]\e[0m"
+              << std::endl;
+    for (const auto& f : dir_files) {
+      std::cerr << " - " << f << std::endl;
+      if (f[f.size() - 2] == 'p' && f[f.size() - 1] == 't') {
+        std::cerr << "\e[32m  -> Found potential TorchScript model file\e[0m"
+                  << std::endl;
+        is_inductor = false;
+        break;
+      }
+      else
+      if (f[f.size() - 3] == 'p' && f[f.size() - 2] == 't' && f[f.size() - 1] == '2') {
+        std::cerr << "\e[32m  -> Found potential Inductor model file\e[0m"
+                  << std::endl;
+        is_inductor = true;
+        break;
+      }
+    }
+  }
+
+  if (is_inductor) {
+    // Create an InductorModel object and associate it with the
+    // TRITONBACKEND_Model.
+    try {
+      InductorModel* aoti_model = InductorModel::Create(model);
+      RETURN_IF_ERROR(TRITONBACKEND_ModelSetState(
+          model, reinterpret_cast<void*>(aoti_model)));
+      } catch (const TritonError& ex) {
+        RETURN_ERROR_IF_TRUE(
+            true, TRITONSERVER_ERROR_INTERNAL,
+            std::string("failed to create InductorModel for model '" + name +
+                        "': " + ex.Message()));
+      }
+      catch (const std::exception& ex) {
+        RETURN_ERROR_IF_TRUE(
+            true, TRITONSERVER_ERROR_INTERNAL,
+            std::string("failed to create InductorModel for model '" + name +
+                        "': " + ex.what()));
+      }
+  } else {
+    // Create a ModelState object and associate it with the
+    // TRITONBACKEND_Model.
+    ModelState* model_state;
+    RETURN_IF_ERROR(ModelState::Create(model, &model_state));
+    RETURN_IF_ERROR(
+        TRITONBACKEND_ModelSetState(model, reinterpret_cast<void*>(model_state)));
+  }
 
   return nullptr;  // success
 }

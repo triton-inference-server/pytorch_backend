@@ -95,7 +95,7 @@ namespace triton::backend::pytorch
     cache_cleaning_enabled_ = value;
   }
 
-  std::shared_ptr<InductorModel>
+  InductorModel*
   InductorModel::Create(
       TRITONBACKEND_Model *triton_model)
   {
@@ -105,7 +105,7 @@ namespace triton::backend::pytorch
                             "Argument `triton_model` cannot be `null`.");
 
     auto imodel_ptr = new InductorModel{triton_model};
-    std::shared_ptr<InductorModel> imodel{imodel_ptr};
+    InductorModel* imodel{imodel_ptr};
 
     bool auto_complete_config = false;
     if (auto err = TRITONBACKEND_ModelAutoCompleteConfig(triton_model, &auto_complete_config))

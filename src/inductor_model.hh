@@ -95,7 +95,7 @@ namespace triton::backend::pytorch
         bool value);
 
       [[nodiscard]]
-      std::shared_ptr<InductorModel>
+      InductorModel*
       Create(
         TRITONBACKEND_Model* triton_model);
 
