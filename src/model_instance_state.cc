@@ -24,9 +24,9 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "libtorch.hh"
 #include "model_instance_state.hh"
 
+#include "libtorch.hh"
 #include "string_utils.hh"
 
 #ifdef TRITON_PYTORCH_ENABLE_TORCHVISION

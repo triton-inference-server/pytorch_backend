@@ -24,10 +24,11 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "libtorch.hh"
 #include "model_state.hh"
 
 #include <mutex>
+
+#include "libtorch.hh"
 
 namespace {
 std::once_flag pytorch_interop_threads_flag;
@@ -193,7 +194,7 @@ ModelState::LoadModel(
   // use the default name ("model.pt").
   std::string cc_model_filename = artifact_name;
   if (cc_model_filename.empty()) {
-    cc_model_filename = "model.pt" ;
+    cc_model_filename = "model.pt";
   }
 
   *model_path = JoinPath(

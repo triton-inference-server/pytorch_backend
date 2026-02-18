@@ -26,6 +26,13 @@
 
 #pragma once
 
+#include <exception>
+#include <map>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 #include "libtorch_utils.h"
 #include "triton/backend/backend_common.h"
 #include "triton/backend/backend_input_collector.h"
@@ -34,18 +41,11 @@
 #include "triton/core/tritonbackend.h"
 #include "triton/core/tritonserver.h"
 
-#include <exception>
-#include <map>
-#include <memory>
-#include <string>
-#include <unordered_map>
-#include <vector>
-
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #pragma warning(push, 0)
-#include <torch/csrc/inductor/aoti_package/model_package_loader.h>
 #include <torch/csrc/inductor/aoti_include/cuda.h>
+#include <torch/csrc/inductor/aoti_package/model_package_loader.h>
 #include <torch/script.h>
 #pragma warning(pop)
 #pragma GCC diagnostic pop
@@ -55,183 +55,110 @@
 // https://github.com/pytorch/pytorch/blob/v2.2.1-rc3/aten/src/ATen/Parallel.h#L133
 #include <ATen/Parallel.h>
 
-namespace triton::backend::pytorch
-{
-  constexpr char INDUCTOR_MODEL_ARTIFACT_NAME_DEFAULT[] = "model.pt2";
-  constexpr char INDUCTOR_MODEL_NAME_DEFAULT[] = "model";
+namespace triton::backend::pytorch {
+constexpr char INDUCTOR_MODEL_ARTIFACT_NAME_DEFAULT[] = "model.pt2";
+constexpr char INDUCTOR_MODEL_NAME_DEFAULT[] = "model";
 
-  using TorchModelLoader = torch::inductor::AOTIModelPackageLoader;
+using TorchModelLoader = torch::inductor::AOTIModelPackageLoader;
 
-  class InductorModel
-    : public triton::backend::BackendModel
-  {
-    private:
+class InductorModel : public triton::backend::BackendModel {
+ private:
+  torch::Device device_{torch::kCPU};
+  int32_t device_count_{0};
+  bool cache_cleaning_enabled_{false};
+  bool cudnn_enabled_{true};
+  bool inference_mode_enabled_{true};
+  bool is_dictionary_input_{false};
+  std::shared_ptr<TorchModelLoader> model_loader_{nullptr};
+  std::string model_name_;
+  std::map<std::string, std::pair<int64_t, int64_t>> model_outputs_;
+  std::string model_path_;
+  std::map<std::pair<bool, int64_t>, std::shared_ptr<TorchModelLoader>>
+      model_package_loaders_;
+  bool optimized_execution_enabled_{true};
+  bool weight_sharing_enabled_{false};
 
-      torch::Device device_{torch::kCPU};
-      int32_t device_count_{0};
-      bool cache_cleaning_enabled_{false};
-      bool cudnn_enabled_{true};
-      bool inference_mode_enabled_{true};
-      bool is_dictionary_input_{false};
-      std::shared_ptr<TorchModelLoader> model_loader_{nullptr};
-      std::string model_name_;
-      std::map<std::string, std::pair<int64_t, int64_t>> model_outputs_;
-      std::string model_path_;
-      std::map<std::pair<bool, int64_t>, std::shared_ptr<TorchModelLoader>> model_package_loaders_;
-      bool optimized_execution_enabled_{true};
-      bool weight_sharing_enabled_{false};
+ public:
+  InductorModel() = delete;
 
-    public:
+  virtual ~InductorModel() = default;
 
-      InductorModel() = delete;
+  [[nodiscard]] bool CacheCleaningEnabled() const;
 
-      virtual ~InductorModel() = default;
+  void CacheCleaningEnabled(bool value);
 
-      [[nodiscard]]
-      bool
-      CacheCleaningEnabled() const;
+  [[nodiscard]] static InductorModel* Create(TRITONBACKEND_Model* triton_model);
 
-      void
-      CacheCleaningEnabled(
-        bool value);
+  [[nodiscard]] bool CudnnEnabled() const;
 
-      [[nodiscard]]
-      static InductorModel*
-      Create(
-        TRITONBACKEND_Model* triton_model);
+  void CudnnEnabled(bool value);
 
-      [[nodiscard]]
-      bool
-      CudnnEnabled() const;
+  [[nodiscard]] std::vector<torch::IValue> Forward(
+      const std::vector<torch::IValue>& inputs, void* stream_handle = nullptr);
 
-      void
-      CudnnEnabled(
-        bool value);
+  [[nodiscard]] std::vector<std::string> GetModelCallSpec();
 
-      [[nodiscard]]
-      std::vector<torch::IValue>
-      Forward(
-        const std::vector<torch::IValue>& inputs,
-        void* stream_handle = nullptr);
+  [[nodiscard]] bool InferenceModeEnabled() const;
 
-      [[nodiscard]]
-      std::vector<std::string>
-      GetModelCallSpec();
+  [[nodiscard]] bool IsDictionaryInput() const;
 
-      [[nodiscard]]
-      bool
-      InferenceModeEnabled() const;
+  void LoadModel(
+      const std::string& model_file_name, const torch::Device& device,
+      uint32_t device_count, TRITONSERVER_InstanceGroupKind kind);
 
-      [[nodiscard]]
-      bool
-      IsDictionaryInput() const;
+  [[nodiscard]] const std::map<std::string, std::pair<int64_t, int64_t>>&
+  ModelOutputs() const;
 
-      void
-      LoadModel(
-        const std::string& model_file_name,
-        const torch::Device& device,
-        uint32_t device_count,
-        TRITONSERVER_InstanceGroupKind kind);
+  [[nodiscard]] bool OptimizedExecutionEnabled() const;
 
-      [[nodiscard]]
-      const std::map<std::string, std::pair<int64_t, int64_t>>&
-      ModelOutputs() const;
+  void OptimizedExecutionEnabled(bool value);
 
-      [[nodiscard]]
-      bool
-      OptimizedExecutionEnabled() const;
+  [[nodiscard]] bool WeightSharingEnabled() const;
 
-      void
-      OptimizedExecutionEnabled(
-        bool value);
+  /** triton::backend::BackendModel implementation **/
 
-      [[nodiscard]]
-      bool
-      WeightSharingEnabled() const;
+  [[nodiscard]] const std::vector<triton::backend::BatchInput>& BatchInputs()
+      const;
 
-      /** triton::backend::BackendModel implementation **/
+  [[nodiscard]] const std::vector<triton::backend::BatchOutput>& BatchOutputs()
+      const;
 
-      [[nodiscard]]
-      const std::vector<triton::backend::BatchInput>&
-      BatchInputs() const;
+  [[nodiscard]] bool EnablePinnedInput() const;
 
-      [[nodiscard]]
-      const std::vector<triton::backend::BatchOutput>&
-      BatchOutputs() const;
+  [[nodiscard]] bool EnablePinnedOutput() const;
 
-      [[nodiscard]]
-      bool
-      EnablePinnedInput() const;
+  [[nodiscard]] const triton::backend::BatchOutput* FindBatchOutput(
+      const std::string& output_name) const;
 
-      [[nodiscard]]
-      bool
-      EnablePinnedOutput() const;
+  [[nodiscard]] bool IsInputRagged(const std::string& input_name) const;
 
-      [[nodiscard]]
-      const triton::backend::BatchOutput*
-      FindBatchOutput(
-        const std::string& output_name) const;
+  [[nodiscard]] bool IsInputOptional(const std::string& input_name) const;
 
-      [[nodiscard]]
-      bool
-      IsInputRagged(
-        const std::string& input_name) const;
+  [[nodiscard]] int MaxBatchSize() const;
 
-      [[nodiscard]]
-      bool
-      IsInputOptional(
-        const std::string& input_name) const;
+  [[nodiscard]] const std::string& ModelPath() const;
 
-      [[nodiscard]]
-      int
-      MaxBatchSize() const;
+  [[nodiscard]] const std::string& Name() const;
 
-      [[nodiscard]]
-      const std::string&
-      ModelPath() const;
+  [[nodiscard]] const std::string& RepositoryPath() const;
 
-      [[nodiscard]]
-      const std::string&
-      Name() const;
+  void SetMaxBatchSize(int value);
 
-      [[nodiscard]]
-      const std::string&
-      RepositoryPath() const;
+  [[nodiscard]] TRITONSERVER_Error* SupportsFirstDimBatching(bool* value_out);
 
-      void
-      SetMaxBatchSize(
-        int value);
+  [[nodiscard]] TRITONBACKEND_MemoryManager* TritonMemoryManager();
 
-      [[nodiscard]]
-      TRITONSERVER_Error*
-      SupportsFirstDimBatching(
-        bool* value_out);
+  [[nodiscard]] TRITONBACKEND_Model* TritonModel();
 
-      [[nodiscard]]
-      TRITONBACKEND_MemoryManager*
-      TritonMemoryManager();
+  [[nodiscard]] TRITONSERVER_Server* TritonServer();
 
-      [[nodiscard]]
-      TRITONBACKEND_Model*
-      TritonModel();
+  [[nodiscard]] uint64_t Version() const;
 
-      [[nodiscard]]
-      TRITONSERVER_Server*
-      TritonServer();
+ private:
+  InductorModel(TRITONBACKEND_Model* backend_model);
 
-      [[nodiscard]]
-      uint64_t
-       Version() const;
+  void AutoCompleteConfig();
 
-    private:
-
-      InductorModel(
-        TRITONBACKEND_Model* backend_model);
-
-      void
-      AutoCompleteConfig();
-
-      void
-      ParseParameters();
-  };
-}
+  void ParseParameters();
+};
+}  // namespace triton::backend::pytorch

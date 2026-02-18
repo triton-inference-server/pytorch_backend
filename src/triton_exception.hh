@@ -26,35 +26,27 @@
 
 #pragma once
 
-#include "libtorch.hh"
-
 #include <exception>
 #include <memory>
 
-namespace triton::backend::pytorch
-{
-  class triton_exception
-    : public std::exception
-  {
-    private:
+#include "libtorch.hh"
 
-      std::shared_ptr<TRITONSERVER_Error> error_;
+namespace triton::backend::pytorch {
+class triton_exception : public std::exception {
+ private:
+  std::shared_ptr<TRITONSERVER_Error> error_;
 
-    public:
+ public:
+  explicit triton_exception(TRITONSERVER_Error* error);
 
-      explicit triton_exception(
-          TRITONSERVER_Error* error);
+  triton_exception();
 
-      triton_exception();
+  triton_exception(const triton_exception&) = default;
 
-      triton_exception(const triton_exception&) = default;
+  ~triton_exception() = default;
 
-      ~triton_exception() = default;
+  TRITONSERVER_Error* get_error() const noexcept;
 
-      TRITONSERVER_Error*
-      get_error() const noexcept;
-
-      const char*
-      what() const noexcept override;
-  };
-}
+  const char* what() const noexcept override;
+};
+}  // namespace triton::backend::pytorch

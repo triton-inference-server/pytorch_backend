@@ -26,112 +26,86 @@
 
 #pragma once
 
-#include "triton/backend/backend_common.h"
-#include "triton/core/tritonserver.h"
-
 #include <exception>
 #include <sstream>
 #include <string>
 
-namespace triton::backend::pytorch
-{
-  class BackendException
-    : std::runtime_error
+#include "triton/backend/backend_common.h"
+#include "triton/core/tritonserver.h"
+
+namespace triton::backend::pytorch {
+class BackendException : std::runtime_error {
+ private:
+  TRITONSERVER_Error_Code error_code_;
+
+ public:
+  BackendException(
+      TRITONSERVER_Error_Code error_code, const std::string& message)
+      : runtime_error{message}, error_code_{error_code}
   {
-    private:
+  }
 
-      TRITONSERVER_Error_Code error_code_;
+  BackendException() = delete;
 
-    public:
+  TRITONSERVER_Error_Code error_code() const noexcept { return error_code_; }
 
-      BackendException(
-          TRITONSERVER_Error_Code error_code,
-          const std::string &message)
-        : runtime_error{message}
-        , error_code_{error_code}
-      { }
+  virtual const char* what() const noexcept override
+  {
+    return runtime_error::what();
+  }
+};
 
-      BackendException() = delete;
+void __delete_error__(TRITONSERVER_Error_Code value);
 
-      TRITONSERVER_Error_Code
-      error_code() const noexcept
-      {
-        return error_code_;
-      }
+void __delete_error__(TRITONSERVER_Error* error);
 
-      virtual const char*
-      what() const noexcept override
-      {
-        return runtime_error::what();
-      }
-  };
+void __delete_error__(uint64_t value);
 
-  void
-  __delete_error__(
-    TRITONSERVER_Error_Code value);
+void __delete_error__(triton::common::Error::Code value);
 
-  void
-  __delete_error__(
-    TRITONSERVER_Error* error);
+TRITONSERVER_Error_Code __to_error_code__(TRITONSERVER_Error_Code value);
 
-  void
-  __delete_error__(
-    uint64_t value);
+TRITONSERVER_Error_Code __to_error_code__(TRITONSERVER_Error* error);
 
-  void
-  __delete_error__(
-    triton::common::Error::Code value);
+TRITONSERVER_Error_Code __to_error_code__(uint64_t value);
 
-  TRITONSERVER_Error_Code
-  __to_error_code__(
-    TRITONSERVER_Error_Code value);
+TRITONSERVER_Error_Code __to_error_code__(triton::common::Error::Code value);
 
-  TRITONSERVER_Error_Code
-  __to_error_code__(
-    TRITONSERVER_Error* error);
-
-  TRITONSERVER_Error_Code
-  __to_error_code__(
-    uint64_t value);
-
-  TRITONSERVER_Error_Code
-  __to_error_code__(
-    triton::common::Error::Code value);
-
-#define THROW_TRITON_EXCEPTION(error, message) \
-  do { \
-    TRITONSERVER_Error_Code ec = triton::backend::pytorch::__to_error_code__(error); \
-    __delete_error__(error); \
-    std::stringstream buf; \
-    buf << message; \
+#define THROW_TRITON_EXCEPTION(error, message)                       \
+  do {                                                               \
+    TRITONSERVER_Error_Code ec =                                     \
+        triton::backend::pytorch::__to_error_code__(error);          \
+    __delete_error__(error);                                         \
+    std::stringstream buf;                                           \
+    buf << message;                                                  \
     throw triton::backend::pytorch::BackendException{ec, buf.str()}; \
   } while (false);
 
-#define TRITON_LOG_ERROR(message) \
-  do { \
-    std::stringstream buf; \
-    buf << message; \
+#define TRITON_LOG_ERROR(message)                           \
+  do {                                                      \
+    std::stringstream buf;                                  \
+    buf << message;                                         \
     LOG_MESSAGE(TRITONSERVER_LOG_ERROR, buf.str().c_str()); \
   } while (false);
 
-#define TRITON_LOG_INFO(message) \
-  do { \
-    std::stringstream buf; \
-    buf << message; \
+#define TRITON_LOG_INFO(message)                           \
+  do {                                                     \
+    std::stringstream buf;                                 \
+    buf << message;                                        \
     LOG_MESSAGE(TRITONSERVER_LOG_INFO, buf.str().c_str()); \
   } while (false);
 
-#define TRITON_LOG_VERBOSE(message) \
-  do { \
-    std::stringstream buf; \
-    buf << message; \
+#define TRITON_LOG_VERBOSE(message)                           \
+  do {                                                        \
+    std::stringstream buf;                                    \
+    buf << message;                                           \
     LOG_MESSAGE(TRITONSERVER_LOG_VERBOSE, buf.str().c_str()); \
   } while (false);
 
-#define TRITON_LOG_WARN(message) \
-  do { \
-    std::stringstream buf; \
-    buf << message; \
+#define TRITON_LOG_WARN(message)                           \
+  do {                                                     \
+    std::stringstream buf;                                 \
+    buf << message;                                        \
     LOG_MESSAGE(TRITONSERVER_LOG_WARN, buf.str().c_str()); \
   } while (false);
-}
+}  // namespace triton::backend::pytorch

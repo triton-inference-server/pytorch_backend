@@ -26,29 +26,25 @@
 
 #include "triton_exception.hh"
 
-namespace triton::backend::pytorch
-{
-  triton_exception::triton_exception(
-      TRITONSERVER_Error* error)
+namespace triton::backend::pytorch {
+triton_exception::triton_exception(TRITONSERVER_Error* error)
     : error_{error, TRITONSERVER_ErrorDelete}
-  {
-    if (!error)
-      throw std::invalid_argument("Argument 'error' cannot be nullptr");
-  }
-
-  triton_exception::triton_exception()
-    : error_{nullptr}
-  { }
-
-  TRITONSERVER_Error*
-  triton_exception::get_error() const noexcept
-  {
-    return error_ ? error_.get() : nullptr;
-  }
-
-  const char*
-  triton_exception::what() const noexcept
-  {
-    return error_ ? TRITONSERVER_ErrorMessage(error_.get()) : nullptr;
-  }
+{
+  if (!error)
+    throw std::invalid_argument("Argument 'error' cannot be nullptr");
 }
+
+triton_exception::triton_exception() : error_{nullptr} {}
+
+TRITONSERVER_Error*
+triton_exception::get_error() const noexcept
+{
+  return error_ ? error_.get() : nullptr;
+}
+
+const char*
+triton_exception::what() const noexcept
+{
+  return error_ ? TRITONSERVER_ErrorMessage(error_.get()) : nullptr;
+}
+}  // namespace triton::backend::pytorch

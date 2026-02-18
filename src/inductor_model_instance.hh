@@ -26,6 +26,10 @@
 
 #pragma once
 
+#include <memory>
+#include <string>
+#include <unordered_map>
+
 #include "inductor_model.hh"
 #include "naming_convention.hh"
 #include "triton/backend/backend_common.h"
@@ -36,10 +40,6 @@
 #include "triton/common/triton_json.h"
 #include "triton/core/tritonbackend.h"
 #include "triton/core/tritonserver.h"
-
-#include <memory>
-#include <string>
-#include <unordered_map>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-compare"
@@ -52,179 +52,115 @@
 #include <cuda_runtime_api.h>
 #endif
 
-namespace triton::backend::pytorch
-{
-  using TritonInductorModel = triton::backend::pytorch::InductorModel;
-  using TritonJsonValue = triton::common::TritonJson::Value;
-  using TritonNamingConvention = triton::backend::pytorch::NamingConvention;
+namespace triton::backend::pytorch {
+using TritonInductorModel = triton::backend::pytorch::InductorModel;
+using TritonJsonValue = triton::common::TritonJson::Value;
+using TritonNamingConvention = triton::backend::pytorch::NamingConvention;
 
-  class InductorModelInstance
-    : public triton::backend::BackendModelInstance
-  {
-    private:
-
-      uint32_t batch_input_count_{0};
-      cudaEvent_t compute_infer_start_event_;
-      cudaEvent_t compute_input_start_event_;
-      cudaEvent_t compute_output_start_event_;
-      torch::Device device_{torch::kCPU};
-      int device_count_{0};
-      std::unordered_map<std::string, int> input_index_map_;
-      bool is_batching_supported_{false};
-      bool is_dictionary_input_{false};
-      TritonInductorModel* model_{nullptr};
-      std::string model_path_;
-      std::unordered_map<std::string, TRITONSERVER_DataType> output_dtype_map_;
-      std::unordered_map<std::string, int> output_index_map_;
+class InductorModelInstance : public triton::backend::BackendModelInstance {
+ private:
+  uint32_t batch_input_count_{0};
+  cudaEvent_t compute_infer_start_event_;
+  cudaEvent_t compute_input_start_event_;
+  cudaEvent_t compute_output_start_event_;
+  torch::Device device_{torch::kCPU};
+  int device_count_{0};
+  std::unordered_map<std::string, int> input_index_map_;
+  bool is_batching_supported_{false};
+  bool is_dictionary_input_{false};
+  TritonInductorModel* model_{nullptr};
+  std::string model_path_;
+  std::unordered_map<std::string, TRITONSERVER_DataType> output_dtype_map_;
+  std::unordered_map<std::string, int> output_index_map_;
 #ifdef TRITON_ENABLE_GPU
-      std::vector<cudaStream_t> stream_vector_;
+  std::vector<cudaStream_t> stream_vector_;
 #endif
 
-    public:
+ public:
+  InductorModelInstance(
+      TritonInductorModel* model,
+      TRITONBACKEND_ModelInstance* triton_model_instance);
 
-      InductorModelInstance(
-        TritonInductorModel* model,
-        TRITONBACKEND_ModelInstance* triton_model_instance);
+  InductorModelInstance() = delete;
 
-      InductorModelInstance() = delete;
+  ~InductorModelInstance() override;
 
-      ~InductorModelInstance() override;
+  void ClearCache();
 
-      void
-      ClearCache();
+  [[nodiscard]] static InductorModelInstance* Create(
+      TritonInductorModel* model,
+      TRITONBACKEND_ModelInstance* triton_model_instance);
 
-      [[nodiscard]]
-      static InductorModelInstance*
-      Create(
-        TritonInductorModel* model,
-        TRITONBACKEND_ModelInstance* triton_model_instance);
+  void ProcessRequests(
+      TRITONBACKEND_Request** requests, const uint32_t request_count);
 
-      void
-      ProcessRequests(
-        TRITONBACKEND_Request** requests,
-        const uint32_t request_count);
+  [[nodiscard]] TritonInductorModel* InductorModel() const;
 
-      [[nodiscard]]
-      TritonInductorModel*
-      InductorModel() const;
+  /** triton::backend::BackendModelInstance implementation **/
 
-      /** triton::backend::BackendModelInstance implementation **/
+  [[nodiscard]] const std::string& ArtifactFilename() const;
 
-      [[nodiscard]]
-      const std::string&
-      ArtifactFilename() const;
+  [[nodiscard]] cudaStream_t CudaStream();
 
-      [[nodiscard]]
-      cudaStream_t
-      CudaStream();
+  [[nodiscard]] int32_t DeviceId() const;
 
-      [[nodiscard]]
-      int32_t
-      DeviceId() const;
+  [[nodiscard]] const std::string& HostPolicyName() const;
 
-      [[nodiscard]]
-      const std::string&
-      HostPolicyName() const;
+  [[nodiscard]] TRITONSERVER_InstanceGroupKind Kind() const;
 
-      [[nodiscard]]
-      TRITONSERVER_InstanceGroupKind
-      Kind() const;
+  [[nodiscard]] triton::backend::BackendModel* Model() const;
 
-      [[nodiscard]]
-      triton::backend::BackendModel*
-      Model() const;
+  [[nodiscard]] const std::string& Name() const;
 
-      [[nodiscard]]
-      const std::string&
-      Name() const;
+  [[nodiscard]] TRITONBACKEND_ModelInstance* TritonModelInstance();
 
-      [[nodiscard]]
-      TRITONBACKEND_ModelInstance*
-      TritonModelInstance();
+ private:
+  void AddInputToMap(
+      TritonNamingConvention naming_convention,
+      const std::vector<std::string>& allowed_inputs,
+      const std::string& io_name, uint32_t index);
 
-    private:
+  void CreateCudaEvents(int32_t device_id);
 
-      void
-      AddInputToMap(
-        TritonNamingConvention naming_convention,
-        const std::vector<std::string>& allowed_inputs,
-        const std::string& io_name,
-        uint32_t index);
+  void Execute(
+      std::vector<TRITONBACKEND_Response*>* responses, uint32_t response_count,
+      std::vector<torch::IValue>& input_tensors,
+      std::vector<torch::IValue>& output_tensors);
 
-      void
-      CreateCudaEvents(
-        int32_t device_id);
+  [[nodiscard]] float GetCudaEventElapsedTime(
+      const cudaEvent_t& start_event, const cudaEvent_t& end_event);
 
-      void
-      Execute(
-        std::vector<TRITONBACKEND_Response*>* responses,
-        uint32_t response_count,
-        std::vector<torch::IValue>& input_tensors,
-        std::vector<torch::IValue>& output_tensors);
+  [[nodiscard]] cudaStream_t GetCudaStreamByInstanceKind();
 
-      [[nodiscard]]
-      float
-      GetCudaEventElapsedTime(
-        const cudaEvent_t& start_event,
-        const cudaEvent_t& end_event);
+  [[nodiscard]] TritonNamingConvention GetNamingConvention(
+      const std::vector<std::string>& allowed_ios);
 
-      [[nodiscard]]
-      cudaStream_t
-      GetCudaStreamByInstanceKind();
+  void ReadOutputTensors(
+      size_t total_batch_size, const std::vector<torch::IValue>& output_tensors,
+      TRITONBACKEND_Request** requests, uint32_t request_count,
+      std::vector<TRITONBACKEND_Response*>& responses);
 
-      [[nodiscard]]
-      TritonNamingConvention
-      GetNamingConvention(
-        const std::vector<std::string>& allowed_ios);
+  void RecordBackendTimestamp(uint64_t* timestamp, void* cuda_event);
 
-      void
-      ReadOutputTensors(
-        size_t total_batch_size,
-        const std::vector<torch::IValue>& output_tensors,
-        TRITONBACKEND_Request** requests,
-        uint32_t request_count,
-        std::vector<TRITONBACKEND_Response*>& responses);
+  void SetCurrentCudaStream(const cudaStream_t& stream, int device_id);
 
-      void
-      RecordBackendTimestamp(
-        uint64_t* timestamp,
-        void* cuda_event);
+  void SetInputTensors(
+      size_t total_batch_size, TRITONBACKEND_Request** requests,
+      uint32_t request_count, std::vector<TRITONBACKEND_Response*>* responses,
+      triton::backend::BackendInputCollector* collector,
+      std::vector<const char*>* input_names,
+      std::vector<torch::IValue>* input_tensors, bool* cuda_copy);
 
-      void
-      SetCurrentCudaStream(
-        const cudaStream_t& stream,
-        int device_id);
+  [[nodiscard]] bool ValidateBooleanSequenceControl(
+      TritonJsonValue& sequence_batching, const std::string& control_kind,
+      bool required);
 
-      void
-      SetInputTensors(
-        size_t total_batch_size,
-        TRITONBACKEND_Request** requests,
-        uint32_t request_count,
-        std::vector<TRITONBACKEND_Response*>* responses,
-        triton::backend::BackendInputCollector* collector,
-        std::vector<const char*>* input_names,
-        std::vector<torch::IValue>* input_tensors,
-        bool* cuda_copy);
+  void ValidateInputs(const size_t expected_input_count);
 
-      [[nodiscard]]
-      bool
-      ValidateBooleanSequenceControl(
-        TritonJsonValue& sequence_batching,
-        const std::string& control_kind,
-        bool required);
+  void ValidateOutputs();
 
-      void
-      ValidateInputs(
-        const size_t expected_input_count);
-
-      void
-      ValidateOutputs();
-
-      [[nodiscard]]
-      bool
-      ValidateTypedSequenceControl(
-        TritonJsonValue& sequence_batching,
-        const std::string& control_kind,
-        bool required);
-  };
-}
+  [[nodiscard]] bool ValidateTypedSequenceControl(
+      TritonJsonValue& sequence_batching, const std::string& control_kind,
+      bool required);
+};
+}  // namespace triton::backend::pytorch

@@ -26,68 +26,70 @@
 
 #include "triton_utils.hh"
 
-namespace triton::backend::pytorch
+namespace triton::backend::pytorch {
+void
+__delete_error__(TRITONSERVER_Error_Code value)
+{ /* noop */
+}
+
+void
+__delete_error__(TRITONSERVER_Error* error)
 {
-  void
-  __delete_error__(
-    TRITONSERVER_Error_Code value)
-  { /* noop */ }
-
-  void
-  __delete_error__(
-    TRITONSERVER_Error* error)
-  {
-    if (error) {
-      TRITONSERVER_ErrorDelete(error);
-    }
-  }
-
-  void
-  __delete_error__(
-    uint64_t value)
-  { /* noop */ }
-
-  void
-  __delete_error__(
-    triton::common::Error::Code value)
-  { /* noop */ }
-
-  TRITONSERVER_Error_Code
-  __to_error_code__(
-    TRITONSERVER_Error_Code value)
-  {
-    return value;
-  }
-
-  TRITONSERVER_Error_Code
-  __to_error_code__(
-    TRITONSERVER_Error* error)
-  {
-    return (error) ? TRITONSERVER_ErrorCode(error) : TRITONSERVER_ERROR_UNKNOWN;
-  }
-
-  TRITONSERVER_Error_Code
-  __to_error_code__(
-    uint64_t value)
-  {
-    switch (value)
-    {
-      case 0: return TRITONSERVER_ERROR_UNKNOWN;
-      case 1: return TRITONSERVER_ERROR_INTERNAL;
-      case 2: return TRITONSERVER_ERROR_NOT_FOUND;
-      case 3: return TRITONSERVER_ERROR_INVALID_ARG;
-      case 4: return TRITONSERVER_ERROR_UNAVAILABLE;
-      case 5: return TRITONSERVER_ERROR_UNSUPPORTED;
-      case 6: return TRITONSERVER_ERROR_ALREADY_EXISTS;
-      case 7: return TRITONSERVER_ERROR_CANCELLED;
-      default: return TRITONSERVER_ERROR_UNKNOWN;
-    }
-  }
-
-  TRITONSERVER_Error_Code
-  __to_error_code__(
-    triton::common::Error::Code value)
-  {
-    return StatusCodeToTritonCode(value);
+  if (error) {
+    TRITONSERVER_ErrorDelete(error);
   }
 }
+
+void
+__delete_error__(uint64_t value)
+{ /* noop */
+}
+
+void
+__delete_error__(triton::common::Error::Code value)
+{ /* noop */
+}
+
+TRITONSERVER_Error_Code
+__to_error_code__(TRITONSERVER_Error_Code value)
+{
+  return value;
+}
+
+TRITONSERVER_Error_Code
+__to_error_code__(TRITONSERVER_Error* error)
+{
+  return (error) ? TRITONSERVER_ErrorCode(error) : TRITONSERVER_ERROR_UNKNOWN;
+}
+
+TRITONSERVER_Error_Code
+__to_error_code__(uint64_t value)
+{
+  switch (value) {
+    case 0:
+      return TRITONSERVER_ERROR_UNKNOWN;
+    case 1:
+      return TRITONSERVER_ERROR_INTERNAL;
+    case 2:
+      return TRITONSERVER_ERROR_NOT_FOUND;
+    case 3:
+      return TRITONSERVER_ERROR_INVALID_ARG;
+    case 4:
+      return TRITONSERVER_ERROR_UNAVAILABLE;
+    case 5:
+      return TRITONSERVER_ERROR_UNSUPPORTED;
+    case 6:
+      return TRITONSERVER_ERROR_ALREADY_EXISTS;
+    case 7:
+      return TRITONSERVER_ERROR_CANCELLED;
+    default:
+      return TRITONSERVER_ERROR_UNKNOWN;
+  }
+}
+
+TRITONSERVER_Error_Code
+__to_error_code__(triton::common::Error::Code value)
+{
+  return StatusCodeToTritonCode(value);
+}
+}  // namespace triton::backend::pytorch

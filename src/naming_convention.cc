@@ -27,33 +27,30 @@
 #include "naming_convention.hh"
 
 #include <stdint.h>
+
 #include <ostream>
 
-namespace triton::backend::pytorch
+namespace triton::backend::pytorch {
+std::ostream&
+operator<<(std::ostream& out, const NamingConvention& value) noexcept
 {
-  std::ostream&
-  operator<<(
-      std::ostream& out,
-      const NamingConvention& value) noexcept
-  {
-    switch (value)
-    {
-      case NamingConvention::NAMED_INDEX:
-        out << "NAMED_INDEX";
-        break;
+  switch (value) {
+    case NamingConvention::NAMED_INDEX:
+      out << "NAMED_INDEX";
+      break;
 
-      case NamingConvention::FORWARD_ARGUMENT:
-        out << "FORWARD_ARGUMENT";
-        break;
+    case NamingConvention::FORWARD_ARGUMENT:
+      out << "FORWARD_ARGUMENT";
+      break;
 
-      case NamingConvention::STRICT_CONFIG_ORDERING:
-        out << "STRICT_CONFIG_ORDERING";
-        break;
+    case NamingConvention::STRICT_CONFIG_ORDERING:
+      out << "STRICT_CONFIG_ORDERING";
+      break;
 
-      default:
-        out << "UNKNOWN(" << static_cast<uint32_t>(value) << ")";
-        break;
-    }
-    return out;
+    default:
+      out << "UNKNOWN(" << static_cast<uint32_t>(value) << ")";
+      break;
   }
+  return out;
 }
+}  // namespace triton::backend::pytorch
