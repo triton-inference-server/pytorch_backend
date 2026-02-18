@@ -204,26 +204,6 @@ ModelState::LoadModel(
     bool exists;
     RETURN_IF_ERROR(FileExists(*model_path, &exists));
 
-    // Try the secondary model default model name when the model file is not
-    // found and no explicit model file is specified.
-    if (!exists && artifact_name.empty()) {
-      std::string pt2_file_name{"model.pt2"};
-      std::string pt2_file_path = JoinPath(
-          {RepositoryPath(), std::to_string(Version()), pt2_file_name});
-
-      RETURN_IF_ERROR(FileExists(pt2_file_path, &exists));
-
-      if (exists) {
-        LOG_MESSAGE(
-            TRITONSERVER_LOG_INFO,
-            (std::string("Using alternative default model file '") +
-             pt2_file_name + "' for model '" + Name() + "'")
-                .c_str());
-        cc_model_filename = pt2_file_name;
-        *model_path = pt2_file_path;
-      }
-    }
-
     RETURN_ERROR_IF_FALSE(
         exists, TRITONSERVER_ERROR_UNAVAILABLE,
         std::string("unable to find '") + *model_path +
