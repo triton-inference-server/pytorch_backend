@@ -34,9 +34,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include "libtorch_utils.h"
+#include "../libtorch_utils.h"
 #include "model_state.hh"
-#include "naming_convention.hh"
 #include "triton/backend/backend_common.h"
 #include "triton/backend/backend_input_collector.h"
 #include "triton/backend/backend_memory.h"
@@ -46,7 +45,7 @@
 #include "triton/common/nvtx.h"
 #include "triton/core/tritonbackend.h"
 
-namespace triton::backend::pytorch {
+namespace triton::backend::pytorch::pt {
 
 //
 // ModelInstanceState

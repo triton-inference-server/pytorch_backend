@@ -33,7 +33,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "libtorch_utils.h"
+#include "../libtorch_utils.h"
 #include "triton/backend/backend_common.h"
 #include "triton/backend/backend_input_collector.h"
 #include "triton/backend/backend_model.h"
@@ -55,7 +55,7 @@
 // https://github.com/pytorch/pytorch/blob/v2.2.1-rc3/aten/src/ATen/Parallel.h#L133
 #include <ATen/Parallel.h>
 
-namespace triton::backend::pytorch {
+namespace triton::backend::pytorch::pt2 {
 constexpr char INDUCTOR_MODEL_ARTIFACT_NAME_DEFAULT[] = "model.pt2";
 constexpr char INDUCTOR_MODEL_NAME_DEFAULT[] = "model";
 

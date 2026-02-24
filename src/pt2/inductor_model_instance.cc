@@ -31,9 +31,9 @@
 #include <unordered_map>
 #include <vector>
 
-#include "libtorch.hh"
-#include "libtorch_utils.h"
-#include "string_utils.hh"
+#include "../libtorch.hh"
+#include "../libtorch_utils.h"
+#include "../string_utils.hh"
 #include "triton/common/nvtx.h"
 #include "triton_exception.hh"
 #include "triton_utils.hh"
@@ -44,8 +44,8 @@
 #include <cuda_runtime_api.h>
 #endif
 
-namespace triton::backend::pytorch {
-using TritonInductorModel = triton::backend::pytorch::InductorModel;
+namespace triton::backend::pytorch::pt2 {
+using TritonInductorModel = triton::backend::pytorch::pt2::InductorModel;
 using TritonJsonValue = triton::common::TritonJson::Value;
 using TritonNamingConvention = triton::backend::pytorch::NamingConvention;
 

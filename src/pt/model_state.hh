@@ -32,8 +32,7 @@
 #include <exception>
 #include <mutex>
 
-#include "libtorch_utils.h"
-#include "naming_convention.hh"
+#include "../libtorch_utils.h"
 #include "triton/backend/backend_common.h"
 #include "triton/backend/backend_input_collector.h"
 #include "triton/backend/backend_memory.h"
@@ -48,7 +47,7 @@
 // https://github.com/pytorch/pytorch/blob/v2.2.1-rc3/aten/src/ATen/Parallel.h#L133
 #include <ATen/Parallel.h>
 
-namespace triton::backend::pytorch {
+namespace triton::backend::pytorch::pt {
 
 class ModelState : public triton::backend::BackendModel {
  private:

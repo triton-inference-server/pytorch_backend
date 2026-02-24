@@ -31,7 +31,7 @@
 #include <unordered_map>
 
 #include "inductor_model.hh"
-#include "naming_convention.hh"
+#include "../libtorch_utils.h"
 #include "triton/backend/backend_common.h"
 #include "triton/backend/backend_input_collector.h"
 #include "triton/backend/backend_model.h"
@@ -52,8 +52,8 @@
 #include <cuda_runtime_api.h>
 #endif
 
-namespace triton::backend::pytorch {
-using TritonInductorModel = triton::backend::pytorch::InductorModel;
+namespace triton::backend::pytorch::pt2 {
+using TritonInductorModel = triton::backend::pytorch::pt2::InductorModel;
 using TritonJsonValue = triton::common::TritonJson::Value;
 using TritonNamingConvention = triton::backend::pytorch::NamingConvention;
 

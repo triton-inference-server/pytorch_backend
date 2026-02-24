@@ -26,10 +26,10 @@
 
 #include "libtorch.hh"
 
-#include "inductor_model.hh"
-#include "inductor_model_instance.hh"
-#include "model_instance_state.hh"
-#include "model_state.hh"
+#include "pt2/inductor_model.hh"
+#include "pt2/inductor_model_instance.hh"
+#include "pt/model_instance_state.hh"
+#include "pt/model_state.hh"
 #include "triton/backend/backend_common.h"
 #include "triton_utils.hh"
 
@@ -189,7 +189,7 @@ TRITONBACKEND_Initialize(TRITONBACKEND_Backend* backend)
   const char* cname;
   RETURN_IF_ERROR(TRITONBACKEND_BackendName(backend, &cname));
 
-  std::string name(cname);
+  std::string name{cname};
 
   LOG_MESSAGE(
       TRITONSERVER_LOG_INFO,
@@ -232,7 +232,7 @@ TRITONBACKEND_ModelInitialize(TRITONBACKEND_Model* model)
     // Create an InductorModel object and associate it with the
     // TRITONBACKEND_Model.
     try {
-      auto aoti_model = InductorModel::Create(model);
+      auto aoti_model = pt2::InductorModel::Create(model);
       RETURN_IF_ERROR(TRITONBACKEND_ModelSetState(
           model, reinterpret_cast<void*>(aoti_model)));
     }
@@ -247,8 +247,8 @@ TRITONBACKEND_ModelInitialize(TRITONBACKEND_Model* model)
   } else {
     // Create a ModelState object and associate it with the
     // TRITONBACKEND_Model.
-    ModelState* model_state;
-    RETURN_IF_ERROR(ModelState::Create(model, &model_state));
+    pt::ModelState* model_state;
+    RETURN_IF_ERROR(pt::ModelState::Create(model, &model_state));
     RETURN_IF_ERROR(TRITONBACKEND_ModelSetState(
         model, reinterpret_cast<void*>(model_state)));
   }
@@ -271,11 +271,11 @@ TRITONBACKEND_ModelFinalize(TRITONBACKEND_Model* model)
   RETURN_IF_ERROR(TRITONBACKEND_ModelState(model, &vmodel));
 
   if (is_inductor) {
-    InductorModel* aoti_model = reinterpret_cast<InductorModel*>(vmodel);
+    pt2::InductorModel* aoti_model = reinterpret_cast<pt2::InductorModel*>(vmodel);
 
     delete aoti_model;
   } else {
-    ModelState* model_state = reinterpret_cast<ModelState*>(vmodel);
+    pt::ModelState* model_state = reinterpret_cast<pt::ModelState*>(vmodel);
 
     delete model_state;
   }
@@ -310,12 +310,12 @@ TRITONBACKEND_ModelInstanceInitialize(TRITONBACKEND_ModelInstance* instance)
   RETURN_IF_ERROR(TRITONBACKEND_ModelState(model, &vmodel));
 
   if (is_inductor) {
-    auto aoti_model = reinterpret_cast<InductorModel*>(vmodel);
+    auto aoti_model = reinterpret_cast<pt2::InductorModel*>(vmodel);
 
     try {
       // Create an InductorModelInstance object and associate it with the
       // TRITONBACKEND_ModelInstance.
-      auto aoti_instance = InductorModelInstance::Create(aoti_model, instance);
+      auto aoti_instance = pt2::InductorModelInstance::Create(aoti_model, instance);
       RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceSetState(
           instance, reinterpret_cast<void*>(aoti_instance)));
     }
@@ -338,13 +338,13 @@ TRITONBACKEND_ModelInstanceInitialize(TRITONBACKEND_ModelInstance* instance)
 
     return nullptr;  // success
   } else {
-    ModelState* model_state = reinterpret_cast<ModelState*>(vmodel);
+    pt::ModelState* model_state = reinterpret_cast<pt::ModelState*>(vmodel);
 
     // Create a ModelInstanceState object and associate it with the
     // TRITONBACKEND_ModelInstance.
-    ModelInstanceState* instance_state;
+    pt::ModelInstanceState* instance_state;
     RETURN_IF_ERROR(
-        ModelInstanceState::Create(model_state, instance, &instance_state));
+        pt::ModelInstanceState::Create(model_state, instance, &instance_state));
     RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceSetState(
         instance, reinterpret_cast<void*>(instance_state)));
 
@@ -371,10 +371,10 @@ TRITONBACKEND_ModelInstanceFinalize(TRITONBACKEND_ModelInstance* instance)
   RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceState(instance, &vmodel));
 
   if (is_inductor) {
-    auto aoti_instance = reinterpret_cast<InductorModelInstance*>(vmodel);
+    auto aoti_instance = reinterpret_cast<pt2::InductorModelInstance*>(vmodel);
     delete aoti_instance;
   } else {
-    auto instance_state = reinterpret_cast<ModelInstanceState*>(vmodel);
+    auto instance_state = reinterpret_cast<pt::ModelInstanceState*>(vmodel);
     delete instance_state;
   }
 
@@ -415,7 +415,7 @@ TRITONBACKEND_ModelInstanceExecute(
   // 'instance'), which is what we do here.
 
   if (is_inductor) {
-    InductorModelInstance* aoti_instance{nullptr};
+    pt2::InductorModelInstance* aoti_instance{nullptr};
     RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceState(
         instance, reinterpret_cast<void**>(&aoti_instance)));
 
@@ -443,11 +443,11 @@ TRITONBACKEND_ModelInstanceExecute(
       aoti_instance->ClearCache();
     }
   } else {
-    ModelInstanceState* instance_state{nullptr};
+    pt::ModelInstanceState* instance_state{nullptr};
     RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceState(
         instance, reinterpret_cast<void**>(&instance_state)));
 
-    ModelState* model_state = instance_state->StateForModel();
+    auto model_state = instance_state->StateForModel();
 
     // This backend specifies BLOCKING execution policy. That means that
     // we should not return from this function until execution is

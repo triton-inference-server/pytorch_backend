@@ -28,8 +28,8 @@
 
 #include <mutex>
 
-#include "libtorch.hh"
-#include "triton_utils.hh"
+#include "../libtorch.hh"
+#include "../triton_utils.hh"
 
 #ifdef TRITON_ENABLE_GPU
 #include <c10/cuda/CUDACachingAllocator.h>
@@ -46,7 +46,7 @@ std::once_flag pytorch_interop_threads_flag;
 std::once_flag pytorch_intraop_threads_flag;
 }  // namespace
 
-namespace triton::backend::pytorch {
+namespace triton::backend::pytorch::pt2 {
 using TritonBatchOutput = triton::backend::BatchOutput;
 using TritonBatchInput = triton::backend::BatchInput;
 using TritonBackendModel = triton::backend::BackendModel;

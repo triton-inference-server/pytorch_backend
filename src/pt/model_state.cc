@@ -28,14 +28,14 @@
 
 #include <mutex>
 
-#include "libtorch.hh"
+#include "../libtorch.hh"
 
 namespace {
 std::once_flag pytorch_interop_threads_flag;
 std::once_flag pytorch_intraop_threads_flag;
 }  // namespace
 
-namespace triton::backend::pytorch {
+namespace triton::backend::pytorch::pt {
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     : BackendModel(triton_model), enable_optimized_execution_(true),

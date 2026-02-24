@@ -27,7 +27,6 @@
 #pragma once
 
 #include "libtorch_utils.h"
-#include "naming_convention.hh"
 #include "string_utils.hh"
 
 //

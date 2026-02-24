@@ -30,6 +30,7 @@
 #include <sstream>
 #include <string>
 
+#include "libtorch_utils.h"
 #include "triton/backend/backend_common.h"
 #include "triton/core/tritonserver.h"
 

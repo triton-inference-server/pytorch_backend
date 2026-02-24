@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include <ostream>
 #include <string>
 #include <utility>
 
@@ -72,4 +73,15 @@ TRITONSERVER_Error* ParseParameter(
 TRITONSERVER_Error* ParseParameter(
     triton::common::TritonJson::Value& params, const std::string& mkey,
     int* value);
+
+// The naming convention followed for inputs/outputs in the model configuration.
+// Outputs don't support FORWARD_ARGUMENT.
+enum class NamingConvention {
+  NAMED_INDEX,
+  FORWARD_ARGUMENT,
+  STRICT_CONFIG_ORDERING,
+};
+
+std::ostream& operator<<(
+    std::ostream& out, const NamingConvention& value) noexcept;
 }  // namespace triton::backend::pytorch

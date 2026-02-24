@@ -26,8 +26,9 @@
 
 #include "model_instance_state.hh"
 
-#include "libtorch.hh"
-#include "string_utils.hh"
+#include "../libtorch.hh"
+#include "../libtorch_utils.h"
+#include "../string_utils.hh"
 
 #ifdef TRITON_PYTORCH_ENABLE_TORCHVISION
 // Suppress warnings in torch headers
@@ -46,7 +47,7 @@
 #include <cuda_runtime_api.h>
 #endif  // TRITON_ENABLE_GPU
 
-namespace triton::backend::pytorch {
+namespace triton::backend::pytorch::pt {
 
 ModelInstanceState::ModelInstanceState(
     ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
