@@ -26,10 +26,10 @@
 
 #include "libtorch.hh"
 
-#include "pt2/inductor_model.hh"
-#include "pt2/inductor_model_instance.hh"
 #include "pt/model_instance_state.hh"
 #include "pt/model_state.hh"
+#include "pt2/model_instance_state.hh"
+#include "pt2/model_state.hh"
 #include "triton/backend/backend_common.h"
 #include "triton_utils.hh"
 
@@ -58,9 +58,18 @@
 //
 
 namespace triton::backend::pytorch {
-static std::unordered_map<void*, bool> model_is_inductor_map{};
-static std::mutex model_is_inductor_map_mutex{};
+static std::unordered_map<void*, bool> model_is_pt2_map{};
+static std::mutex model_is_pt2_map_mutex{};
 
+/// @brief Gets the model configuration and determine if the model is a PT2
+/// (Inductor) model based on the platform field in the model configuration.
+/// @param model The TRITONBACKEND_Model for which to get the configuration and
+/// determine if it's a PT2 model.
+/// @param model_name The name of the model, used for logging purposes.
+/// @param platform The platform of the model, used to determine if it's a PT2
+/// model.
+/// @returns A TRITONSERVER_Error indicating success or failure of the
+/// operation.
 TRITONSERVER_Error*
 GetModelConfigPlatform(
     TRITONBACKEND_Model* model, const std::string model_name,
@@ -98,11 +107,20 @@ GetModelConfigPlatform(
   return nullptr;  // success
 }
 
+/// @brief Gets model information including the model name, version, artifact
+/// type, and whether it's a PT2 model.
+/// @param model The TRITONBACKEND_Model for which to get the information.
+/// @param model_name The name of the model, used for logging purposes.
+/// @param model_version The version of the model.
+/// @param artifact_type The artifact type of the model.
+/// @param is_pt2 A boolean indicating whether the model is a PT2 model.
+/// @returns A TRITONSERVER_Error indicating success or failure of the
+/// operation.
 TRITONSERVER_Error*
 GetModelInfo(
     TRITONBACKEND_Model* model, std::string& model_name,
     uint64_t& model_version, TRITONBACKEND_ArtifactType& artifact_type,
-    bool& is_inductor)
+    bool& is_pt2)
 {
   const char* cname;
   RETURN_IF_ERROR(TRITONBACKEND_ModelName(model, &cname));
@@ -121,19 +139,19 @@ GetModelInfo(
                                         << ") location=" << location)
 
   try {
-    std::lock_guard lock{model_is_inductor_map_mutex};
-    auto it = model_is_inductor_map.find(static_cast<void*>(model));
-    if (it != model_is_inductor_map.end()) {
-      is_inductor = it->second;
+    std::lock_guard lock{model_is_pt2_map_mutex};
+    auto it = model_is_pt2_map.find(static_cast<void*>(model));
+    if (it != model_is_pt2_map.end()) {
+      is_pt2 = it->second;
     } else {
       std::string platform;
       if (auto err = GetModelConfigPlatform(model, model_name, platform)) {
-        model_is_inductor_map[static_cast<void*>(model)] = is_inductor = false;
+        model_is_pt2_map[static_cast<void*>(model)] = is_pt2 = false;
         return err;
       }
 
-      is_inductor = (platform == "torch_aoti");
-      model_is_inductor_map[static_cast<void*>(model)] = is_inductor;
+      is_pt2 = (platform == "torch_aoti");
+      model_is_pt2_map[static_cast<void*>(model)] = is_pt2;
     }
   }
   catch (const std::exception& ex) {
@@ -153,18 +171,33 @@ GetModelInfo(
   return nullptr;  // success
 }
 
+/// @brief Gets the model instance information including the model, model name,
+/// model version, whether it's a PT2 model, instance name, device id, and
+/// instance group kind.
+/// @param instance The TRITONBACKEND_ModelInstance for which to get the
+/// information.
+/// @param model The TRITONBACKEND_Model associated with the instance.
+/// @param model_name The name of the model, used for logging purposes.
+/// @param model_version The version of the model.
+/// @param is_pt2 A boolean indicating whether the model is a PT2 model.
+/// @param instance_name The name of the model instance, used for logging
+/// purposes.
+/// @param device_id The device id on which the model instance is running.
+/// @param kind The instance group kind of the model instance.
+/// @returns A TRITONSERVER_Error indicating success or failure of the
+/// operation.
 TRITONSERVER_Error*
 GetModelInstanceInfo(
     TRITONBACKEND_ModelInstance* instance, TRITONBACKEND_Model** model,
-    std::string& model_name, uint64_t& model_version, bool& is_inductor,
+    std::string& model_name, uint64_t& model_version, bool& is_pt2,
     std::string& instance_name, int32_t& device_id,
     TRITONSERVER_InstanceGroupKind& kind)
 {
   RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceModel(instance, model));
 
   TRITONBACKEND_ArtifactType artifact_type{TRITONBACKEND_ARTIFACT_FILESYSTEM};
-  RETURN_IF_ERROR(GetModelInfo(
-      *model, model_name, model_version, artifact_type, is_inductor));
+  RETURN_IF_ERROR(
+      GetModelInfo(*model, model_name, model_version, artifact_type, is_pt2));
 
   const char* cname;
   RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceName(instance, &cname));
@@ -223,24 +256,25 @@ TRITONBACKEND_ModelInitialize(TRITONBACKEND_Model* model)
   std::string model_name{};
   uint64_t model_version{0};
   TRITONBACKEND_ArtifactType artifact_type{TRITONBACKEND_ARTIFACT_FILESYSTEM};
-  bool is_inductor{false};
+  bool is_pt2{false};
 
-  RETURN_IF_ERROR(GetModelInfo(
-      model, model_name, model_version, artifact_type, is_inductor));
+  // Get model info to determine if it is a PT2 model archive or not.
+  RETURN_IF_ERROR(
+      GetModelInfo(model, model_name, model_version, artifact_type, is_pt2));
 
-  if (is_inductor) {
-    // Create an InductorModel object and associate it with the
+  if (is_pt2) {
+    // Create an ModelState object and associate it with the
     // TRITONBACKEND_Model.
     try {
-      auto aoti_model = pt2::InductorModel::Create(model);
+      auto model_state = pt2::ModelState::Create(model);
       RETURN_IF_ERROR(TRITONBACKEND_ModelSetState(
-          model, reinterpret_cast<void*>(aoti_model)));
+          model, reinterpret_cast<void*>(model_state)));
     }
     catch (const std::exception& ex) {
       RETURN_ERROR_IF_TRUE(
           true, TRITONSERVER_ERROR_INTERNAL,
           TOSTRING(
-              "failed to create InductorModel for model \""
+              "failed to create ModelState for model \""
               << model_name << "\""
               << ", version " << model_version << ": " << ex.what()));
     }
@@ -262,18 +296,19 @@ TRITONBACKEND_ModelFinalize(TRITONBACKEND_Model* model)
   std::string model_name{};
   uint64_t model_version{0};
   TRITONBACKEND_ArtifactType artifact_type{TRITONBACKEND_ARTIFACT_FILESYSTEM};
-  bool is_inductor{false};
+  bool is_pt2{false};
 
-  RETURN_IF_ERROR(GetModelInfo(
-      model, model_name, model_version, artifact_type, is_inductor));
+  // Get model info to determine if it is a PT2 model archive or not.
+  RETURN_IF_ERROR(
+      GetModelInfo(model, model_name, model_version, artifact_type, is_pt2));
 
   void* vmodel;
   RETURN_IF_ERROR(TRITONBACKEND_ModelState(model, &vmodel));
 
-  if (is_inductor) {
-    pt2::InductorModel* aoti_model = reinterpret_cast<pt2::InductorModel*>(vmodel);
+  if (is_pt2) {
+    pt2::ModelState* model_state = reinterpret_cast<pt2::ModelState*>(vmodel);
 
-    delete aoti_model;
+    delete model_state;
   } else {
     pt::ModelState* model_state = reinterpret_cast<pt::ModelState*>(vmodel);
 
@@ -297,27 +332,29 @@ TRITONBACKEND_ModelInstanceInitialize(TRITONBACKEND_ModelInstance* instance)
   TRITONBACKEND_Model* model;
   std::string model_name{};
   uint64_t model_version{0};
-  bool is_inductor{false};
+  bool is_pt2{false};
   std::string instance_name{};
   int32_t device_id{0};
   TRITONSERVER_InstanceGroupKind kind;
 
+  // Get model info to determine if it is a PT2 model archive or not.
   RETURN_IF_ERROR(GetModelInstanceInfo(
-      instance, &model, model_name, model_version, is_inductor, instance_name,
+      instance, &model, model_name, model_version, is_pt2, instance_name,
       device_id, kind));
 
   void* vmodel;
   RETURN_IF_ERROR(TRITONBACKEND_ModelState(model, &vmodel));
 
-  if (is_inductor) {
-    auto aoti_model = reinterpret_cast<pt2::InductorModel*>(vmodel);
+  if (is_pt2) {
+    auto model_state = reinterpret_cast<pt2::ModelState*>(vmodel);
 
     try {
-      // Create an InductorModelInstance object and associate it with the
+      // Create an ModelInstanceState object and associate it with the
       // TRITONBACKEND_ModelInstance.
-      auto aoti_instance = pt2::InductorModelInstance::Create(aoti_model, instance);
+      auto instance_state =
+          pt2::ModelInstanceState::Create(model_state, instance);
       RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceSetState(
-          instance, reinterpret_cast<void*>(aoti_instance)));
+          instance, reinterpret_cast<void*>(instance_state)));
     }
     catch (const triton::backend::pytorch::BackendException& ex) {
       RETURN_ERROR_IF_TRUE(
@@ -358,21 +395,22 @@ TRITONBACKEND_ModelInstanceFinalize(TRITONBACKEND_ModelInstance* instance)
   TRITONBACKEND_Model* model;
   std::string model_name{};
   uint64_t model_version{0};
-  bool is_inductor{false};
+  bool is_pt2{false};
   std::string instance_name{};
   int32_t device_id{0};
   TRITONSERVER_InstanceGroupKind kind;
 
+  // Get model info to determine if it is a PT2 model archive or not.
   RETURN_IF_ERROR(GetModelInstanceInfo(
-      instance, &model, model_name, model_version, is_inductor, instance_name,
+      instance, &model, model_name, model_version, is_pt2, instance_name,
       device_id, kind));
 
   void* vmodel;
   RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceState(instance, &vmodel));
 
-  if (is_inductor) {
-    auto aoti_instance = reinterpret_cast<pt2::InductorModelInstance*>(vmodel);
-    delete aoti_instance;
+  if (is_pt2) {
+    auto instance_state = reinterpret_cast<pt2::ModelInstanceState*>(vmodel);
+    delete instance_state;
   } else {
     auto instance_state = reinterpret_cast<pt::ModelInstanceState*>(vmodel);
     delete instance_state;
@@ -397,13 +435,14 @@ TRITONBACKEND_ModelInstanceExecute(
   TRITONBACKEND_Model* model;
   std::string model_name{};
   uint64_t model_version{0};
-  bool is_inductor{false};
+  bool is_pt2{false};
   std::string instance_name{};
   int32_t device_id{0};
   TRITONSERVER_InstanceGroupKind kind;
 
+  // Get model info to determine if it is a PT2 model archive or not.
   RETURN_IF_ERROR(GetModelInstanceInfo(
-      instance, &model, model_name, model_version, is_inductor, instance_name,
+      instance, &model, model_name, model_version, is_pt2, instance_name,
       device_id, kind));
 
   // Triton will not call this function simultaneously for the same
@@ -414,12 +453,12 @@ TRITONBACKEND_ModelInstanceExecute(
   // function-local and model-instance-specific state (obtained from
   // 'instance'), which is what we do here.
 
-  if (is_inductor) {
-    pt2::InductorModelInstance* aoti_instance{nullptr};
+  if (is_pt2) {
+    pt2::ModelInstanceState* instance_state{nullptr};
     RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceState(
-        instance, reinterpret_cast<void**>(&aoti_instance)));
+        instance, reinterpret_cast<void**>(&instance_state)));
 
-    auto aoti_model = aoti_instance->InductorModel();
+    auto model_state = instance_state->ModelState();
 
     // This backend specifies BLOCKING execution policy. That means that
     // we should not return from this function until execution is
@@ -428,19 +467,19 @@ TRITONBACKEND_ModelInstanceExecute(
     // another call to TRITONBACKEND_ModelInstanceExecute.
 
     TRITON_LOG_VERBOSE(
-        "model \"" << aoti_model->Name() << "\", instance \""
-                   << aoti_instance->Name() << "\", executing " << request_count
-                   << " requests");
+        "model \"" << model_state->Name() << "\", instance \""
+                   << instance_state->Name() << "\", executing "
+                   << request_count << " requests");
 
     // At this point we accept ownership of 'requests', which means that
     // even if something goes wrong we must still return success from
     // this function. If something does go wrong in processing a
     // particular request then we send an error response just for the
     // specific request.
-    aoti_instance->ProcessRequests(requests, request_count);
+    instance_state->ProcessRequests(requests, request_count);
 
-    if (aoti_model->CacheCleaningEnabled()) {
-      aoti_instance->ClearCache();
+    if (model_state->CacheCleaningEnabled()) {
+      instance_state->ClearCache();
     }
   } else {
     pt::ModelInstanceState* instance_state{nullptr};

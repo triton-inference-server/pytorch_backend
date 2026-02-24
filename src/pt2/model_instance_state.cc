@@ -24,7 +24,7 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "inductor_model_instance.hh"
+#include "model_instance_state.hh"
 
 #include <iostream>
 #include <stdexcept>
@@ -45,15 +45,14 @@
 #endif
 
 namespace triton::backend::pytorch::pt2 {
-using TritonInductorModel = triton::backend::pytorch::pt2::InductorModel;
+using TritonModelState = triton::backend::pytorch::pt2::ModelState;
 using TritonJsonValue = triton::common::TritonJson::Value;
 using TritonNamingConvention = triton::backend::pytorch::NamingConvention;
 
 static const std::string DELIMINATOR{"__"};
 
-InductorModelInstance::InductorModelInstance(
-    TritonInductorModel* model,
-    TRITONBACKEND_ModelInstance* triton_model_instance)
+ModelInstanceState::ModelInstanceState(
+    TritonModelState* model, TRITONBACKEND_ModelInstance* triton_model_instance)
     : BackendModelInstance{model, triton_model_instance}, model_{model}
 {
   DEBUG_TRACE_FUNCTION_CALL();
@@ -177,7 +176,7 @@ InductorModelInstance::InductorModelInstance(
   ValidateOutputs();
 }
 
-InductorModelInstance::~InductorModelInstance()
+ModelInstanceState::~ModelInstanceState()
 {
   DEBUG_TRACE_FUNCTION_CALL();
   ClearCache();
@@ -215,7 +214,7 @@ InductorModelInstance::~InductorModelInstance()
 }
 
 void
-InductorModelInstance::AddInputToMap(
+ModelInstanceState::AddInputToMap(
     TritonNamingConvention naming_convention,
     const std::vector<std::string>& allowed_inputs, const std::string& io_name,
     uint32_t index)
@@ -274,14 +273,14 @@ InductorModelInstance::AddInputToMap(
 }
 
 const std::string&
-InductorModelInstance::ArtifactFilename() const
+ModelInstanceState::ArtifactFilename() const
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return BackendModelInstance::ArtifactFilename();
 }
 
 void
-InductorModelInstance::ClearCache()
+ModelInstanceState::ClearCache()
 {
   DEBUG_TRACE_FUNCTION_CALL();
 #ifdef TRITON_ENABLE_GPU
@@ -292,14 +291,13 @@ InductorModelInstance::ClearCache()
 #endif
 }
 
-InductorModelInstance*
-InductorModelInstance::Create(
-    TritonInductorModel* model,
-    TRITONBACKEND_ModelInstance* triton_model_instance)
+ModelInstanceState*
+ModelInstanceState::Create(
+    TritonModelState* model, TRITONBACKEND_ModelInstance* triton_model_instance)
 {
   DEBUG_TRACE_FUNCTION_CALL();
   try {
-    return new InductorModelInstance(model, triton_model_instance);
+    return new ModelInstanceState(model, triton_model_instance);
   }
   catch (const triton::backend::pytorch::BackendException& exception) {
     DEBUG_TRACE_ERROR(
@@ -307,7 +305,7 @@ InductorModelInstance::Create(
                            << exception.what() << "\" }");
     THROW_TRITON_EXCEPTION(
         exception.error_code(),
-        "Failed to create InductorModelInstance for model \""
+        "Failed to create ModelInstanceState for model \""
             << model->Name() << "\": " << exception.what());
   }
   catch (const std::exception& exception) {
@@ -318,13 +316,13 @@ InductorModelInstance::Create(
                            << exception.what() << "\" }");
     THROW_TRITON_EXCEPTION(
         TRITONSERVER_ERROR_INTERNAL,
-        "Failed to create InductorModelInstance for model \""
+        "Failed to create ModelInstanceState for model \""
             << model->Name() << "\": " << exception.what());
   }
 }
 
 void
-InductorModelInstance::CreateCudaEvents(int32_t device_id)
+ModelInstanceState::CreateCudaEvents(int32_t device_id)
 {
   DEBUG_TRACE_FUNCTION_CALL();
 #ifdef TRITON_ENABLE_GPU
@@ -385,21 +383,21 @@ InductorModelInstance::CreateCudaEvents(int32_t device_id)
 }
 
 cudaStream_t
-InductorModelInstance::CudaStream()
+ModelInstanceState::CudaStream()
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return BackendModelInstance::CudaStream();
 }
 
 int32_t
-InductorModelInstance::DeviceId() const
+ModelInstanceState::DeviceId() const
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return BackendModelInstance::DeviceId();
 }
 
 void
-InductorModelInstance::Execute(
+ModelInstanceState::Execute(
     std::vector<TRITONBACKEND_Response*>* responses, uint32_t response_count,
     std::vector<torch::IValue>& input_tensors,
     std::vector<torch::IValue>& output_tensors)
@@ -486,7 +484,7 @@ InductorModelInstance::Execute(
 }
 
 float
-InductorModelInstance::GetCudaEventElapsedTime(
+ModelInstanceState::GetCudaEventElapsedTime(
     const cudaEvent_t& start_event, const cudaEvent_t& end_event)
 {
   DEBUG_TRACE_FUNCTION_CALL();
@@ -506,7 +504,7 @@ InductorModelInstance::GetCudaEventElapsedTime(
 }
 
 cudaStream_t
-InductorModelInstance::GetCudaStreamByInstanceKind()
+ModelInstanceState::GetCudaStreamByInstanceKind()
 {
   DEBUG_TRACE_FUNCTION_CALL();
 #ifdef TRITON_ENABLE_GPU
@@ -531,7 +529,7 @@ InductorModelInstance::GetCudaStreamByInstanceKind()
 }
 
 TritonNamingConvention
-InductorModelInstance::GetNamingConvention(
+ModelInstanceState::GetNamingConvention(
     const std::vector<std::string>& allowed_ios)
 {
   DEBUG_TRACE_FUNCTION_CALL();
@@ -695,42 +693,42 @@ InductorModelInstance::GetNamingConvention(
 }
 
 const std::string&
-InductorModelInstance::HostPolicyName() const
+ModelInstanceState::HostPolicyName() const
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return BackendModelInstance::HostPolicyName();
 }
 
-TritonInductorModel*
-InductorModelInstance::InductorModel() const
+TritonModelState*
+ModelInstanceState::ModelState() const
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return model_;
 }
 
 TRITONSERVER_InstanceGroupKind
-InductorModelInstance::Kind() const
+ModelInstanceState::Kind() const
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return BackendModelInstance::Kind();
 }
 
 triton::backend::BackendModel*
-InductorModelInstance::Model() const
+ModelInstanceState::Model() const
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return BackendModelInstance::Model();
 }
 
 const std::string&
-InductorModelInstance::Name() const
+ModelInstanceState::Name() const
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return BackendModelInstance::Name();
 }
 
 void
-InductorModelInstance::ProcessRequests(
+ModelInstanceState::ProcessRequests(
     TRITONBACKEND_Request** requests, const uint32_t request_count)
 {
   DEBUG_TRACE_FUNCTION_CALL();
@@ -1046,11 +1044,6 @@ InductorModelInstance::ProcessRequests(
                 << Name() << "\": " << exception.what())
                 .c_str());
       }
-      catch (const std::exception& exception) {
-        TRITON_LOG_ERROR(
-            "Failed to read output tensors for model instance \""
-            << Name() << "\": " << exception.what());
-      }
 
       RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
           responses, request_count, all_response_failed, err);
@@ -1143,7 +1136,7 @@ InductorModelInstance::ProcessRequests(
 }
 
 void
-InductorModelInstance::ReadOutputTensors(
+ModelInstanceState::ReadOutputTensors(
     size_t total_batch_size, const std::vector<torch::IValue>& output_tensors,
     TRITONBACKEND_Request** requests, uint32_t request_count,
     std::vector<TRITONBACKEND_Response*>& responses)
@@ -1380,7 +1373,7 @@ InductorModelInstance::ReadOutputTensors(
 }
 
 void
-InductorModelInstance::RecordBackendTimestamp(
+ModelInstanceState::RecordBackendTimestamp(
     uint64_t* timestamp, void* cuda_event_ptr)
 {
   DEBUG_TRACE_FUNCTION_CALL();
@@ -1405,7 +1398,7 @@ InductorModelInstance::RecordBackendTimestamp(
 }
 
 void
-InductorModelInstance::SetCurrentCudaStream(
+ModelInstanceState::SetCurrentCudaStream(
     const cudaStream_t& stream, int device_id)
 {
   DEBUG_TRACE_FUNCTION_CALL();
@@ -1424,7 +1417,7 @@ InductorModelInstance::SetCurrentCudaStream(
 }
 
 void
-InductorModelInstance::SetInputTensors(
+ModelInstanceState::SetInputTensors(
     size_t total_batch_size, TRITONBACKEND_Request** requests,
     const uint32_t request_count,
     std::vector<TRITONBACKEND_Response*>* responses,
@@ -1754,13 +1747,13 @@ InductorModelInstance::SetInputTensors(
 }
 
 TRITONBACKEND_ModelInstance*
-InductorModelInstance::TritonModelInstance()
+ModelInstanceState::TritonModelInstance()
 {
   return BackendModelInstance::TritonModelInstance();
 }
 
 bool
-InductorModelInstance::ValidateBooleanSequenceControl(
+ModelInstanceState::ValidateBooleanSequenceControl(
     TritonJsonValue& sequence_batching, const std::string& control_kind,
     bool required)
 {
@@ -1828,7 +1821,7 @@ InductorModelInstance::ValidateBooleanSequenceControl(
 }
 
 void
-InductorModelInstance::ValidateInputs(const size_t expected_input_count)
+ModelInstanceState::ValidateInputs(const size_t expected_input_count)
 {
   DEBUG_TRACE_FUNCTION_CALL();
   std::vector<std::string> allowed_inputs{model_->GetModelCallSpec()};
@@ -2069,7 +2062,7 @@ InductorModelInstance::ValidateInputs(const size_t expected_input_count)
 }
 
 void
-InductorModelInstance::ValidateOutputs()
+ModelInstanceState::ValidateOutputs()
 {
   DEBUG_TRACE_FUNCTION_CALL();
   TritonJsonValue ios;
@@ -2351,7 +2344,7 @@ InductorModelInstance::ValidateOutputs()
 }
 
 bool
-InductorModelInstance::ValidateTypedSequenceControl(
+ModelInstanceState::ValidateTypedSequenceControl(
     TritonJsonValue& sequence_batching, const std::string& control_kind,
     bool required)
 {
@@ -2439,4 +2432,4 @@ InductorModelInstance::ValidateTypedSequenceControl(
 
   return have_control;
 }
-}  // namespace triton::backend::pytorch
+}  // namespace triton::backend::pytorch::pt2

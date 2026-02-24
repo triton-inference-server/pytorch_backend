@@ -1676,4 +1676,4 @@ ModelInstanceState::ValidateTypedSequenceControl(
 }
 
 
-}  // namespace triton::backend::pytorch
+}  // namespace triton::backend::pytorch::pt

@@ -173,4 +173,4 @@ class ModelInstanceState : public BackendModelInstance {
       const std::string& control_kind, bool required, bool* have_control);
 };
 
-}  // namespace triton::backend::pytorch
+}  // namespace triton::backend::pytorch::pt

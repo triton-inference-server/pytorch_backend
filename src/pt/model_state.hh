@@ -126,4 +126,4 @@ class ModelState : public triton::backend::BackendModel {
   TRITONSERVER_Error* ParseParameters();
 };
 
-}  // namespace triton::backend::pytorch
+}  // namespace triton::backend::pytorch::pt

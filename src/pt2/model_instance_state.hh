@@ -30,8 +30,8 @@
 #include <string>
 #include <unordered_map>
 
-#include "inductor_model.hh"
 #include "../libtorch_utils.h"
+#include "model_state.hh"
 #include "triton/backend/backend_common.h"
 #include "triton/backend/backend_input_collector.h"
 #include "triton/backend/backend_model.h"
@@ -53,11 +53,11 @@
 #endif
 
 namespace triton::backend::pytorch::pt2 {
-using TritonInductorModel = triton::backend::pytorch::pt2::InductorModel;
+using TritonModelState = triton::backend::pytorch::pt2::ModelState;
 using TritonJsonValue = triton::common::TritonJson::Value;
 using TritonNamingConvention = triton::backend::pytorch::NamingConvention;
 
-class InductorModelInstance : public triton::backend::BackendModelInstance {
+class ModelInstanceState : public triton::backend::BackendModelInstance {
  private:
   uint32_t batch_input_count_{0};
   cudaEvent_t compute_infer_start_event_;
@@ -68,7 +68,7 @@ class InductorModelInstance : public triton::backend::BackendModelInstance {
   std::unordered_map<std::string, int> input_index_map_;
   bool is_batching_supported_{false};
   bool is_dictionary_input_{false};
-  TritonInductorModel* model_{nullptr};
+  TritonModelState* model_{nullptr};
   std::string model_path_;
   std::unordered_map<std::string, TRITONSERVER_DataType> output_dtype_map_;
   std::unordered_map<std::string, int> output_index_map_;
@@ -77,24 +77,24 @@ class InductorModelInstance : public triton::backend::BackendModelInstance {
 #endif
 
  public:
-  InductorModelInstance(
-      TritonInductorModel* model,
+  ModelInstanceState(
+      TritonModelState* model,
       TRITONBACKEND_ModelInstance* triton_model_instance);
 
-  InductorModelInstance() = delete;
+  ModelInstanceState() = delete;
 
-  ~InductorModelInstance() override;
+  ~ModelInstanceState() override;
 
   void ClearCache();
 
-  [[nodiscard]] static InductorModelInstance* Create(
-      TritonInductorModel* model,
+  [[nodiscard]] static ModelInstanceState* Create(
+      TritonModelState* model,
       TRITONBACKEND_ModelInstance* triton_model_instance);
 
   void ProcessRequests(
       TRITONBACKEND_Request** requests, const uint32_t request_count);
 
-  [[nodiscard]] TritonInductorModel* InductorModel() const;
+  [[nodiscard]] TritonModelState* ModelState() const;
 
   /** triton::backend::BackendModelInstance implementation **/
 
@@ -163,4 +163,4 @@ class InductorModelInstance : public triton::backend::BackendModelInstance {
       TritonJsonValue& sequence_batching, const std::string& control_kind,
       bool required);
 };
-}  // namespace triton::backend::pytorch
+}  // namespace triton::backend::pytorch::pt2

@@ -24,7 +24,7 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "inductor_model.hh"
+#include "model_state.hh"
 
 #include <mutex>
 
@@ -52,7 +52,7 @@ using TritonBatchInput = triton::backend::BatchInput;
 using TritonBackendModel = triton::backend::BackendModel;
 using TritonJsonValue = triton::common::TritonJson::Value;
 
-InductorModel::InductorModel(TRITONBACKEND_Model* backend_model)
+ModelState::ModelState(TRITONBACKEND_Model* backend_model)
     : BackendModel{backend_model}
 {
   DEBUG_TRACE_FUNCTION_CALL();
@@ -63,7 +63,7 @@ InductorModel::InductorModel(TRITONBACKEND_Model* backend_model)
 }
 
 void
-InductorModel::AutoCompleteConfig()
+ModelState::AutoCompleteConfig()
 {
   DEBUG_TRACE_FUNCTION_CALL();
   TRITON_LOG_WARN(
@@ -73,35 +73,35 @@ InductorModel::AutoCompleteConfig()
 }
 
 const std::vector<triton::backend::BatchInput>&
-InductorModel::BatchInputs() const
+ModelState::BatchInputs() const
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::BatchInputs();
 }
 
 const std::vector<triton::backend::BatchOutput>&
-InductorModel::BatchOutputs() const
+ModelState::BatchOutputs() const
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::BatchOutputs();
 }
 
 bool
-InductorModel::CacheCleaningEnabled() const
+ModelState::CacheCleaningEnabled() const
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return cache_cleaning_enabled_;
 }
 
 void
-InductorModel::CacheCleaningEnabled(bool value)
+ModelState::CacheCleaningEnabled(bool value)
 {
   DEBUG_TRACE_FUNCTION_CALL();
   cache_cleaning_enabled_ = value;
 }
 
-InductorModel*
-InductorModel::Create(TRITONBACKEND_Model* triton_model)
+ModelState*
+ModelState::Create(TRITONBACKEND_Model* triton_model)
 {
   DEBUG_TRACE_FUNCTION_CALL();
   if (!triton_model)
@@ -109,7 +109,7 @@ InductorModel::Create(TRITONBACKEND_Model* triton_model)
         TRITONSERVER_ERROR_INTERNAL,
         "Argument `triton_model` cannot be `null`.");
 
-  auto aoti_model = new InductorModel{triton_model};
+  auto aoti_model = new ModelState{triton_model};
   bool auto_complete_config = false;
 
   if (auto err = TRITONBACKEND_ModelAutoCompleteConfig(
@@ -224,42 +224,42 @@ InductorModel::Create(TRITONBACKEND_Model* triton_model)
 }
 
 bool
-InductorModel::CudnnEnabled() const
+ModelState::CudnnEnabled() const
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return cudnn_enabled_;
 }
 
 void
-InductorModel::CudnnEnabled(bool value)
+ModelState::CudnnEnabled(bool value)
 {
   DEBUG_TRACE_FUNCTION_CALL();
   cudnn_enabled_ = value;
 }
 
 bool
-InductorModel::EnablePinnedInput() const
+ModelState::EnablePinnedInput() const
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::EnablePinnedInput();
 }
 
 bool
-InductorModel::EnablePinnedOutput() const
+ModelState::EnablePinnedOutput() const
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::EnablePinnedOutput();
 }
 
 const triton::backend::BatchOutput*
-InductorModel::FindBatchOutput(const std::string& output_name) const
+ModelState::FindBatchOutput(const std::string& output_name) const
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::FindBatchOutput(output_name);
 }
 
 std::vector<std::string>
-InductorModel::GetModelCallSpec()
+ModelState::GetModelCallSpec()
 {
   DEBUG_TRACE_FUNCTION_CALL();
   if (!model_loader_) {
@@ -273,7 +273,7 @@ InductorModel::GetModelCallSpec()
 }
 
 std::vector<torch::IValue>
-InductorModel::Forward(
+ModelState::Forward(
     const std::vector<torch::IValue>& inputs, void* stream_handle)
 {
   DEBUG_TRACE_FUNCTION_CALL();
@@ -304,35 +304,35 @@ InductorModel::Forward(
 }
 
 bool
-InductorModel::InferenceModeEnabled() const
+ModelState::InferenceModeEnabled() const
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return inference_mode_enabled_;
 }
 
 bool
-InductorModel::IsDictionaryInput() const
+ModelState::IsDictionaryInput() const
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return is_dictionary_input_;
 }
 
 bool
-InductorModel::IsInputRagged(const std::string& input_name) const
+ModelState::IsInputRagged(const std::string& input_name) const
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::IsInputRagged(input_name);
 }
 
 bool
-InductorModel::IsInputOptional(const std::string& input_name) const
+ModelState::IsInputOptional(const std::string& input_name) const
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::IsInputOptional(input_name);
 }
 
 void
-InductorModel::LoadModel(
+ModelState::LoadModel(
     const std::string& model_file_name, const torch::Device& device,
     uint32_t device_count, TRITONSERVER_InstanceGroupKind kind)
 {
@@ -441,49 +441,49 @@ InductorModel::LoadModel(
 }
 
 int
-InductorModel::MaxBatchSize() const
+ModelState::MaxBatchSize() const
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::MaxBatchSize();
 }
 
 const std::map<std::string, std::pair<int64_t, int64_t>>&
-InductorModel::ModelOutputs() const
+ModelState::ModelOutputs() const
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return model_outputs_;
 }
 
 const std::string&
-InductorModel::ModelPath() const
+ModelState::ModelPath() const
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return model_path_;
 }
 
 const std::string&
-InductorModel::Name() const
+ModelState::Name() const
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::Name();
 }
 
 bool
-InductorModel::OptimizedExecutionEnabled() const
+ModelState::OptimizedExecutionEnabled() const
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return optimized_execution_enabled_;
 }
 
 void
-InductorModel::OptimizedExecutionEnabled(bool value)
+ModelState::OptimizedExecutionEnabled(bool value)
 {
   DEBUG_TRACE_FUNCTION_CALL();
   optimized_execution_enabled_ = value;
 }
 
 void
-InductorModel::ParseParameters()
+ModelState::ParseParameters()
 {
   DEBUG_TRACE_FUNCTION_CALL();
   TritonJsonValue parameters;
@@ -652,58 +652,58 @@ InductorModel::ParseParameters()
 }
 
 const std::string&
-InductorModel::RepositoryPath() const
+ModelState::RepositoryPath() const
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::RepositoryPath();
 }
 
 void
-InductorModel::SetMaxBatchSize(int value)
+ModelState::SetMaxBatchSize(int value)
 {
   DEBUG_TRACE_FUNCTION_CALL();
   TritonBackendModel::SetMaxBatchSize(value);
 }
 
 TRITONSERVER_Error*
-InductorModel::SupportsFirstDimBatching(bool* value_out)
+ModelState::SupportsFirstDimBatching(bool* value_out)
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::SupportsFirstDimBatching(value_out);
 }
 
 TRITONBACKEND_MemoryManager*
-InductorModel::TritonMemoryManager()
+ModelState::TritonMemoryManager()
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::TritonMemoryManager();
 }
 
 TRITONBACKEND_Model*
-InductorModel::TritonModel()
+ModelState::TritonModel()
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::TritonModel();
 }
 
 TRITONSERVER_Server*
-InductorModel::TritonServer()
+ModelState::TritonServer()
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::TritonServer();
 }
 
 uint64_t
-InductorModel::Version() const
+ModelState::Version() const
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::Version();
 }
 
 bool
-InductorModel::WeightSharingEnabled() const
+ModelState::WeightSharingEnabled() const
 {
   DEBUG_TRACE_FUNCTION_CALL();
   return weight_sharing_enabled_;
 }
-}  // namespace triton::backend::pytorch
+}  // namespace triton::backend::pytorch::pt2

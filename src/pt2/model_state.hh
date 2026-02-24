@@ -61,7 +61,7 @@ constexpr char INDUCTOR_MODEL_NAME_DEFAULT[] = "model";
 
 using TorchModelLoader = torch::inductor::AOTIModelPackageLoader;
 
-class InductorModel : public triton::backend::BackendModel {
+class ModelState : public triton::backend::BackendModel {
  private:
   torch::Device device_{torch::kCPU};
   int32_t device_count_{0};
@@ -79,15 +79,15 @@ class InductorModel : public triton::backend::BackendModel {
   bool weight_sharing_enabled_{false};
 
  public:
-  InductorModel() = delete;
+  ModelState() = delete;
 
-  virtual ~InductorModel() = default;
+  virtual ~ModelState() = default;
 
   [[nodiscard]] bool CacheCleaningEnabled() const;
 
   void CacheCleaningEnabled(bool value);
 
-  [[nodiscard]] static InductorModel* Create(TRITONBACKEND_Model* triton_model);
+  [[nodiscard]] static ModelState* Create(TRITONBACKEND_Model* triton_model);
 
   [[nodiscard]] bool CudnnEnabled() const;
 
@@ -155,10 +155,10 @@ class InductorModel : public triton::backend::BackendModel {
   [[nodiscard]] uint64_t Version() const;
 
  private:
-  InductorModel(TRITONBACKEND_Model* backend_model);
+  ModelState(TRITONBACKEND_Model* backend_model);
 
   void AutoCompleteConfig();
 
   void ParseParameters();
 };
-}  // namespace triton::backend::pytorch
+}  // namespace triton::backend::pytorch::pt2

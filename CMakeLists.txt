@@ -329,8 +329,8 @@ add_library(
   src/triton_exception.cc
   src/pt/model_state.cc
   src/pt/model_instance_state.cc
-  src/pt2/inductor_model.cc
-  src/pt2/inductor_model_instance.cc
+  src/pt2/model_state.cc
+  src/pt2/model_instance_state.cc
 )
 
 add_library(
