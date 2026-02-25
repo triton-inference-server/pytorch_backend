@@ -1,4 +1,4 @@
-# Copyright 2019-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -51,6 +51,7 @@ option(TRITON_ENABLE_NVTX "Include nvtx markers collection in backend." OFF)
 option(TRITON_PYTORCH_ENABLE_TORCHTRT "Enable TorchTRT support" OFF)
 option(TRITON_PYTORCH_ENABLE_TORCHVISION "Enable Torchvision support" ON)
 option(TRITON_PYTORCH_NVSHMEM "Enable NVSHMEM support" ON)
+option(TRITON_PYTORCH_OPTREE "Enable OpTree support" OFF)
 
 set(TRITON_PYTORCH_DOCKER_IMAGE "" CACHE STRING "Docker image containing the PyTorch build required by backend.")
 set(TRITON_PYTORCH_INCLUDE_PATHS "" CACHE PATH "Paths to Torch includes")
@@ -111,6 +112,7 @@ message(TRACE "TRITON_ENABLE_NVTX: ${TRITON_ENABLE_NVTX}")
 message(TRACE "TRITON_PYTORCH_ENABLE_TORCHTRT: ${TRITON_PYTORCH_ENABLE_TORCHTRT}")
 message(TRACE "TRITON_PYTORCH_ENABLE_TORCHVISION: ${TRITON_PYTORCH_ENABLE_TORCHVISION}")
 message(TRACE "TRITON_PYTORCH_NVSHMEM: ${TRITON_PYTORCH_NVSHMEM}")
+message(TRACE "TRITON_PYTORCH_OPTREE: ${TRITON_PYTORCH_OPTREE}")
 message(TRACE "TRITON_PYTORCH_DOCKER_IMAGE: ${TRITON_PYTORCH_DOCKER_IMAGE}")
 message(TRACE "TRITON_PYTORCH_INCLUDE_PATHS: ${TRITON_PYTORCH_INCLUDE_PATHS}")
 message(TRACE "TRITON_PYTORCH_LIB_PATHS: ${TRITON_PYTORCH_LIB_PATHS}")
@@ -123,7 +125,6 @@ message(TRACE "RHEL_BUILD: ${RHEL_BUILD}")
 message(TRACE "LIB_DIR: ${LIB_DIR}")
 message(TRACE "LIBTORCH_LIBS_PATH: ${LIBTORCH_LIBS_PATH}")
 message(TRACE "PY_INSTALL_PATH: ${PY_INSTALL_PATH}")
-
 
 #
 # Dependencies
@@ -152,6 +153,56 @@ FetchContent_Declare(
   GIT_SHALLOW ON
 )
 FetchContent_MakeAvailable(repo-common repo-core repo-backend)
+
+include(ExternalProject)
+
+# Fetch and Build OpTree if enabled.
+if (${TRITON_PYTORCH_OPTREE})
+  set(optree_LIB_NAME ".liboptree.so")
+
+  # Find required Python packages
+  find_package(Python REQUIRED COMPONENTS Interpreter Development)
+
+  FetchContent_Declare(
+    repo-pybind11
+    GIT_REPOSITORY "https://github.com/pybind/pybind11"
+    GIT_TAG "v3.0.2"
+    GIT_SHALLOW ON
+    OVERRIDE_FIND_PACKAGE
+  )
+  FetchContent_MakeAvailable(repo-pybind11)
+
+  # Build OpTree as an external project
+  ExternalProject_Add(
+    extern-optree
+    GIT_REPOSITORY https://github.com/metaopt/optree.git
+    GIT_TAG        v0.19.0
+    CMAKE_ARGS
+      -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+      -DPython_EXECUTABLE=${Python_EXECUTABLE}
+      -DPython_EXTRA_LIBRARIES=${Python_LIBRARIES}
+      -DPython_INCLUDE_DIRS=${Python_INCLUDE_DIRS}
+      -DPYTHON_MODULE_EXTENSION=${optree_LIB_NAME}
+    INSTALL_COMMAND cp <BINARY_DIR>/lib/_C${optree_LIB_NAME} ${CMAKE_CURRENT_BINARY_DIR}/_C${optree_LIB_NAME}
+  )
+
+  # Get paths from ExternalProject
+  ExternalProject_Get_Property(extern-optree SOURCE_DIR)
+  ExternalProject_Get_Property(extern-optree BINARY_DIR)
+
+  set(optree_SOURCE_DIR ${SOURCE_DIR})
+  set(optree_BINARY_DIR ${BINARY_DIR})
+
+  message(TRACE "optree_SOURCE_DIR: ${optree_SOURCE_DIR}")
+  message(TRACE "optree_BINARY_DIR: ${optree_BINARY_DIR}")
+
+  # Create imported library target
+  add_library(optree SHARED IMPORTED)
+  set_target_properties(optree PROPERTIES
+      IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/_C${optree_LIB_NAME}"
+  )
+  add_dependencies(optree extern-optree)
+endif() # TRITON_PYTORCH_OPTREE
 
 #
 # CUDA
@@ -351,9 +402,19 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
 else()
   target_include_directories(
     triton-pytorch-backend
-    PRIVATE ${TRITON_PYTORCH_INCLUDE_PATHS}
+    PRIVATE
+      ${TRITON_PYTORCH_INCLUDE_PATHS}
   )
 endif() # TRITON_PYTORCH_DOCKER_BUILD
+
+if (${TRITON_PYTORCH_OPTREE})
+  target_include_directories(
+      triton-pytorch-backend
+      PRIVATE
+        "${optree_SOURCE_DIR}/include"
+        ${Python_INCLUDE_DIRS}
+  )
+endif() # TRITON_PYTORCH_OPTREE
 
 # Need to turn off -Werror due to Torchvision vision.h extern initialization
 # Unfortunately gcc does not provide a specific flag to ignore the specific
@@ -462,6 +523,15 @@ if(${TRITON_ENABLE_GPU})
   )
 endif() # TRITON_ENABLE_GPU
 
+if (${TRITON_PYTORCH_OPTREE})
+  target_link_libraries(
+    triton-pytorch-backend
+    PRIVATE
+      optree
+      ${Python_LIBRARIES}
+  )
+endif() # TRITON_PYTORCH_OPTREE
+
 #
 # Install
 #
@@ -489,6 +559,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
   install(
     FILES
       ${PT_LIB_PATHS}
+      ${CMAKE_CURRENT_BINARY_DIR}/_C${optree_LIB_NAME}
       ${CMAKE_CURRENT_BINARY_DIR}/LICENSE.pytorch
     DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/pytorch
   )
