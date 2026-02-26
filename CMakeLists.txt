@@ -87,7 +87,7 @@ else()
 endif()
 
 # Python.h needed by torch headers.
-find_package(Python3 REQUIRED COMPONENTS Development.Module)
+find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module)
 
 set(RHEL_BUILD OFF)
 set(LIB_DIR "lib")
@@ -105,26 +105,26 @@ if(LINUX)
   endif(${DISTRO_ID_LIKE} MATCHES "rhel|centos")
 endif(LINUX)
 
-message(TRACE "CMAKE_HOST_SYSTEM_PROCESSOR: ${CMAKE_HOST_SYSTEM_PROCESSOR}")
-message(TRACE "TRITON_ENABLE_GPU: ${TRITON_ENABLE_GPU}")
-message(TRACE "TRITON_ENABLE_STATS: ${TRITON_ENABLE_STATS}")
-message(TRACE "TRITON_ENABLE_NVTX: ${TRITON_ENABLE_NVTX}")
-message(TRACE "TRITON_PYTORCH_ENABLE_TORCHTRT: ${TRITON_PYTORCH_ENABLE_TORCHTRT}")
-message(TRACE "TRITON_PYTORCH_ENABLE_TORCHVISION: ${TRITON_PYTORCH_ENABLE_TORCHVISION}")
-message(TRACE "TRITON_PYTORCH_NVSHMEM: ${TRITON_PYTORCH_NVSHMEM}")
-message(TRACE "TRITON_PYTORCH_OPTREE: ${TRITON_PYTORCH_OPTREE}")
-message(TRACE "TRITON_PYTORCH_DOCKER_IMAGE: ${TRITON_PYTORCH_DOCKER_IMAGE}")
-message(TRACE "TRITON_PYTORCH_INCLUDE_PATHS: ${TRITON_PYTORCH_INCLUDE_PATHS}")
-message(TRACE "TRITON_PYTORCH_LIB_PATHS: ${TRITON_PYTORCH_LIB_PATHS}")
-message(TRACE "TRITON_REPO_ORGANIZATION: ${TRITON_REPO_ORGANIZATION}")
-message(TRACE "TRITON_BACKEND_REPO_TAG: ${TRITON_BACKEND_REPO_TAG}")
-message(TRACE "TRITON_CORE_REPO_TAG: ${TRITON_CORE_REPO_TAG}")
-message(TRACE "TRITON_COMMON_REPO_TAG: ${TRITON_COMMON_REPO_TAG}")
-message(TRACE "TRITON_PYTORCH_DOCKER_BUILD: ${TRITON_PYTORCH_DOCKER_BUILD}")
-message(TRACE "RHEL_BUILD: ${RHEL_BUILD}")
-message(TRACE "LIB_DIR: ${LIB_DIR}")
-message(TRACE "LIBTORCH_LIBS_PATH: ${LIBTORCH_LIBS_PATH}")
-message(TRACE "PY_INSTALL_PATH: ${PY_INSTALL_PATH}")
+message(VERBOSE "CMAKE_HOST_SYSTEM_PROCESSOR: ${CMAKE_HOST_SYSTEM_PROCESSOR}")
+message(VERBOSE "TRITON_ENABLE_GPU: ${TRITON_ENABLE_GPU}")
+message(VERBOSE "TRITON_ENABLE_STATS: ${TRITON_ENABLE_STATS}")
+message(VERBOSE "TRITON_ENABLE_NVTX: ${TRITON_ENABLE_NVTX}")
+message(VERBOSE "TRITON_PYTORCH_ENABLE_TORCHTRT: ${TRITON_PYTORCH_ENABLE_TORCHTRT}")
+message(VERBOSE "TRITON_PYTORCH_ENABLE_TORCHVISION: ${TRITON_PYTORCH_ENABLE_TORCHVISION}")
+message(VERBOSE "TRITON_PYTORCH_NVSHMEM: ${TRITON_PYTORCH_NVSHMEM}")
+message(VERBOSE "TRITON_PYTORCH_OPTREE: ${TRITON_PYTORCH_OPTREE}")
+message(VERBOSE "TRITON_PYTORCH_DOCKER_IMAGE: ${TRITON_PYTORCH_DOCKER_IMAGE}")
+message(VERBOSE "TRITON_PYTORCH_INCLUDE_PATHS: ${TRITON_PYTORCH_INCLUDE_PATHS}")
+message(VERBOSE "TRITON_PYTORCH_LIB_PATHS: ${TRITON_PYTORCH_LIB_PATHS}")
+message(VERBOSE "TRITON_REPO_ORGANIZATION: ${TRITON_REPO_ORGANIZATION}")
+message(VERBOSE "TRITON_BACKEND_REPO_TAG: ${TRITON_BACKEND_REPO_TAG}")
+message(VERBOSE "TRITON_CORE_REPO_TAG: ${TRITON_CORE_REPO_TAG}")
+message(VERBOSE "TRITON_COMMON_REPO_TAG: ${TRITON_COMMON_REPO_TAG}")
+message(VERBOSE "TRITON_PYTORCH_DOCKER_BUILD: ${TRITON_PYTORCH_DOCKER_BUILD}")
+message(VERBOSE "RHEL_BUILD: ${RHEL_BUILD}")
+message(VERBOSE "LIB_DIR: ${LIB_DIR}")
+message(VERBOSE "LIBTORCH_LIBS_PATH: ${LIBTORCH_LIBS_PATH}")
+message(VERBOSE "PY_INSTALL_PATH: ${PY_INSTALL_PATH}")
 
 #
 # Dependencies
@@ -154,34 +154,33 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(repo-common repo-core repo-backend)
 
-include(ExternalProject)
 
 # Fetch and Build OpTree if enabled.
 if (${TRITON_PYTORCH_OPTREE})
   set(optree_LIB_NAME ".liboptree.so")
 
-  # Find required Python packages
-  find_package(Python REQUIRED COMPONENTS Interpreter Development)
+  include(ExternalProject)
 
   FetchContent_Declare(
     repo-pybind11
     GIT_REPOSITORY "https://github.com/pybind/pybind11"
     GIT_TAG "v3.0.2"
-    GIT_SHALLOW ON
     OVERRIDE_FIND_PACKAGE
   )
   FetchContent_MakeAvailable(repo-pybind11)
 
+  message(VERBOSE "pybind11_DIR: ${pybind11_DIR}")
+
   # Build OpTree as an external project
   ExternalProject_Add(
     extern-optree
-    GIT_REPOSITORY https://github.com/metaopt/optree.git
-    GIT_TAG        v0.19.0
+    GIT_REPOSITORY "https://github.com/metaopt/optree.git"
+    GIT_TAG "v0.19.0"
     CMAKE_ARGS
       -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-      -DPython_EXECUTABLE=${Python_EXECUTABLE}
-      -DPython_EXTRA_LIBRARIES=${Python_LIBRARIES}
-      -DPython_INCLUDE_DIRS=${Python_INCLUDE_DIRS}
+      -DPython_EXECUTABLE=${Python3_EXECUTABLE}
+      -DPython_EXTRA_LIBRARIES=${Python3_LIBRARIES}
+      -DPython_INCLUDE_DIRS=${Python3_INCLUDE_DIRS}
       -DPYTHON_MODULE_EXTENSION=${optree_LIB_NAME}
     INSTALL_COMMAND cp <BINARY_DIR>/lib/_C${optree_LIB_NAME} ${CMAKE_CURRENT_BINARY_DIR}/_C${optree_LIB_NAME}
   )
@@ -193,8 +192,9 @@ if (${TRITON_PYTORCH_OPTREE})
   set(optree_SOURCE_DIR ${SOURCE_DIR})
   set(optree_BINARY_DIR ${BINARY_DIR})
 
-  message(TRACE "optree_SOURCE_DIR: ${optree_SOURCE_DIR}")
-  message(TRACE "optree_BINARY_DIR: ${optree_BINARY_DIR}")
+  message(VERBOSE "optree_SOURCE_DIR: ${optree_SOURCE_DIR}")
+  message(VERBOSE "optree_BINARY_DIR: ${optree_BINARY_DIR}")
+  message(VERBOSE "pybind11_INCLUDE_DIR: ${pybind11_INCLUDE_DIR}")
 
   # Create imported library target
   add_library(optree SHARED IMPORTED)
@@ -296,8 +296,8 @@ set(TORCHVISION_LIBS
     $<IF:$<BOOL:${RHEL_BUILD}>,libpng16.so.16,libpng16.so>
 )
 
-message(TRACE "LIBS_ARCH: ${LIBS_ARCH}")
-message(TRACE "LIBTORCH_LIBS: ${LIBTORCH_LIBS}")
+message(VERBOSE "LIBS_ARCH: ${LIBS_ARCH}")
+message(VERBOSE "LIBTORCH_LIBS: ${LIBTORCH_LIBS}")
 
 # The patchelf commands ensure the MKL libraries are loaded correctly during runtime
 # Without these, the framework/backend complains of missing libraries / symbols and
@@ -412,7 +412,7 @@ if (${TRITON_PYTORCH_OPTREE})
       triton-pytorch-backend
       PRIVATE
         "${optree_SOURCE_DIR}/include"
-        ${Python_INCLUDE_DIRS}
+        ${pybind11_INCLUDE_DIR}
   )
 endif() # TRITON_PYTORCH_OPTREE
 
@@ -501,8 +501,8 @@ else()
   ENDFOREACH(p)
 endif() # TRITON_PYTORCH_DOCKER_BUILD
 
-message(TRACE "TRITON_PYTORCH_LDFLAGS: ${TRITON_PYTORCH_LDFLAGS}")
-message(TRACE "TRITON_PYTORCH_LIBS: ${TRITON_PYTORCH_LIBS}")
+message(VERBOSE "TRITON_PYTORCH_LDFLAGS: ${TRITON_PYTORCH_LDFLAGS}")
+message(VERBOSE "TRITON_PYTORCH_LIBS: ${TRITON_PYTORCH_LIBS}")
 
 target_link_libraries(
   triton-pytorch-backend
@@ -528,7 +528,7 @@ if (${TRITON_PYTORCH_OPTREE})
     triton-pytorch-backend
     PRIVATE
       optree
-      ${Python_LIBRARIES}
+      ${Python3_LIBRARIES}
   )
 endif() # TRITON_PYTORCH_OPTREE
 
@@ -537,7 +537,7 @@ endif() # TRITON_PYTORCH_OPTREE
 #
 include(GNUInstallDirs)
 set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/TritonPyTorchBackend)
-message(TRACE "INSTALL_CONFIGDIR: ${INSTALL_CONFIGDIR}")
+message(VERBOSE "INSTALL_CONFIGDIR: ${INSTALL_CONFIGDIR}")
 
 install(
   TARGETS
@@ -554,7 +554,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     set(PT_LIB_PATHS ${PT_LIB_PATHS} "${CMAKE_CURRENT_BINARY_DIR}/${plib}")
   ENDFOREACH(plib)
 
-  message(TRACE "PT_LIB_PATHS: ${PT_LIB_PATHS}")
+  message(VERBOSE "PT_LIB_PATHS: ${PT_LIB_PATHS}")
 
   install(
     FILES
@@ -601,7 +601,7 @@ else()
     set(PT_LIB_PATHS ${PT_LIB_PATHS} "${TRITON_PYTORCH_LIB_PATHS}/${plib}")
   ENDFOREACH(plib)
 
-  message(TRACE "PT_LIB_PATHS: ${PT_LIB_PATHS}")
+  message(VERBOSE "PT_LIB_PATHS: ${PT_LIB_PATHS}")
 
   install(
     FILES
