@@ -160,7 +160,6 @@ if (${TRITON_PYTORCH_OPTREE})
   set(optree_LIB_NAME ".liboptree.so")
 
   include(ExternalProject)
-
   # Build OpTree as an external project
   ExternalProject_Add(
     extern-optree
@@ -379,6 +378,7 @@ target_include_directories(
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${Python3_INCLUDE_DIRS}
+    $<$<BOOL:${TRITON_PYTORCH_OPTREE}>:${optree_SOURCE_DIR}/include>
 )
 
 if (${TRITON_PYTORCH_DOCKER_BUILD})
@@ -396,15 +396,6 @@ else()
       ${TRITON_PYTORCH_INCLUDE_PATHS}
   )
 endif() # TRITON_PYTORCH_DOCKER_BUILD
-
-if (${TRITON_PYTORCH_OPTREE})
-  target_include_directories(
-      triton-pytorch-backend
-      PRIVATE
-        "${optree_SOURCE_DIR}/include"
-        ${pybind11_INCLUDE_DIR}
-  )
-endif() # TRITON_PYTORCH_OPTREE
 
 # Need to turn off -Werror due to Torchvision vision.h extern initialization
 # Unfortunately gcc does not provide a specific flag to ignore the specific
@@ -512,15 +503,6 @@ if(${TRITON_ENABLE_GPU})
       CUDA::cudart
   )
 endif() # TRITON_ENABLE_GPU
-
-if (${TRITON_PYTORCH_OPTREE})
-  target_link_libraries(
-    triton-pytorch-backend
-    PRIVATE
-      optree
-      ${Python3_LIBRARIES}
-  )
-endif() # TRITON_PYTORCH_OPTREE
 
 #
 # Install
