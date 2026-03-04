@@ -159,6 +159,8 @@ FetchContent_MakeAvailable(repo-common repo-core repo-backend)
 if (${TRITON_PYTORCH_OPTREE})
   set(optree_LIB_NAME ".liboptree.so")
 
+  find_package(pybind11 REQUIRED)
+
   include(ExternalProject)
   # Build OpTree as an external project
   ExternalProject_Add(
@@ -167,9 +169,7 @@ if (${TRITON_PYTORCH_OPTREE})
     GIT_TAG "v0.19.0"
     CMAKE_ARGS
       -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-      -DPython_EXECUTABLE=${Python3_EXECUTABLE}
-      -DPython_EXTRA_LIBRARIES=${Python3_LIBRARIES}
-      -DPython_INCLUDE_DIRS=${Python3_INCLUDE_DIRS}
+      -Dpybind11_DIR=${pybind11_DIR}
       -DPYTHON_MODULE_EXTENSION=${optree_LIB_NAME}
     INSTALL_COMMAND cp <BINARY_DIR>/lib/_C${optree_LIB_NAME} ${CMAKE_CURRENT_BINARY_DIR}/_C${optree_LIB_NAME}
   )
