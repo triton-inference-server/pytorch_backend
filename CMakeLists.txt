@@ -157,7 +157,7 @@ FetchContent_MakeAvailable(repo-common repo-core repo-backend)
 
 # Fetch and Build OpTree if enabled.
 if (${TRITON_PYTORCH_OPTREE})
-  set(optree_LIB_NAME ".liboptree.so")
+  set(optree_LIB_NAME_SUFFIX ".liboptree.cpython${Python3_VERSION_MAJOR}${Python3_VERSION_MINOR}-${CMAKE_LIBRARY_ARCHITECTURE}.so")
 
   find_package(pybind11 REQUIRED)
 
@@ -169,9 +169,12 @@ if (${TRITON_PYTORCH_OPTREE})
     GIT_TAG "v0.19.0"
     CMAKE_ARGS
       -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+      -DPython_EXECUTABLE=${Python3_EXECUTABLE}
+      -DPython_EXTRA_LIBRARIES=${Python3_LIBRARIES}
+      -DPython_INCLUDE_DIRS=${Python3_INCLUDE_DIRS}
       -Dpybind11_DIR=${pybind11_DIR}
-      -DPYTHON_MODULE_EXTENSION=${optree_LIB_NAME}
-    INSTALL_COMMAND cp <BINARY_DIR>/lib/_C${optree_LIB_NAME} ${CMAKE_CURRENT_BINARY_DIR}/_C${optree_LIB_NAME}
+      -DPYTHON_MODULE_EXTENSION=${optree_LIB_NAME_SUFFIX}
+    INSTALL_COMMAND cp <BINARY_DIR>/lib/_C${optree_LIB_NAME_SUFFIX} ${CMAKE_CURRENT_BINARY_DIR}/_C${optree_LIB_NAME_SUFFIX}
   )
 
   # Get paths from ExternalProject
@@ -188,7 +191,7 @@ if (${TRITON_PYTORCH_OPTREE})
   # Create imported library target
   add_library(optree SHARED IMPORTED)
   set_target_properties(optree PROPERTIES
-      IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/_C${optree_LIB_NAME}"
+      IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/_C${optree_LIB_NAME_SUFFIX}"
   )
   add_dependencies(optree extern-optree)
 endif() # TRITON_PYTORCH_OPTREE
@@ -525,7 +528,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
   install(
     FILES
       ${PT_LIB_PATHS}
-      ${CMAKE_CURRENT_BINARY_DIR}/_C${optree_LIB_NAME}
+      ${CMAKE_CURRENT_BINARY_DIR}/_C${optree_LIB_NAME_SUFFIX}
       ${CMAKE_CURRENT_BINARY_DIR}/LICENSE.pytorch
     DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/pytorch
   )
