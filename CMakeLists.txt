@@ -494,15 +494,9 @@ target_link_libraries(
     triton-backend-utils   # from repo-backend
     ${TRITON_PYTORCH_LDFLAGS}
     ${TRITON_PYTORCH_LIBS}
+    $<$<BOOL:${TRITON_PYTORCH_OPTREE}>:optree>
+    $<$<BOOL:${TRITON_ENABLE_GPU}>:CUDA::cudart>
 )
-
-if(${TRITON_ENABLE_GPU})
-  target_link_libraries(
-    triton-pytorch-backend
-    PRIVATE
-      CUDA::cudart
-  )
-endif() # TRITON_ENABLE_GPU
 
 #
 # Install
