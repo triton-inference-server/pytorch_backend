@@ -1,4 +1,4 @@
-// Copyright (c) 2020-24 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright (c) 2020-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -25,9 +25,9 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "libtorch_utils.h"
+#include <stdint.h>
 
-namespace triton { namespace backend { namespace pytorch {
-
+namespace triton::backend::pytorch {
 TRITONSERVER_DataType
 ConvertTorchTypeToDataType(const torch::ScalarType& stype)
 {
@@ -176,4 +176,26 @@ ConvertCUDAStatusToTritonError(
 }
 #endif
 
-}}}  // namespace triton::backend::pytorch
+std::ostream&
+operator<<(std::ostream& out, const NamingConvention& value) noexcept
+{
+  switch (value) {
+    case NamingConvention::NAMED_INDEX:
+      out << "NAMED_INDEX";
+      break;
+
+    case NamingConvention::FORWARD_ARGUMENT:
+      out << "FORWARD_ARGUMENT";
+      break;
+
+    case NamingConvention::STRICT_CONFIG_ORDERING:
+      out << "STRICT_CONFIG_ORDERING";
+      break;
+
+    default:
+      out << "UNKNOWN(" << static_cast<uint32_t>(value) << ")";
+      break;
+  }
+  return out;
+}
+}  // namespace triton::backend::pytorch

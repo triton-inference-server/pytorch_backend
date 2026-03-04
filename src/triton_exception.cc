@@ -1,4 +1,4 @@
-// Copyright 2019-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -24,17 +24,27 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#pragma once
-
+#include "triton_exception.hh"
 
 namespace triton::backend::pytorch {
+triton_exception::triton_exception(TRITONSERVER_Error* error)
+    : error_{error, TRITONSERVER_ErrorDelete}
+{
+  if (!error)
+    throw std::invalid_argument("Argument 'error' cannot be nullptr");
+}
 
-// The naming convention followed for inputs/outputs in the model configuration.
-// Outputs don't support FORWARD_ARGUMENT.
-enum class NamingConvention {
-  NAMED_INDEX,
-  FORWARD_ARGUMENT,
-  STRICT_CONFIG_ORDERING
-};
+triton_exception::triton_exception() : error_{nullptr} {}
 
+TRITONSERVER_Error*
+triton_exception::get_error() const noexcept
+{
+  return error_ ? error_.get() : nullptr;
+}
+
+const char*
+triton_exception::what() const noexcept
+{
+  return error_ ? TRITONSERVER_ErrorMessage(error_.get()) : nullptr;
+}
 }  // namespace triton::backend::pytorch

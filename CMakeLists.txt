@@ -324,9 +324,13 @@ add_library(
   src/libtorch.cc
   src/libtorch_utils.cc
   src/libtorch_utils.h
-  src/model_instance_state.cc
-  src/model_state.cc
   src/string_utils.cc
+  src/triton_utils.cc
+  src/triton_exception.cc
+  src/pt/model_state.cc
+  src/pt/model_instance_state.cc
+  src/pt2/model_state.cc
+  src/pt2/model_instance_state.cc
 )
 
 add_library(

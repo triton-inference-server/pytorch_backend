@@ -1,4 +1,4 @@
-// Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -26,6 +26,10 @@
 
 #pragma once
 
+#include <ostream>
+#include <string>
+#include <utility>
+
 #include "triton/backend/backend_common.h"
 #include "triton/core/tritonserver.h"
 
@@ -41,12 +45,13 @@
 #pragma warning(pop)
 #pragma GCC diagnostic pop
 
-namespace triton { namespace backend { namespace pytorch {
-
+namespace triton::backend::pytorch {
 TRITONSERVER_DataType ConvertTorchTypeToDataType(
     const torch::ScalarType& ttype);
+
 std::pair<bool, torch::ScalarType> ConvertDataTypeToTorchType(
     const TRITONSERVER_DataType dtype);
+
 std::pair<bool, torch::ScalarType> ModelConfigDataTypeToTorchType(
     const std::string& data_type_str);
 
@@ -69,4 +74,14 @@ TRITONSERVER_Error* ParseParameter(
     triton::common::TritonJson::Value& params, const std::string& mkey,
     int* value);
 
-}}}  // namespace triton::backend::pytorch
+// The naming convention followed for inputs/outputs in the model configuration.
+// Outputs don't support FORWARD_ARGUMENT.
+enum class NamingConvention {
+  NAMED_INDEX,
+  FORWARD_ARGUMENT,
+  STRICT_CONFIG_ORDERING,
+};
+
+std::ostream& operator<<(
+    std::ostream& out, const NamingConvention& value) noexcept;
+}  // namespace triton::backend::pytorch
