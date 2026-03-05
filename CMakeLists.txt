@@ -157,10 +157,11 @@ FetchContent_MakeAvailable(repo-common repo-core repo-backend)
 
 # Fetch and Build OpTree if enabled.
 if (${TRITON_PYTORCH_OPTREE})
-  set(optree_LIB_NAME ".liboptree.so")
+  set(optree_LIB_NAME_SUFFIX ".liboptree.cpython${Python3_VERSION_MAJOR}${Python3_VERSION_MINOR}-${CMAKE_LIBRARY_ARCHITECTURE}.so")
+
+  find_package(pybind11 REQUIRED)
 
   include(ExternalProject)
-
   # Build OpTree as an external project
   ExternalProject_Add(
     extern-optree
@@ -171,8 +172,9 @@ if (${TRITON_PYTORCH_OPTREE})
       -DPython_EXECUTABLE=${Python3_EXECUTABLE}
       -DPython_EXTRA_LIBRARIES=${Python3_LIBRARIES}
       -DPython_INCLUDE_DIRS=${Python3_INCLUDE_DIRS}
-      -DPYTHON_MODULE_EXTENSION=${optree_LIB_NAME}
-    INSTALL_COMMAND cp <BINARY_DIR>/lib/_C${optree_LIB_NAME} ${CMAKE_CURRENT_BINARY_DIR}/_C${optree_LIB_NAME}
+      -Dpybind11_DIR=${pybind11_DIR}
+      -DPYTHON_MODULE_EXTENSION=${optree_LIB_NAME_SUFFIX}
+    INSTALL_COMMAND cp <BINARY_DIR>/lib/_C${optree_LIB_NAME_SUFFIX} ${CMAKE_CURRENT_BINARY_DIR}/_C${optree_LIB_NAME_SUFFIX}
   )
 
   # Get paths from ExternalProject
@@ -189,7 +191,7 @@ if (${TRITON_PYTORCH_OPTREE})
   # Create imported library target
   add_library(optree SHARED IMPORTED)
   set_target_properties(optree PROPERTIES
-      IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/_C${optree_LIB_NAME}"
+      IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/_C${optree_LIB_NAME_SUFFIX}"
   )
   add_dependencies(optree extern-optree)
 endif() # TRITON_PYTORCH_OPTREE
@@ -243,6 +245,8 @@ if (${TRITON_PYTORCH_ENABLE_TORCHVISION})
       libtorchvision.so.1
   )
 endif() # TRITON_PYTORCH_ENABLE_TORCHVISION
+
+message(VERBOSE "PT_LIBS: ${PT_LIBS}")
 
 if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
   set(PT_LIBS
@@ -379,6 +383,7 @@ target_include_directories(
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${Python3_INCLUDE_DIRS}
+    $<$<BOOL:${TRITON_PYTORCH_OPTREE}>:${optree_SOURCE_DIR}/include>
 )
 
 if (${TRITON_PYTORCH_DOCKER_BUILD})
@@ -396,15 +401,6 @@ else()
       ${TRITON_PYTORCH_INCLUDE_PATHS}
   )
 endif() # TRITON_PYTORCH_DOCKER_BUILD
-
-if (${TRITON_PYTORCH_OPTREE})
-  target_include_directories(
-      triton-pytorch-backend
-      PRIVATE
-        "${optree_SOURCE_DIR}/include"
-        ${pybind11_INCLUDE_DIR}
-  )
-endif() # TRITON_PYTORCH_OPTREE
 
 # Need to turn off -Werror due to Torchvision vision.h extern initialization
 # Unfortunately gcc does not provide a specific flag to ignore the specific
@@ -503,24 +499,9 @@ target_link_libraries(
     triton-backend-utils   # from repo-backend
     ${TRITON_PYTORCH_LDFLAGS}
     ${TRITON_PYTORCH_LIBS}
+    $<$<BOOL:${TRITON_PYTORCH_OPTREE}>:optree>
+    $<$<BOOL:${TRITON_ENABLE_GPU}>:CUDA::cudart>
 )
-
-if(${TRITON_ENABLE_GPU})
-  target_link_libraries(
-    triton-pytorch-backend
-    PRIVATE
-      CUDA::cudart
-  )
-endif() # TRITON_ENABLE_GPU
-
-if (${TRITON_PYTORCH_OPTREE})
-  target_link_libraries(
-    triton-pytorch-backend
-    PRIVATE
-      optree
-      ${Python3_LIBRARIES}
-  )
-endif() # TRITON_PYTORCH_OPTREE
 
 #
 # Install
@@ -549,7 +530,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
   install(
     FILES
       ${PT_LIB_PATHS}
-      ${CMAKE_CURRENT_BINARY_DIR}/_C${optree_LIB_NAME}
+      $<$<BOOL:${TRITON_PYTORCH_OPTREE}>:${CMAKE_CURRENT_BINARY_DIR}/_C${optree_LIB_NAME_SUFFIX}>
       ${CMAKE_CURRENT_BINARY_DIR}/LICENSE.pytorch
     DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/pytorch
   )
