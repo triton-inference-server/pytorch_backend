@@ -81,7 +81,7 @@ Currently, Triton requires that a specially patched version of PyTorch be used w
 The full source for these PyTorch versions are available as Docker images from
 [NGC](https://ngc.nvidia.com).
 
-For example, the PyTorch version compatible with the 25.09 release of Triton is available as `nvcr.io/nvidia/pytorch:26.02-py3` which supports PyTorch version `2.11.0a0`.
+For example, the PyTorch version compatible with the 26.02 release of Triton is available as `nvcr.io/nvidia/pytorch:26.02-py3` which supports PyTorch version `2.11.0a0`.
 
 > [!NOTE]
 > Additional details and version information can be found in the container's
