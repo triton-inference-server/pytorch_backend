@@ -1,4 +1,4 @@
-# Copyright 2019-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -51,6 +51,7 @@ option(TRITON_ENABLE_NVTX "Include nvtx markers collection in backend." OFF)
 option(TRITON_PYTORCH_ENABLE_TORCHTRT "Enable TorchTRT support" OFF)
 option(TRITON_PYTORCH_ENABLE_TORCHVISION "Enable Torchvision support" ON)
 option(TRITON_PYTORCH_NVSHMEM "Enable NVSHMEM support" ON)
+option(TRITON_PYTORCH_OPTREE "Enable OpTree support" OFF)
 
 set(TRITON_PYTORCH_DOCKER_IMAGE "" CACHE STRING "Docker image containing the PyTorch build required by backend.")
 set(TRITON_PYTORCH_INCLUDE_PATHS "" CACHE PATH "Paths to Torch includes")
@@ -86,7 +87,7 @@ else()
 endif()
 
 # Python.h needed by torch headers.
-find_package(Python3 REQUIRED COMPONENTS Development.Module)
+find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module)
 
 set(RHEL_BUILD OFF)
 set(LIB_DIR "lib")
@@ -111,6 +112,7 @@ message(TRACE "TRITON_ENABLE_NVTX: ${TRITON_ENABLE_NVTX}")
 message(TRACE "TRITON_PYTORCH_ENABLE_TORCHTRT: ${TRITON_PYTORCH_ENABLE_TORCHTRT}")
 message(TRACE "TRITON_PYTORCH_ENABLE_TORCHVISION: ${TRITON_PYTORCH_ENABLE_TORCHVISION}")
 message(TRACE "TRITON_PYTORCH_NVSHMEM: ${TRITON_PYTORCH_NVSHMEM}")
+message(TRACE "TRITON_PYTORCH_OPTREE: ${TRITON_PYTORCH_OPTREE}")
 message(TRACE "TRITON_PYTORCH_DOCKER_IMAGE: ${TRITON_PYTORCH_DOCKER_IMAGE}")
 message(TRACE "TRITON_PYTORCH_INCLUDE_PATHS: ${TRITON_PYTORCH_INCLUDE_PATHS}")
 message(TRACE "TRITON_PYTORCH_LIB_PATHS: ${TRITON_PYTORCH_LIB_PATHS}")
@@ -123,7 +125,6 @@ message(TRACE "RHEL_BUILD: ${RHEL_BUILD}")
 message(TRACE "LIB_DIR: ${LIB_DIR}")
 message(TRACE "LIBTORCH_LIBS_PATH: ${LIBTORCH_LIBS_PATH}")
 message(TRACE "PY_INSTALL_PATH: ${PY_INSTALL_PATH}")
-
 
 #
 # Dependencies
@@ -152,6 +153,48 @@ FetchContent_Declare(
   GIT_SHALLOW ON
 )
 FetchContent_MakeAvailable(repo-common repo-core repo-backend)
+
+
+# Fetch and Build OpTree if enabled.
+if (${TRITON_PYTORCH_OPTREE})
+  set(optree_LIB_NAME_SUFFIX ".liboptree.cpython${Python3_VERSION_MAJOR}${Python3_VERSION_MINOR}-${CMAKE_LIBRARY_ARCHITECTURE}.so")
+
+  find_package(pybind11 REQUIRED)
+
+  include(ExternalProject)
+  # Build OpTree as an external project
+  ExternalProject_Add(
+    extern-optree
+    GIT_REPOSITORY "https://github.com/metaopt/optree.git"
+    GIT_TAG "v0.19.0"
+    CMAKE_ARGS
+      -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+      -DPython_EXECUTABLE=${Python3_EXECUTABLE}
+      -DPython_EXTRA_LIBRARIES=${Python3_LIBRARIES}
+      -DPython_INCLUDE_DIRS=${Python3_INCLUDE_DIRS}
+      -Dpybind11_DIR=${pybind11_DIR}
+      -DPYTHON_MODULE_EXTENSION=${optree_LIB_NAME_SUFFIX}
+    INSTALL_COMMAND cp <BINARY_DIR>/lib/_C${optree_LIB_NAME_SUFFIX} ${CMAKE_CURRENT_BINARY_DIR}/_C${optree_LIB_NAME_SUFFIX}
+  )
+
+  # Get paths from ExternalProject
+  ExternalProject_Get_Property(extern-optree SOURCE_DIR)
+  ExternalProject_Get_Property(extern-optree BINARY_DIR)
+
+  set(optree_SOURCE_DIR ${SOURCE_DIR})
+  set(optree_BINARY_DIR ${BINARY_DIR})
+
+  message(TRACE "optree_SOURCE_DIR: ${optree_SOURCE_DIR}")
+  message(TRACE "optree_BINARY_DIR: ${optree_BINARY_DIR}")
+  message(TRACE "pybind11_INCLUDE_DIR: ${pybind11_INCLUDE_DIR}")
+
+  # Create imported library target
+  add_library(optree SHARED IMPORTED)
+  set_target_properties(optree PROPERTIES
+      IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/_C${optree_LIB_NAME_SUFFIX}"
+  )
+  add_dependencies(optree extern-optree)
+endif() # TRITON_PYTORCH_OPTREE
 
 #
 # CUDA
@@ -202,6 +245,8 @@ if (${TRITON_PYTORCH_ENABLE_TORCHVISION})
       libtorchvision.so.1
   )
 endif() # TRITON_PYTORCH_ENABLE_TORCHVISION
+
+message(VERBOSE "PT_LIBS: ${PT_LIBS}")
 
 if (${TRITON_PYTORCH_ENABLE_TORCHTRT})
   set(PT_LIBS
@@ -342,6 +387,7 @@ target_include_directories(
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${Python3_INCLUDE_DIRS}
+    $<$<BOOL:${TRITON_PYTORCH_OPTREE}>:${optree_SOURCE_DIR}/include>
 )
 
 if (${TRITON_PYTORCH_DOCKER_BUILD})
@@ -355,7 +401,8 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
 else()
   target_include_directories(
     triton-pytorch-backend
-    PRIVATE ${TRITON_PYTORCH_INCLUDE_PATHS}
+    PRIVATE
+      ${TRITON_PYTORCH_INCLUDE_PATHS}
   )
 endif() # TRITON_PYTORCH_DOCKER_BUILD
 
@@ -456,15 +503,9 @@ target_link_libraries(
     triton-backend-utils   # from repo-backend
     ${TRITON_PYTORCH_LDFLAGS}
     ${TRITON_PYTORCH_LIBS}
+    $<$<BOOL:${TRITON_PYTORCH_OPTREE}>:optree>
+    $<$<BOOL:${TRITON_ENABLE_GPU}>:CUDA::cudart>
 )
-
-if(${TRITON_ENABLE_GPU})
-  target_link_libraries(
-    triton-pytorch-backend
-    PRIVATE
-      CUDA::cudart
-  )
-endif() # TRITON_ENABLE_GPU
 
 #
 # Install
@@ -493,6 +534,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
   install(
     FILES
       ${PT_LIB_PATHS}
+      $<$<BOOL:${TRITON_PYTORCH_OPTREE}>:${CMAKE_CURRENT_BINARY_DIR}/_C${optree_LIB_NAME_SUFFIX}>
       ${CMAKE_CURRENT_BINARY_DIR}/LICENSE.pytorch
     DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/pytorch
   )
