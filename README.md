@@ -81,11 +81,11 @@ Currently, Triton requires that a specially patched version of PyTorch be used w
 The full source for these PyTorch versions are available as Docker images from
 [NGC](https://ngc.nvidia.com).
 
-For example, the PyTorch version compatible with the 25.09 release of Triton is available as `nvcr.io/nvidia/pytorch:25.09-py3` which supports PyTorch version `2.9.0a0`.
+For example, the PyTorch version compatible with the 26.02 release of Triton is available as `nvcr.io/nvidia/pytorch:26.02-py3` which supports PyTorch version `2.11.0a0`.
 
 > [!NOTE]
 > Additional details and version information can be found in the container's
-> [release notes](https://docs.nvidia.com/deeplearning/frameworks/pytorch-release-notes/rel-25-09.html#rel-25-09).
+> [release notes](https://docs.nvidia.com/deeplearning/frameworks/pytorch-release-notes/rel-26-02.html#rel-26-02).
 
 Copy over the LibTorch and TorchVision headers and libraries from the
 [PyTorch NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch)
@@ -101,6 +101,30 @@ make install
 
 ## Using the PyTorch Backend
 
+### AOT Inductor Support (Beta)
+
+Starting with the 26.03 release of Triton, support for ahead-of-time (AOT) inductor compiled and packaged model archives is available.
+The new model archive package (PT2) can be generated using the following example, and generally uses the `.pt2` file extension.
+
+```python
+    ep = torch.export.export(model, sample_inputs)
+    torch._inductor.compile_and_package(ep, "model.pt2")
+```
+
+The model repository should look like:
+
+```bash
+model_repository/
+`-- model_directory
+    |-- 1
+    |   `-- model.pt2
+    `-- config.pbtxt
+```
+
+> [!Note]
+> As of the 26.03 release of Triton, the input and output types supported by the backend are tensors and lists of tensors.
+> Support for Python strings, lists of strings, and dictionaries is in-development but not yet available.
+
 ### PyTorch 2.0 Models
 
 PyTorch 2.0 features are available.
@@ -108,6 +132,7 @@ However, Triton's PyTorch backend requires a serialized representation of the mo
 The serialized representation of the model can be generated using PyTorch's
 [`torch.save()`](https://docs.pytorch.org/tutorials/beginner/saving_loading_models.html#id1)
 function to generate the `model.pt` file.
+Support for PyTorch's new [PT2 model archive package](https://docs.pytorch.org/docs/stable/user_guide/torch_compiler/export/pt2_archive.html) is currently in-development and can be tested as of Triton's 26.03 release.
 
 The model repository should look like:
 
@@ -147,7 +172,18 @@ Triton exposes some flags to control the execution mode of the TorchScript model
   The model config specifying the option would look like:
 
   ```proto
-  default_model_name: "another_file_name.pt"
+  default_model_name: "another_file_name.pt2"
+  ```
+
+* `platform`:
+  Instructs the Triton PyTorch backend to load the model using either the AOT Inductor or legacy LibTorch framework.
+  Legacy LibTorch framework is selected using `pytorch_libtorch`.
+  AOT Inductor framework is selected using `torch_aoti`.
+
+  The model config specifying the platform would look like:
+
+  ```proto
+  platform: "torch_aoti"
   ```
 
 ### Parameters
