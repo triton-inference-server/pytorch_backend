@@ -1,5 +1,5 @@
 <!--
-# Copyright 2020-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -106,9 +106,11 @@ make install
 Starting with the 26.03 release of Triton, support for ahead-of-time (AOT) inductor compiled and packaged model archives is available.
 The new model archive package (PT2) can be generated using the following example, and generally uses the `.pt2` file extension.
 
+Example Python code for creating a `model.pt2` packaged model archive.
+
 ```python
     ep = torch.export.export(model, sample_inputs)
-    torch._inductor.compile_and_package(ep, "model.pt2")
+    torch._inductor.compile_and_package(ep, OUTPUT_FOLDER + "/model.pt2")
 ```
 
 The model repository should look like:
@@ -133,6 +135,13 @@ The serialized representation of the model can be generated using PyTorch's
 [`torch.save()`](https://docs.pytorch.org/tutorials/beginner/saving_loading_models.html#id1)
 function to generate the `model.pt` file.
 Support for PyTorch's new [PT2 model archive package](https://docs.pytorch.org/docs/stable/user_guide/torch_compiler/export/pt2_archive.html) is currently in-development and can be tested as of Triton's 26.03 release.
+
+Example Python code for creating `model.pt` packaged model archive:
+
+```python
+  traced = torch.jit.script(model)
+  traced.save(OUTPUT_FOLDER + "/model.pt")
+```
 
 The model repository should look like:
 
