@@ -31,6 +31,7 @@
 #include <unordered_map>
 
 #include "../libtorch_utils.h"
+#include "io_data.hh"
 #include "model_state.hh"
 #include "triton/backend/backend_common.h"
 #include "triton/backend/backend_input_collector.h"
@@ -65,13 +66,11 @@ class ModelInstanceState : public triton::backend::BackendModelInstance {
   cudaEvent_t compute_output_start_event_;
   torch::Device device_{torch::kCPU};
   int device_count_{0};
-  std::unordered_map<std::string, int> input_index_map_;
   bool is_batching_supported_{false};
-  bool is_dictionary_input_{false};
+  pt2::io_data map_inputs_;
+  pt2::io_data map_outputs_;
   TritonModelState* model_{nullptr};
   std::string model_path_;
-  std::unordered_map<std::string, TRITONSERVER_DataType> output_dtype_map_;
-  std::unordered_map<std::string, int> output_index_map_;
 #ifdef TRITON_ENABLE_GPU
   std::vector<cudaStream_t> stream_vector_;
 #endif
@@ -115,17 +114,12 @@ class ModelInstanceState : public triton::backend::BackendModelInstance {
   [[nodiscard]] TRITONBACKEND_ModelInstance* TritonModelInstance();
 
  private:
-  void AddInputToMap(
-      TritonNamingConvention naming_convention,
-      const std::vector<std::string>& allowed_inputs,
-      const std::string& io_name, uint32_t index);
-
   void CreateCudaEvents(int32_t device_id);
 
   void Execute(
       std::vector<TRITONBACKEND_Response*>* responses, uint32_t response_count,
-      std::vector<torch::IValue>& input_tensors,
-      std::vector<torch::IValue>& output_tensors);
+      std::vector<torch::Tensor>& input_tensors,
+      std::vector<torch::Tensor>& output_tensors);
 
   [[nodiscard]] float GetCudaEventElapsedTime(
       const cudaEvent_t& start_event, const cudaEvent_t& end_event);
@@ -136,7 +130,7 @@ class ModelInstanceState : public triton::backend::BackendModelInstance {
       const std::vector<std::string>& allowed_ios);
 
   void ReadOutputTensors(
-      size_t total_batch_size, const std::vector<torch::IValue>& output_tensors,
+      size_t total_batch_size, const std::vector<torch::Tensor>& output_tensors,
       TRITONBACKEND_Request** requests, uint32_t request_count,
       std::vector<TRITONBACKEND_Response*>& responses);
 
@@ -149,7 +143,7 @@ class ModelInstanceState : public triton::backend::BackendModelInstance {
       uint32_t request_count, std::vector<TRITONBACKEND_Response*>* responses,
       triton::backend::BackendInputCollector* collector,
       std::vector<const char*>* input_names,
-      std::vector<torch::IValue>* input_tensors, bool* cuda_copy);
+      std::vector<torch::Tensor>* input_tensors, bool* cuda_copy);
 
   [[nodiscard]] bool ValidateBooleanSequenceControl(
       TritonJsonValue& sequence_batching, const std::string& control_kind,

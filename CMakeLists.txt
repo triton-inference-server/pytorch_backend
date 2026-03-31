@@ -376,6 +376,9 @@ add_library(
   src/pt/model_instance_state.cc
   src/pt2/model_state.cc
   src/pt2/model_instance_state.cc
+  src/pt2/call_spec.cc
+  src/pt2/call_spec_type.cc
+  src/pt2/io_data.cc
 )
 
 add_library(
