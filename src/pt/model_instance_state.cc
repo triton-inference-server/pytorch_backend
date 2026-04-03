@@ -800,6 +800,12 @@ ModelInstanceState::ProcessRequests(
     }
   }
 
+#ifdef TRITON_ENABLE_GPU
+  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU && invalid_index) {
+    cudaStreamSynchronize(GetCudaStreamByInstanceKind());
+  }
+#endif
+
   uint64_t exec_end_ns = 0;
   SET_TIMESTAMP(exec_end_ns);
 
