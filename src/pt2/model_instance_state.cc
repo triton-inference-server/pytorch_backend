@@ -1851,8 +1851,12 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_count)
   //
   //   [1]                → tree_def for the outer (args, kwargs) tuple
   //   ["children_spec"]  → array of two children: [args_tuple, kwargs_dict]
-  //   [0]                → the args_tuple node (kwargs dict is always empty)
+  //   [0]                → the args_tuple node
   //   ["children_spec"]  → one entry per positional tensor argument
+  //
+  // We also navigate to [1] (the kwargs_dict node) and assert its
+  // children_spec is empty — models exported with tensor kwargs are rejected
+  // because Triton has no mechanism to supply named keyword arguments.
   //
   // IndexAsObject / MemberAsArray return nullptr on success, so chaining them
   // with && short-circuits at the first failure.
@@ -1870,16 +1874,29 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_count)
     TritonJsonValue outer_children;  // outer_tree["children_spec"]  — [args_tuple, kwargs_dict]
     TritonJsonValue args_tree;       // outer_children[0]            — the args tuple node
     TritonJsonValue args_children;   // args_tree["children_spec"]   — one entry per input tensor
+    TritonJsonValue kwargs_tree;     // outer_children[1]            — the kwargs dict node
+    TritonJsonValue kwargs_children; // kwargs_tree["children_spec"] — one entry per kwarg tensor
     bool nav_ok =
         (in_spec_doc.IndexAsObject(1, &outer_tree) == nullptr) &&
         (outer_tree.MemberAsArray("children_spec", &outer_children) == nullptr) &&
         (outer_children.IndexAsObject(0, &args_tree) == nullptr) &&
-        (args_tree.MemberAsArray("children_spec", &args_children) == nullptr);
+        (args_tree.MemberAsArray("children_spec", &args_children) == nullptr) &&
+        (outer_children.IndexAsObject(1, &kwargs_tree) == nullptr) &&
+        (kwargs_tree.MemberAsArray("children_spec", &kwargs_children) == nullptr);
     if (!nav_ok) {
       THROW_TRITON_EXCEPTION(
           TRITONSERVER_ERROR_INTERNAL,
           "Unexpected in_spec pytree structure for model \"" << Name() << "\": "
               << call_spec[0].substr(0, 200));
+    }
+    if (kwargs_children.ArraySize() > 0) {
+      THROW_TRITON_EXCEPTION(
+          TRITONSERVER_ERROR_INVALID_ARG,
+          "Model \"" << Name() << "\" was exported with "
+              << kwargs_children.ArraySize()
+              << " keyword-argument tensor input(s), which are not supported. "
+              << "Re-export using only positional arguments: "
+              << "torch.export.export(model, args=(x1, x2, ...), kwargs={})");
     }
     model_input_count = static_cast<size_t>(args_children.ArraySize());
   }
