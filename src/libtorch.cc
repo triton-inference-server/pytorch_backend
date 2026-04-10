@@ -133,11 +133,6 @@ GetModelInfo(
   RETURN_IF_ERROR(
       TRITONBACKEND_ModelRepository(model, &artifact_type, &location));
 
-  TRITON_LOG_INFO(
-      "TRITONBACKEND_ModelInitialize: " << model_name << " (version "
-                                        << model_version
-                                        << ") location=" << location)
-
   try {
     std::lock_guard lock{model_is_pt2_map_mutex};
     auto it = model_is_pt2_map.find(static_cast<void*>(model));
@@ -206,11 +201,6 @@ GetModelInstanceInfo(
   RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceDeviceId(instance, &device_id));
 
   RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceKind(instance, &kind));
-
-  TRITON_LOG_INFO(
-      "TRITONBACKEND_ModelInstanceInitialize: "
-      << instance_name << " (" << TRITONSERVER_InstanceGroupKindString(kind)
-      << " device " << device_id << ")");
 
   return nullptr;  // success
 }
