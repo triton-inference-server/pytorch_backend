@@ -1824,20 +1824,89 @@ void
 ModelInstanceState::ValidateInputs(const size_t expected_input_count)
 {
   DEBUG_TRACE_FUNCTION_CALL();
-  std::vector<std::string> allowed_inputs{model_->GetModelCallSpec()};
-
-  if (allowed_inputs.size() != expected_input_count) {
-    DEBUG_TRACE_ERROR(
-        "Failed to load model \""
-        << Name() << "\" configuration expects " << expected_input_count
-        << " inputs, but model expects " << allowed_inputs.size()
-        << " inputs.");
+  // get_call_spec() returns [in_spec, out_spec] — always exactly 2 strings.
+  // in_spec is a pytree spec "[<header_int>, <tree_def_object>]" produced by
+  // treespec_dumps().  The outer tuple encodes (args, kwargs), so in_spec is:
+  //   [1, {"type": "builtins.tuple", ..., "children_spec": [
+  //       {"type": "builtins.tuple", ..., "children_spec": [<N leaf nodes>]},
+  //       {"type": "builtins.dict",  ..., "children_spec": []}
+  //   ]}]
+  // json[0] is always 1 — it counts the outer (args, kwargs) wrapper as one
+  // node, NOT the number of inputs.  True count: in_spec[1]["children_spec"][0]
+  // ["children_spec"].size().
+  std::vector<std::string> call_spec{model_->GetModelCallSpec()};
+  if (call_spec.size() != 2 || call_spec[0].empty() || call_spec[0][0] != '[') {
     THROW_TRITON_EXCEPTION(
         TRITONSERVER_ERROR_INTERNAL,
-        "Failed to load model \""
-            << Name() << "\" configuration expects " << expected_input_count
-            << " inputs, but model expects " << allowed_inputs.size()
-            << " inputs.");
+        "Unexpected get_call_spec() format for model \"" << Name() << "\"");
+  }
+
+  // Parse in_spec with TritonJson to count the positional tensor inputs.
+  //
+  // TritonJson::Value::Parse accepts a top-level JSON array (rapidjson handles
+  // both objects and arrays).  in_spec is [<int>, <object>], so element [0] is
+  // an integer (skipped) and element [1] is the tree_def object.
+  //
+  // We need:  in_spec[1]["children_spec"][0]["children_spec"].size()
+  //
+  //   [1]                → tree_def for the outer (args, kwargs) tuple
+  //   ["children_spec"]  → array of two children: [args_tuple, kwargs_dict]
+  //   [0]                → the args_tuple node
+  //   ["children_spec"]  → one entry per positional tensor argument
+  //
+  // We also navigate to [1] (the kwargs_dict node) and assert its
+  // children_spec is empty — models exported with tensor kwargs are rejected
+  // because Triton has no mechanism to supply named keyword arguments.
+  //
+  // IndexAsObject / MemberAsArray return nullptr on success, so chaining them
+  // with && short-circuits at the first failure.
+  size_t model_input_count = 0;
+  {
+    TritonJsonValue in_spec_doc;
+    TRITONSERVER_Error* parse_err =
+        in_spec_doc.Parse(call_spec[0].c_str(), call_spec[0].size());
+    if (parse_err != nullptr) {
+      THROW_TRITON_EXCEPTION(
+          parse_err,
+          "Failed to parse in_spec JSON for model \"" << Name() << "\"");
+    }
+    TritonJsonValue outer_tree;      // in_spec_doc[1]               — outer (args,kwargs) tree_def
+    TritonJsonValue outer_children;  // outer_tree["children_spec"]  — [args_tuple, kwargs_dict]
+    TritonJsonValue args_tree;       // outer_children[0]            — the args tuple node
+    TritonJsonValue args_children;   // args_tree["children_spec"]   — one entry per input tensor
+    TritonJsonValue kwargs_tree;     // outer_children[1]            — the kwargs dict node
+    TritonJsonValue kwargs_children; // kwargs_tree["children_spec"] — one entry per kwarg tensor
+    bool nav_ok =
+        (in_spec_doc.IndexAsObject(1, &outer_tree) == nullptr) &&
+        (outer_tree.MemberAsArray("children_spec", &outer_children) == nullptr) &&
+        (outer_children.IndexAsObject(0, &args_tree) == nullptr) &&
+        (args_tree.MemberAsArray("children_spec", &args_children) == nullptr) &&
+        (outer_children.IndexAsObject(1, &kwargs_tree) == nullptr) &&
+        (kwargs_tree.MemberAsArray("children_spec", &kwargs_children) == nullptr);
+    if (!nav_ok) {
+      THROW_TRITON_EXCEPTION(
+          TRITONSERVER_ERROR_INTERNAL,
+          "Unexpected in_spec pytree structure for model \"" << Name() << "\": "
+              << call_spec[0].substr(0, 200));
+    }
+    if (kwargs_children.ArraySize() > 0) {
+      THROW_TRITON_EXCEPTION(
+          TRITONSERVER_ERROR_INVALID_ARG,
+          "Model \"" << Name() << "\" was exported with "
+              << kwargs_children.ArraySize()
+              << " keyword-argument tensor input(s), which are not supported. "
+              << "Re-export using only positional arguments: "
+              << "torch.export.export(model, args=(x1, x2, ...), kwargs={})");
+    }
+    model_input_count = static_cast<size_t>(args_children.ArraySize());
+  }
+
+  if (model_input_count != expected_input_count) {
+    THROW_TRITON_EXCEPTION(
+        TRITONSERVER_ERROR_INTERNAL,
+        "Failed to load model \"" << Name() << "\" configuration expects "
+            << expected_input_count << " inputs, but model expects "
+            << model_input_count << " inputs.");
   }
 
   /* CANNOT VALIDATE INPUTS BY DTYPE DUE TO LACK OF INFORMATION FROM MODEL */
@@ -1866,7 +1935,17 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_count)
             << " inputs.");
   }
 
-  auto naming_convention = GetNamingConvention(allowed_inputs);
+  // Pytree specs encode the tensor tree structure but carry no argument names,
+  // so positional ordering is the only option for AOTI models.
+  // STRICT_CONFIG_ORDERING maps each config input to its runner slot by the
+  // loop index i, i.e.  input_index_map_[io_name] = i  (see AddInputToMap).
+  auto naming_convention = TritonNamingConvention::STRICT_CONFIG_ORDERING;
+
+  // allowed_inputs is only consulted by the FORWARD_ARGUMENT branch inside
+  // AddInputToMap (name-based lookup).  Under STRICT_CONFIG_ORDERING that
+  // branch is never reached, so this vector is never read — it exists solely
+  // to satisfy the function signature.
+  std::vector<std::string> allowed_inputs{};
 
   for (size_t i = 0; i < ios.ArraySize(); i += 1) {
     TritonJsonValue io;
