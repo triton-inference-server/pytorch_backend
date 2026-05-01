@@ -29,11 +29,28 @@
 #include <string>
 #include <vector>
 
-#include "call_spec_type.hh"
 #include "triton/backend/backend_common.h"
 
 namespace triton::backend::pytorch::pt2
 {
+  enum class call_spec_type
+  {
+    unspecified,
+    builtins_dict,
+    builtins_list,
+    builtins_tuple,
+    value_tensor,
+  };
+
+  const std::string&
+  name_of(
+      call_spec_type value) noexcept;
+
+  std::ostream&
+  operator<<(
+      std::ostream& writable,
+      const call_spec_type& value) noexcept;
+
   class call_spec
   {
     private:

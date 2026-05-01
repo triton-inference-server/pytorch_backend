@@ -34,17 +34,51 @@
 
 namespace triton::backend::pytorch::pt2
 {
-  static const std::string CALLSPEC_TYPE_DICT{"builtins.dict"};
-  static const std::string CALLSPEC_TYPE_LIST{"builtins.list"};
-  static const std::string CALLSPEC_TYPE_TUPLE{"builtins.tuple"};
-  static const std::string CALLSPEC_TYPE_VALUE_TENSOR{"value.tensor"};
-  static const std::string CALLSPEC_TYPE_UNSPECIFIED{"unspecified"};
+  static const std::string CALLSPEC_TYPE_DICT{"dict"};
+  static const std::string CALLSPEC_TYPE_LIST{"list"};
+  static const std::string CALLSPEC_TYPE_TUPLE{"tuple"};
+  static const std::string CALLSPEC_TYPE_VALUE_TENSOR{"tensor"};
+  static const std::string CALLSPEC_TYPE_UNSPECIFIED{"<unspecified>"};
+
+  const std::string&
+  name_of(
+      call_spec_type value) noexcept
+  {
+    switch (value)
+    {
+      case call_spec_type::builtins_dict:
+        return CALLSPEC_TYPE_DICT;
+      case call_spec_type::builtins_list:
+        return CALLSPEC_TYPE_LIST;
+      case call_spec_type::builtins_tuple:
+        return CALLSPEC_TYPE_TUPLE;
+      case call_spec_type::value_tensor:
+        return CALLSPEC_TYPE_VALUE_TENSOR;
+
+      default:
+      case call_spec_type::unspecified:
+        return CALLSPEC_TYPE_UNSPECIFIED;
+    }
+  }
+
+  std::ostream& operator<<(
+      std::ostream& writable,
+      const call_spec_type& value) noexcept
+  {
+    writable << name_of(value);
+    return writable;
+  }
+
+  static const std::string CALLSPEC_DICT{"builtins.dict"};
+  static const std::string CALLSPEC_LIST{"builtins.list"};
+  static const std::string CALLSPEC_TUPLE{"builtins.tuple"};
+  static const std::string CALLSPEC_VALUE_TENSOR{"value.tensor"};
+  static const std::string CALLSPEC_UNSPECIFIED{"unspecified"};
 
   void
   call_spec::add_child(
       call_spec& child)
   {
-    DEBUG_TRACE_FUNCTION_CALL();
     children_.push_back(child);
     child.set_parent(*this);
   }
@@ -52,14 +86,12 @@ namespace triton::backend::pytorch::pt2
   const std::vector<call_spec>&
   call_spec::children() const
   {
-    DEBUG_TRACE_FUNCTION_CALL();
     return children_;
   }
 
   bool
   call_spec::is_leaf_tensor() const
   {
-    DEBUG_TRACE_FUNCTION_CALL();
     return type_ == call_spec_type::value_tensor
         && children_.empty();
   }
@@ -68,21 +100,18 @@ namespace triton::backend::pytorch::pt2
   call_spec::dictionary_keys(
       const std::vector<std::string>& keys)
   {
-    DEBUG_TRACE_FUNCTION_CALL();
     dictionary_keys_ = keys;
   }
 
   const std::vector<std::string>&
   call_spec::dictionary_keys() const
   {
-    DEBUG_TRACE_FUNCTION_CALL();
     return dictionary_keys_;
   }
 
   std::vector<std::string>
   call_spec::get_names() const
   {
-    DEBUG_TRACE_FUNCTION_CALL();
     std::vector<std::string> names;
 
     // When the type is unspecified or a tensor, return an empty vector.
@@ -93,7 +122,7 @@ namespace triton::backend::pytorch::pt2
     {
       if (dictionary_keys_.size() != children_.size())
       {
-        TRITON_LOG_ERROR("call_spec node has type `" << CALLSPEC_TYPE_DICT << "` "
+        TRITON_LOG_ERROR("call_spec node has type `" << CALLSPEC_DICT << "` "
                          << "but number of keys (" << dictionary_keys_.size() << ") "
                          << "does not match number of children (" << children_.size() << ").");
         return names;
@@ -147,7 +176,6 @@ namespace triton::backend::pytorch::pt2
   call_spec::set_parent(
       call_spec& parent)
   {
-    DEBUG_TRACE_FUNCTION_CALL();
     parent_ = &parent;
   }
 
@@ -155,14 +183,12 @@ namespace triton::backend::pytorch::pt2
   call_spec::type(
       call_spec_type type)
   {
-    DEBUG_TRACE_FUNCTION_CALL();
     type_ = type;
   }
 
   call_spec_type
   call_spec::type() const
   {
-    DEBUG_TRACE_FUNCTION_CALL();
     return type_;
   }
 
@@ -173,7 +199,6 @@ namespace triton::backend::pytorch::pt2
     const std::string& definition,
     call_spec& call_spec_out)
   {
-    DEBUG_TRACE_FUNCTION_CALL();
     if (definition.empty())
       return false;
 
@@ -236,7 +261,6 @@ namespace triton::backend::pytorch::pt2
       common::TritonJson::Value& spec_object,
       call_spec& call_spec_out)
   {
-    DEBUG_TRACE_FUNCTION_CALL();
     if (spec_object.IsNull() || !spec_object.IsObject())
       return false;
 
@@ -268,17 +292,17 @@ namespace triton::backend::pytorch::pt2
         return false;
       }
 
-      if (type_string == CALLSPEC_TYPE_DICT)
+      if (type_string == CALLSPEC_DICT)
       {
         result.type(call_spec_type::builtins_dict);
       }
       else
-      if (type_string == CALLSPEC_TYPE_LIST)
+      if (type_string == CALLSPEC_LIST)
       {
         result.type(call_spec_type::builtins_list);
       }
       else
-      if (type_string == CALLSPEC_TYPE_TUPLE)
+      if (type_string == CALLSPEC_TUPLE)
       {
         result.type(call_spec_type::builtins_tuple);
       }
@@ -492,7 +516,6 @@ namespace triton::backend::pytorch::pt2
   call_spec::write_to(
       std::ostream& writable) const
   {
-    DEBUG_TRACE_FUNCTION_CALL();
     write_to(writable, 0);
   }
 
@@ -503,7 +526,6 @@ namespace triton::backend::pytorch::pt2
       std::ostream& writable,
       size_t indent) const
   {
-    DEBUG_TRACE_FUNCTION_CALL();
     std::string indent_str(static_cast<long unsigned int>(indent * INDENT_SIZE), ' ');
     writable << indent_str << "{\n";
     writable << indent_str << "  type: \"" << type_ << "\",\n";

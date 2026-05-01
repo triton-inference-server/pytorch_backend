@@ -24,9 +24,6 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#define ENABLE_DEBUG_TRACE_INFO 0
-#define ENABLE_DEBUG_TRACE_ERROR 0
-
 #include "model_state.hh"
 
 #include <mutex>
@@ -59,7 +56,6 @@ using TritonJsonValue = triton::common::TritonJson::Value;
 ModelState::ModelState(TRITONBACKEND_Model* backend_model)
     : BackendModel{backend_model}
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   if (!backend_model)
     THROW_TRITON_EXCEPTION(
         TRITONSERVER_ERROR_INTERNAL,
@@ -69,7 +65,6 @@ ModelState::ModelState(TRITONBACKEND_Model* backend_model)
 void
 ModelState::AutoCompleteConfig()
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   TRITON_LOG_WARN(
       "Auto-complete configuration is not supported for Inductor models. "
       "Skipping auto-complete for model \""
@@ -79,35 +74,30 @@ ModelState::AutoCompleteConfig()
 const std::vector<triton::backend::BatchInput>&
 ModelState::BatchInputs() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::BatchInputs();
 }
 
 const std::vector<triton::backend::BatchOutput>&
 ModelState::BatchOutputs() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::BatchOutputs();
 }
 
 bool
 ModelState::CacheCleaningEnabled() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return cache_cleaning_enabled_;
 }
 
 void
 ModelState::CacheCleaningEnabled(bool value)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   cache_cleaning_enabled_ = value;
 }
 
 ModelState*
 ModelState::Create(TRITONBACKEND_Model* triton_model)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   if (!triton_model)
     THROW_TRITON_EXCEPTION(
         TRITONSERVER_ERROR_INTERNAL,
@@ -119,9 +109,8 @@ ModelState::Create(TRITONBACKEND_Model* triton_model)
   if (auto err = TRITONBACKEND_ModelAutoCompleteConfig(
           triton_model, &auto_complete_config)) {
     DEBUG_TRACE_ERROR(
-        "{ model: \"" << aoti_model->Name() << "\""
-                      << ", error: \"" << TRITONSERVER_ErrorMessage(err) << "\""
-                      << " }");
+        "{ model: \"" << aoti_model->Name() << "\", error: \""
+                      << TRITONSERVER_ErrorMessage(err) << "\" }");
     THROW_TRITON_EXCEPTION(
         TRITONSERVER_ERROR_INTERNAL,
         "Failed to check if auto-complete configuration is requested for model "
@@ -146,8 +135,7 @@ ModelState::Create(TRITONBACKEND_Model* triton_model)
           DEBUG_TRACE_ERROR(
               "{ model: \"" << aoti_model->Name() << "\""
                             << ", error: \"" << TRITONSERVER_ErrorMessage(err)
-                            << "\""
-                            << " }");
+                            << "\" }");
           THROW_TRITON_EXCEPTION(
               TRITONSERVER_ERROR_INTERNAL,
               "Failed to get sequence batching state object at index "
@@ -158,10 +146,8 @@ ModelState::Create(TRITONBACKEND_Model* triton_model)
         if (auto err =
                 state.MemberAsString("output_name", &output_state_name)) {
           DEBUG_TRACE_ERROR(
-              "{ model: \"" << aoti_model->Name() << "\""
-                            << ", error: \"" << TRITONSERVER_ErrorMessage(err)
-                            << "\""
-                            << " }");
+              "{ model: \"" << aoti_model->Name() << "\", error: \""
+                            << TRITONSERVER_ErrorMessage(err) << "\" }");
           THROW_TRITON_EXCEPTION(
               TRITONSERVER_ERROR_INTERNAL,
               "Failed to get sequence batching state output name at index "
@@ -171,8 +157,7 @@ ModelState::Create(TRITONBACKEND_Model* triton_model)
         DEBUG_TRACE_INFO(
             "{ auto_complete_config: "
             << (auto_complete_config ? "true" : "false") << ", states[" << i
-            << "]: { output_state_name: " << output_state_name << " }"
-            << " }");
+            << "]: { output_state_name: " << output_state_name << " } }");
 
         auto it = model_outputs.find(output_state_name);
         if (it == model_outputs.end()) {
@@ -187,9 +172,8 @@ ModelState::Create(TRITONBACKEND_Model* triton_model)
   TritonJsonValue outputs;
   if (auto err = aoti_model->ModelConfig().MemberAsArray("output", &outputs)) {
     DEBUG_TRACE_ERROR(
-        "{ model: \"" << aoti_model->Name() << "\""
-                      << ", error: \"" << TRITONSERVER_ErrorMessage(err)
-                      << "\", line: " << __LINE__ << " }");
+        "{ model: \"" << aoti_model->Name() << "\", error: \""
+                      << TRITONSERVER_ErrorMessage(err) << "\" }");
     THROW_TRITON_EXCEPTION(
         TRITONSERVER_ERROR_INTERNAL,
         "Failed to get model outputs array: " << TRITONSERVER_ErrorMessage(err)
@@ -200,10 +184,8 @@ ModelState::Create(TRITONBACKEND_Model* triton_model)
     TritonJsonValue output;
     if (auto err = outputs.IndexAsObject(i, &output)) {
       DEBUG_TRACE_ERROR(
-          "{ model: \"" << aoti_model->Name() << "\""
-                        << ", error: \"" << TRITONSERVER_ErrorMessage(err)
-                        << "\""
-                        << ", line: " << __LINE__ << " }");
+          "{ model: \"" << aoti_model->Name() << "\", error: \""
+                        << TRITONSERVER_ErrorMessage(err) << "\" }");
       THROW_TRITON_EXCEPTION(
           TRITONSERVER_ERROR_INTERNAL,
           "Failed to get model output object at index "
@@ -214,8 +196,7 @@ ModelState::Create(TRITONBACKEND_Model* triton_model)
     if (auto err = output.MemberAsString("name", &output_name)) {
       DEBUG_TRACE_ERROR(
           "{ model: \"" << aoti_model->Name() << "\", error: \""
-                        << TRITONSERVER_ErrorMessage(err) << "\""
-                        << ", line: " << __LINE__ << " }");
+                        << TRITONSERVER_ErrorMessage(err) << "\" }");
       THROW_TRITON_EXCEPTION(
           TRITONSERVER_ERROR_INTERNAL,
           "Failed to get model output name at index "
@@ -224,8 +205,7 @@ ModelState::Create(TRITONBACKEND_Model* triton_model)
     DEBUG_TRACE_INFO(
         "{ auto_complete_config: " << (auto_complete_config ? "true" : "false")
                                    << ", outputs[" << i << "]: { output_name: "
-                                   << output_name << " }"
-                                   << " }");
+                                   << output_name << " } }");
 
     auto it = model_outputs.find(output_name);
     if (it == model_outputs.end()) {
@@ -237,51 +217,36 @@ ModelState::Create(TRITONBACKEND_Model* triton_model)
 
   aoti_model->ParseParameters();
 
-#if ENABLE_DEBUG_TRACE_INFO
-  for (auto& [output_name, output_indices] : model_outputs) {
-    DEBUG_TRACE_INFO(
-        "{ output_name: \"" << output_name << "\""
-                            << ", config_index: " << output_indices.first
-                            << ", state_index: " << output_indices.second
-                            << " }");
-  }
-#endif
-
   return aoti_model;
 }
 
 bool
 ModelState::CudnnEnabled() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return cudnn_enabled_;
 }
 
 void
 ModelState::CudnnEnabled(bool value)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   cudnn_enabled_ = value;
 }
 
 bool
 ModelState::EnablePinnedInput() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::EnablePinnedInput();
 }
 
 bool
 ModelState::EnablePinnedOutput() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::EnablePinnedOutput();
 }
 
 const triton::backend::BatchOutput*
 ModelState::FindBatchOutput(const std::string& output_name) const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::FindBatchOutput(output_name);
 }
 
@@ -289,11 +254,9 @@ std::vector<torch::Tensor>
 ModelState::Forward(
     const std::vector<torch::Tensor>& inputs, void* stream_handle)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   DEBUG_TRACE_INFO(
       "{ len(inputs): " << inputs.size() << ", stream_handle: "
                         << (stream_handle ? "pointer" : "null") << " }");
-
   if (!model_loader_)
     THROW_TRITON_EXCEPTION(
         TRITONSERVER_ERROR_INTERNAL,
@@ -309,35 +272,30 @@ ModelState::Forward(
 bool
 ModelState::InferenceModeEnabled() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return inference_mode_enabled_;
 }
 
 std::unordered_map<std::string, uint32_t>&
 ModelState::InputMap()
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return map_input_index_;
 }
 
 bool
 ModelState::IsDictionaryInput() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return is_dictionary_input_;
 }
 
 bool
 ModelState::IsInputRagged(const std::string& input_name) const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::IsInputRagged(input_name);
 }
 
 bool
 ModelState::IsInputOptional(const std::string& input_name) const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::IsInputOptional(input_name);
 }
 
@@ -346,7 +304,6 @@ ModelState::LoadModel(
     const std::string& model_file_name, const torch::Device& device,
     uint32_t device_count, TRITONSERVER_InstanceGroupKind kind)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   if (kind != TRITONSERVER_INSTANCEGROUPKIND_MODEL && !device.is_cpu() &&
       device_count == 0)
     THROW_TRITON_EXCEPTION(
@@ -554,56 +511,48 @@ ModelState::LoadModel(
 int
 ModelState::MaxBatchSize() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::MaxBatchSize();
 }
 
 const std::map<std::string, std::pair<int64_t, int64_t>>&
 ModelState::ModelOutputs() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return model_outputs_;
 }
 
 const std::string&
 ModelState::ModelPath() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return model_path_;
 }
 
 const std::string&
 ModelState::Name() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::Name();
 }
 
 bool
 ModelState::OptimizedExecutionEnabled() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return optimized_execution_enabled_;
 }
 
 void
 ModelState::OptimizedExecutionEnabled(bool value)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   optimized_execution_enabled_ = value;
 }
 
 std::unordered_map<std::string, uint32_t>&
 ModelState::OutputMap()
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return map_output_index_;
 }
 
 void
 ModelState::ParseParameters()
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   TritonJsonValue parameters;
   if (!ModelConfig().Find("parameters", &parameters)) {
     bool disable_optimized_execution{false};
@@ -613,8 +562,7 @@ ModelState::ParseParameters()
       if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
         DEBUG_TRACE_ERROR(
             "{ model: \"" << Name() << "\", error: \""
-                          << TRITONSERVER_ErrorMessage(err)
-                          << "\", line: " << __LINE__ << " }");
+                          << TRITONSERVER_ErrorMessage(err) << "\" }");
         THROW_TRITON_EXCEPTION(
             TRITONSERVER_ErrorCode(err),
             "Failed to parse 'DISABLE_OPTIMIZED_EXECUTION' parameter for model "
@@ -635,8 +583,7 @@ ModelState::ParseParameters()
       if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
         DEBUG_TRACE_ERROR(
             "{ model: \"" << Name() << "\", error: \""
-                          << TRITONSERVER_ErrorMessage(err)
-                          << "\", line: " << __LINE__ << " }");
+                          << TRITONSERVER_ErrorMessage(err) << "\" }");
         THROW_TRITON_EXCEPTION(
             TRITONSERVER_ErrorCode(err),
             "Failed to parse 'CACHE_CLEANING_ENABLED' parameter for model \""
@@ -655,8 +602,7 @@ ModelState::ParseParameters()
       if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
         DEBUG_TRACE_ERROR(
             "{ model: \"" << Name() << "\", error: \""
-                          << TRITONSERVER_ErrorMessage(err)
-                          << "\", line: " << __LINE__ << " }");
+                          << TRITONSERVER_ErrorMessage(err) << "\" }");
         THROW_TRITON_EXCEPTION(
             TRITONSERVER_ErrorCode(err),
             "Failed to parse 'INFERENCE_MODE' parameter for model \""
@@ -675,8 +621,7 @@ ModelState::ParseParameters()
       if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
         DEBUG_TRACE_ERROR(
             "{ model: \"" << Name() << "\", error: \""
-                          << TRITONSERVER_ErrorMessage(err)
-                          << "\", line: " << __LINE__ << " }");
+                          << TRITONSERVER_ErrorMessage(err) << "\" }");
         THROW_TRITON_EXCEPTION(
             TRITONSERVER_ErrorCode(err),
             "Failed to parse 'DISABLE_CUDNN' parameter for model \""
@@ -695,7 +640,7 @@ ModelState::ParseParameters()
         DEBUG_TRACE_ERROR(
             "{ model: \"" << Name() << "\""
                           << ", error: \"" << TRITONSERVER_ErrorMessage(err)
-                          << "\", line: " << __LINE__ << " }");
+                          << "\" }");
         THROW_TRITON_EXCEPTION(
             TRITONSERVER_ErrorCode(err),
             "Failed to parse 'ENABLE_WEIGHT_SHARING' parameter for model \""
@@ -714,9 +659,9 @@ ModelState::ParseParameters()
             parameters, "INTRA_OP_THREAD_COUNT", &intra_op_thread_count)) {
       if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
         DEBUG_TRACE_ERROR(
-            "{ model: \"" << Name() << "\", error: \""
-                          << TRITONSERVER_ErrorMessage(err)
-                          << "\", line: " << __LINE__ << " }");
+            "{ model: \"" << Name() << "\""
+                          << ", error: \"" << TRITONSERVER_ErrorMessage(err)
+                          << "\" }");
         THROW_TRITON_EXCEPTION(
             TRITONSERVER_ErrorCode(err),
             "Failed to parse 'INTRA_OP_THREAD_COUNT' parameter for model \""
@@ -742,8 +687,7 @@ ModelState::ParseParameters()
       if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
         DEBUG_TRACE_ERROR(
             "{ model: \"" << Name() << "\", error: \""
-                          << TRITONSERVER_ErrorMessage(err)
-                          << "\", line: " << __LINE__ << " }");
+                          << TRITONSERVER_ErrorMessage(err) << "\" }");
         THROW_TRITON_EXCEPTION(
             TRITONSERVER_ErrorCode(err),
             "Failed to parse 'INTER_OP_THREAD_COUNT' parameter for model \""
@@ -778,56 +722,48 @@ ModelState::ParseParameters()
 const std::string&
 ModelState::RepositoryPath() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::RepositoryPath();
 }
 
 void
 ModelState::SetMaxBatchSize(int value)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   TritonBackendModel::SetMaxBatchSize(value);
 }
 
 TRITONSERVER_Error*
 ModelState::SupportsFirstDimBatching(bool* value_out)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::SupportsFirstDimBatching(value_out);
 }
 
 TRITONBACKEND_MemoryManager*
 ModelState::TritonMemoryManager()
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::TritonMemoryManager();
 }
 
 TRITONBACKEND_Model*
 ModelState::TritonModel()
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::TritonModel();
 }
 
 TRITONSERVER_Server*
 ModelState::TritonServer()
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::TritonServer();
 }
 
 uint64_t
 ModelState::Version() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::Version();
 }
 
 bool
 ModelState::WeightSharingEnabled() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return weight_sharing_enabled_;
 }
 }  // namespace triton::backend::pytorch::pt2
