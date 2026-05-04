@@ -110,14 +110,14 @@ ModelInstanceState::ModelInstanceState(
   auto model_outputs = model_->OutputMap();
 
   for (auto [input_name, input_index] : model_inputs) {
-    std::string alternate_name = "INPUT__" + std::to_string(input_index);
-    map_inputs_.emplace(input_name, alternate_name);
+    std::string ordinal_name = "INPUT__" + std::to_string(input_index);
+    map_inputs_.emplace(input_name, ordinal_name);
     map_inputs_[input_name].model_index() = input_index;
   }
 
   for (auto [output_name, output_index] : model_outputs) {
-    std::string alternate_name = "OUTPUT__" + std::to_string(output_index);
-    map_outputs_.emplace(output_name, alternate_name);
+    std::string ordinal_name = "OUTPUT__" + std::to_string(output_index);
+    map_outputs_.emplace(output_name, ordinal_name);
     map_outputs_[output_name].model_index() = output_index;
   }
 

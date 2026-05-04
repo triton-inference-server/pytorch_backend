@@ -45,16 +45,16 @@ namespace triton::backend::pytorch::pt2
   void
   io_data::emplace(
       const std::string& name,
-      const std::string& alternate_name)
+      const std::string& ordinal_name)
   {
-    if (contains(name) || (!alternate_name.empty() && contains(alternate_name)))
+    if (contains(name) || (!ordinal_name.empty() && contains(ordinal_name)))
       THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_ALREADY_EXISTS,
                              "io_data already contains name: \"" + name + "\"");
 
     map_[name] = values_.size();
-    if (!alternate_name.empty())
+    if (!ordinal_name.empty())
     {
-      map_[alternate_name] = values_.size();
+      map_[ordinal_name] = values_.size();
     }
     values_.push_back(pt2::io_data::data{});
   }
