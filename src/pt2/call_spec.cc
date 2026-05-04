@@ -204,7 +204,23 @@ namespace triton::backend::pytorch::pt2
 
     common::TritonJson::Value definition_json;
 
-    if (auto err = definition_json.Parse(definition.c_str(), definition.size()))
+    /*
+      This function is expecting a JSON string with the following format:
+      [
+        version, // currently expected to be 1
+        {
+          type: "builtins.dict" | "builtins.list" | "builtins.tuple" | "value.tensor",
+          context: [key1, key2, ...], // only applicable when type is builtins.dict; otherwise expected to be an empty array
+          children_spec: [spec1, spec2, ...] // only applicable when type is builtins.dict, builtins.list, or builtins.tuple; otherwise expected to be an empty array
+        }
+      ]
+
+      Its responsibility is to convert the JSON string (provided by PyTorch based on the model's forward method signature) into a call_spec object model which
+      Triton can use to understand the structure of the inputs and outputs of the model's forward method.
+    */
+
+    if (auto err = definition_json.Parse(definition.c_str(),
+                                         definition.size()))
     {
       TRITON_LOG_ERROR(PARSE_FAILURE_PREAMBLE
                        << "{ "
@@ -215,6 +231,7 @@ namespace triton::backend::pytorch::pt2
       return false;
     }
 
+    // Ensure the JSON is an array with two entries: [version, spec]
     if (!definition_json.IsArray() || definition_json.ArraySize() != 2)
     {
       TRITON_LOG_ERROR(PARSE_FAILURE_PREAMBLE
@@ -225,6 +242,7 @@ namespace triton::backend::pytorch::pt2
       return false;
     }
 
+    // Ensure [1] is an object representing the call specification.
     common::TritonJson::Value spec_object;
     if (auto err = definition_json.IndexAsObject(1, &spec_object))
     {
@@ -237,6 +255,7 @@ namespace triton::backend::pytorch::pt2
       return false;
     }
 
+    // Ensure the spec object is a JSON object.
     if (spec_object.IsNull() || !spec_object.IsObject())
     {
       TRITON_LOG_ERROR(PARSE_FAILURE_PREAMBLE
@@ -247,6 +266,7 @@ namespace triton::backend::pytorch::pt2
       return false;
     }
 
+    // Parse the spec object into a call_spec instance.
     call_spec spec{};
     if (!try_parse_spec_object(spec_object, spec))
       return false;
@@ -264,21 +284,38 @@ namespace triton::backend::pytorch::pt2
     if (spec_object.IsNull() || !spec_object.IsObject())
       return false;
 
-    constexpr char type_property_name[] = "type";
-    constexpr char context_property_name[] = "context";
-    constexpr char children_spec_property_name[] = "children_spec";
+    /*
+      This functions resposibility to parse the specification JSON object (which is the second entry in the top-level array parsed by try_parse) into a call_spec instance.
+      The expected format of the specification JSON object is as follows:
+
+      {
+        type: "builtins.dict" | "builtins.list" | "builtins.tuple" | "value.tensor",
+        context: [key1, key2, ...], // only applicable when type is builtins.dict; otherwise expected to be an empty array
+        children_spec: [spec1, spec2, ...] // only applicable when type is builtins.dict, builtins.list, or builtins.tuple; otherwise expected to be an empty array
+      }
+
+      When the type is "builtins.dict", each entry in the context array corresponds to a key for the dictionary entry at that position in the children_spec array. When the type is "builtins.list" or "builtins.tuple", the context array is expected to be empty and each entry in the children_spec array corresponds to an entry in the list or tuple. When the type is "value.tensor", both the context and children_spec arrays are expected to be empty since tensors are leaf nodes in the call specification tree.
+    */
 
     call_spec result;
 
     common::TritonJson::WriteBuffer buffer;
+    // Create a buffer for pretty-printing JSON values in error messages.
+    // Be sure to clear the buffer after each use to avoid appending to previous contents when pretty-printing multiple JSON values during the parsing of a single specification object.
     spec_object.PrettyWrite(&buffer);
     std::string spec_object_as_string{buffer.Contents()};
     buffer.Clear();
 
+    constexpr char type_property_name[] = "type";
+
+    // Determine if the object has a type property, and if so, set the type of the call_spec accordingly.
+    // When the type property is not provided, the type of the call_spec is assumed to be value_tensor.
+    // When the type property is provided but has an unrecognized value, return an error.
     if (spec_object.Find(type_property_name)
         && !spec_object.MemberIsNull(type_property_name)
         && spec_object.MemberIsString(type_property_name))
     {
+      // Parse the value of the type property as a string.
       std::string type_string;
       if (auto err = spec_object.MemberAsString(type_property_name, &type_string))
       {
@@ -292,6 +329,8 @@ namespace triton::backend::pytorch::pt2
         return false;
       }
 
+      // Depending on the value of the type property, set the type of this call_spec node.
+      // When the type is unrecognized, return an error.
       if (type_string == CALLSPEC_DICT)
       {
         result.type(call_spec_type::builtins_dict);
@@ -317,6 +356,7 @@ namespace triton::backend::pytorch::pt2
         return false;
       }
     }
+    // The the type property is not provided, the object is assumed to be a value tensor.
     else
     {
       result.type(call_spec_type::value_tensor);
@@ -324,13 +364,25 @@ namespace triton::backend::pytorch::pt2
       return true;
     }
 
-    common::TritonJson::Value context_array;
+    constexpr char context_property_name[] = "context";
 
+    // Attempt to parse the context property if it exists.
+    // When the context property exists but is not an array or string, return an error.
+    // When the context property is a string, attempt to parse it as JSON; if parsing fails or the result is not an array, return an error.
+    // When the type of this call specification is builtins.dict, the context property is expected to be an array of strings representing the keys for each dictionary entry in this call specification.
+    // When the type of this call specification is builtins.list or builtins.tuple, the context property is expected to be an empty array since lists and tuples do not have keys.
+    common::TritonJson::Value context_array;
     if (spec_object.Find(context_property_name)
         && !spec_object.MemberIsNull(context_property_name)
         && (spec_object.MemberIsArray(context_property_name)
             || spec_object.MemberIsString(context_property_name)))
     {
+      /*
+        Because the context property can provided as `null`, a JSON array, or a string (i.e. "null"), we need to handle all cases when parsing the context.
+      */
+
+      // When the context property is a JSON array, we can parse it directly.
+      // When the context property is a string, we need to first parse the string as JSON and then ensure the result is a JSON array.
       if (spec_object.MemberIsArray(context_property_name))
       {
         if (auto err = spec_object.MemberAsArray(context_property_name, &context_array))
@@ -346,6 +398,7 @@ namespace triton::backend::pytorch::pt2
         }
       }
       else
+      // When the context property is a string, attempt to parse it as JSON; if parsing fails or the result is not an array, return an error.
       if (spec_object.MemberIsString(context_property_name))
       {
         std::string context_string;
@@ -361,6 +414,8 @@ namespace triton::backend::pytorch::pt2
           return false;
         }
 
+        // Only attempt to parse the context string as JSON if it is not equal to "null".
+        // This allows us to support both a null value and a string value of "null" to represent an empty context, which provides flexibility for how the JSON specification can be defined on the PyTorch side.
         if (context_string != "null")
         {
           if (auto err = context_array.Parse(context_string.c_str(), context_string.size()))
@@ -375,6 +430,7 @@ namespace triton::backend::pytorch::pt2
             return false;
           }
 
+          // The result of parsing the context string must be a JSON array; if it is not, return an error.
           if (!context_array.IsArray())
           {
             TRITON_LOG_ERROR(PARSE_FAILURE_PREAMBLE
@@ -387,14 +443,18 @@ namespace triton::backend::pytorch::pt2
         }
       }
 
+      // Create a buffer for pretty-printing JSON values in error messages.
+      // Be sure to clear the buffer after each use to avoid appending to previous contents when pretty-printing multiple JSON values during the parsing of a single specification object.
       context_array.PrettyWrite(&buffer);
       std::string context_array_as_string{buffer.Contents()};
       buffer.Clear();
 
+      // Parse the entries in the context array as strings and store them in the call_spec instance.
       std::vector<std::string> context_entries;
-
       for (auto i = 0; i < context_array.ArraySize(); i += 1)
       {
+        // Read the value as a string.
+        // When the value is not a JSON string, return an error.
         std::string context_entry;
         if (auto err = context_array.IndexAsString(i, &context_entry))
         {
@@ -414,12 +474,16 @@ namespace triton::backend::pytorch::pt2
       result.dictionary_keys(context_entries);
     }
 
+    constexpr char children_spec_property_name[] = "children_spec";
+
+    // Attempt to parse the children_spec property if it exists.
     if (spec_object.Find(children_spec_property_name)
         && !spec_object.MemberIsNull(children_spec_property_name)
         && spec_object.MemberIsArray(children_spec_property_name))
     {
       common::TritonJson::Value children_array;
 
+      // When the children_spec property exists but is not an array, return an error.
       if (auto err = spec_object.MemberAsArray(children_spec_property_name, &children_array))
       {
         TRITON_LOG_ERROR(PARSE_FAILURE_PREAMBLE
@@ -432,12 +496,16 @@ namespace triton::backend::pytorch::pt2
         return false;
       }
 
+      // Create a buffer for pretty-printing JSON values in error messages.
+      // Be sure to clear the buffer after each use to avoid appending to previous contents when pretty-printing multiple JSON values during the parsing of a single specification object.
       children_array.PrettyWrite(&buffer);
       std::string children_array_as_string{buffer.Contents()};
       buffer.Clear();
 
+      // Depending on the resulting type of this call specification, validate that the children_spec array has the expected number of entries.
       switch (result.type())
       {
+        // Validate that when the type of this call specification is builtins.dict, the number of entries in the children_spec array matches the number of dictionary keys specified in the context property since each entry in the children_spec array corresponds to a dictionary entry with a key specified in the context array.
         case call_spec_type::builtins_dict:
         {
           if (children_array.ArraySize() != result.dictionary_keys().size())
@@ -452,6 +520,7 @@ namespace triton::backend::pytorch::pt2
         }
         break;
 
+        // Validate that when the type of this call specification is builtins.list or builtins.tuple, the children_spec array has at least one entry since an empty list or tuple would not be valid.
         case call_spec_type::builtins_list:
         case call_spec_type::builtins_tuple:
         {
@@ -472,16 +541,7 @@ namespace triton::backend::pytorch::pt2
           break;
       }
 
-      if (result.type() == call_spec_type::builtins_dict && children_array.ArraySize() != result.dictionary_keys().size())
-      {
-        TRITON_LOG_ERROR(PARSE_FAILURE_PREAMBLE
-                         << "{ "
-                         << "details: \"Number of entries in 'children_spec' does not match number of entries in 'context'.\""
-                         << ", specification: \"" << spec_object_as_string << "\" "
-                         << "}.");
-        return false;
-      }
-
+      // Parse each entry in the children_spec array as a call_spec object and add it as a child of this call_spec instance.
       for (auto i = 0; i < children_array.ArraySize(); i += 1)
       {
         common::TritonJson::Value child_object;
@@ -500,6 +560,8 @@ namespace triton::backend::pytorch::pt2
         if (!child_object.IsObject())
           continue;
 
+        // Parse the child specification object into a call_spec instance.
+        // RECURSIVE CALL
         call_spec child_spec{};
         if (!try_parse_spec_object(child_object, child_spec))
           return false;
