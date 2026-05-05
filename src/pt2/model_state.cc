@@ -257,12 +257,13 @@ ModelState::Forward(
   DEBUG_TRACE_INFO(
       "{ len(inputs): " << inputs.size() << ", stream_handle: "
                         << (stream_handle ? "pointer" : "null") << " }");
-  if (!model_loader_)
+  if (!model_loader_) {
     THROW_TRITON_EXCEPTION(
         TRITONSERVER_ERROR_INTERNAL,
         "Model \""
             << Name()
             << "\" not loaded. Use `LoadModel` before calling `Forward`.");
+  }
 
   auto output_tensors = model_loader_->get_runner()->run(inputs, stream_handle);
 

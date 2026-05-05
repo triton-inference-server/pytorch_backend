@@ -1884,90 +1884,99 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_count)
   TritonJsonValue sequence_batching;
   if (model_->ModelConfig().Find("sequence_batching", &sequence_batching)) {
     throw std::runtime_error("Sequence batching is not supported yet.");
-    // TritonJsonValue states;
-    // if (sequence_batching.Find("state", &states))
-    // {
-    //   for (size_t i = 0; i < states.ArraySize(); i += 1)
-    //   {
-    //     TritonJsonValue state;
-    //     if (auto err = states.IndexAsObject(i, &state))
-    //     {
-    //       DEBUG_TRACE_ERROR("Failed to get sequence state " << i << " for
-    //       model instance \"" << Name() << "\": " <<
-    //       TRITONSERVER_ErrorMessage(err)); THROW_TRITON_EXCEPTION(err,
-    //                              "Failed to get sequence state " << i << "
-    //                              for model instance \"" << Name() << "\": "
-    //                              << TRITONSERVER_ErrorMessage(err));
-    //     }
+    /*
+    TritonJsonValue states;
+    if (sequence_batching.Find("state", &states))
+    {
+      for (size_t i = 0; i < states.ArraySize(); i += 1)
+      {
+        TritonJsonValue state;
+        if (auto err = states.IndexAsObject(i, &state))
+        {
+          DEBUG_TRACE_ERROR("Failed to get sequence state " << i << " for
+          model instance \"" << Name() << "\": " <<
+          TRITONSERVER_ErrorMessage(err)); THROW_TRITON_EXCEPTION(err,
+                                 "Failed to get sequence state " << i << "
+                                 for model instance \"" << Name() << "\": "
+                                 << TRITONSERVER_ErrorMessage(err));
+        }
 
-    //     std::string state_name;
-    //     if (auto err = state.MemberAsString("input_name", &state_name))
-    //     {
-    //       DEBUG_TRACE_ERROR("Failed to get input name for sequence state " <<
-    //       i << " for model instance \"" << Name() << "\": " <<
-    //       TRITONSERVER_ErrorMessage(err)); THROW_TRITON_EXCEPTION(err,
-    //                              "Failed to get input name for sequence state
-    //                              " << i << " for model instance \"" << Name()
-    //                              << "\": " <<
-    //                              TRITONSERVER_ErrorMessage(err));
-    //     }
+        std::string state_name;
+        if (auto err = state.MemberAsString("input_name", &state_name))
+        {
+          DEBUG_TRACE_ERROR("Failed to get input name for sequence state " <<
+          i << " for model instance \"" << Name() << "\": " <<
+          TRITONSERVER_ErrorMessage(err)); THROW_TRITON_EXCEPTION(err,
+                                 "Failed to get input name for sequence state
+                                 " << i << " for model instance \"" << Name()
+                                 << "\": " <<
+                                 TRITONSERVER_ErrorMessage(err));
+        }
 
-    //     // TODO: FIXME
-    //     // AddInputToMap(naming_convention, allowed_inputs, state_name, i);
+        // TODO: FIXME
+        // AddInputToMap(naming_convention, allowed_inputs, state_name, i);
 
-    //     // Validate dtype
-    //     std::string state_dtype;
-    //     if (auto err = state.MemberAsString("data_type", &state_dtype))
-    //     {
-    //       DEBUG_TRACE_ERROR("Failed to get data type for sequence state input
-    //       \"" << state_name << "\" for model instance \"" << Name() << "\": "
-    //       << TRITONSERVER_ErrorMessage(err)); THROW_TRITON_EXCEPTION(err,
-    //                              "Failed to get data type for sequence state
-    //                              input \"" << state_name << "\" for model
-    //                              instance \"" << Name() << "\": " <<
-    //                              TRITONSERVER_ErrorMessage(err));
-    //     }
+        // Validate dtype
+        std::string state_dtype;
+        if (auto err = state.MemberAsString("data_type", &state_dtype))
+        {
+          DEBUG_TRACE_ERROR("Failed to get data type for sequence state input
+          \"" << state_name << "\" for model instance \"" << Name() << "\": "
+          << TRITONSERVER_ErrorMessage(err)); THROW_TRITON_EXCEPTION(err,
+                                 "Failed to get data type for sequence state
+                                 input \"" << state_name << "\" for model
+                                 instance \"" << Name() << "\": " <<
+                                 TRITONSERVER_ErrorMessage(err));
+        }
 
-    //     DEBUG_TRACE_INFO("{ name: \"" << Name() << "\""
-    //                      << ", state_name: \"" << state_name << "\""
-    //                      << ", state_dtype: \"" << state_dtype << "\""
-    //                      << " }");
+        DEBUG_TRACE_INFO("{ name: \"" << Name() << "\""
+                         << ", state_name: \"" << state_name << "\""
+                         << ", state_dtype: \"" << state_dtype << "\""
+                         << " }");
 
-    //     const auto pr = ModelConfigDataTypeToTorchType(state_dtype);
-    //     if (!pr.first)
-    //     {
-    //       DEBUG_TRACE_ERROR("Unsupported datatype " << state_dtype << " for
-    //       sequence state input \"" << state_name << "\" for model instance
-    //       \"" << Name() << "\".");
-    //       THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
-    //                              "Unsupported datatype " << state_dtype << "
-    //                              for sequence state input \"" << state_name
-    //                              << "\" for model instance \"" << Name() <<
-    //                              "\".");
-    //     }
+        const auto pr = ModelConfigDataTypeToTorchType(state_dtype);
+        if (!pr.first)
+        {
+          DEBUG_TRACE_ERROR("Unsupported datatype " << state_dtype << " for
+          sequence state input \"" << state_name << "\" for model instance
+          \"" << Name() << "\".");
+          THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
+                                 "Unsupported datatype " << state_dtype << "
+                                 for sequence state input \"" << state_name
+                                 << "\" for model instance \"" << Name() <<
+                                 "\".");
+        }
 
-    //     // Validate shape for String inputs. Only allow 1 dimension.
-    //     if (state_dtype == "TYPE_STRING")
-    //     {
-    //       if (is_batching_supported_)
-    //       {
-    //         DEBUG_TRACE_ERROR("Triton only supports 1-dimensional string
-    //         inputs for sequence state input \"" << state_name << "\" for
-    //         model \"" << Name() << "\" when batching is enabled.");
-    //         THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INVALID_ARG,
-    //                                "Triton only supports 1-dimensional string
-    //                                inputs for sequence " "state input \"" <<
-    //                                state_name << "\" for model \"" << Name()
-    //                                << "\".");
-    //       }
-    //     }
-    //   }
-    // }
+        // Validate shape for String inputs. Only allow 1 dimension.
+        if (state_dtype == "TYPE_STRING")
+        {
+          if (is_batching_supported_)
+          {
+            DEBUG_TRACE_ERROR("Triton only supports 1-dimensional string
+            inputs for sequence state input \"" << state_name << "\" for
+            model \"" << Name() << "\" when batching is enabled.");
+            THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INVALID_ARG,
+                                   "Triton only supports 1-dimensional string
+                                   inputs for sequence " "state input \"" <<
+                                   state_name << "\" for model \"" << Name()
+                                   << "\".");
+          }
+        }
+      }
+    }
+    */
   }
 
   uint32_t i = 0;
   for (const auto& batch_input : model_->BatchInputs()) {
     for (const auto& input_name : batch_input.TargetNames()) {
+      DEBUG_TRACE_INFO(
+          "{ name: \"" << Name() << "\""
+                       << ", batch_input_name: \"" << input_name << "\""
+                       << ", index: " << i + ios.ArraySize()
+                       << ", naming_convention: " << naming_convention
+                       << ", len(allowed_inputs): " << allowed_inputs.size()
+                       << " }");
       // TODO: FIXME
       // AddInputToMap(/* naming_convention= */naming_convention,
       //               /* allowed_inputs= */allowed_inputs,
@@ -2157,121 +2166,123 @@ ModelInstanceState::ValidateOutputs()
   TritonJsonValue sequence_batching;
   if (model_->ModelConfig().Find("sequence_batching", &sequence_batching)) {
     throw std::runtime_error("Sequence batching is not supported yet.");
-    // TritonJsonValue states;
-    // if (sequence_batching.Find("state", &states))
-    // {
-    //   for (size_t i = 0; i < states.ArraySize(); i += 1)
-    //   {
-    //     TritonJsonValue state;
-    //     if (auto err = states.IndexAsObject(i, &state))
-    //     {
-    //       DEBUG_TRACE_ERROR("Failed to get sequence state " << i
-    //                         << " for model instance \"" << Name() << "\": "
-    //                         << TRITONSERVER_ErrorMessage(err));
-    //       THROW_TRITON_EXCEPTION(err,
-    //                              "Failed to get sequence state " << i
-    //                              << " for model instance \"" << Name() <<
-    //                              "\": " << TRITONSERVER_ErrorMessage(err));
-    //     }
+    /*
+    TritonJsonValue states;
+    if (sequence_batching.Find("state", &states))
+    {
+      for (size_t i = 0; i < states.ArraySize(); i += 1)
+      {
+        TritonJsonValue state;
+        if (auto err = states.IndexAsObject(i, &state))
+        {
+          DEBUG_TRACE_ERROR("Failed to get sequence state " << i
+                            << " for model instance \"" << Name() << "\": "
+                            << TRITONSERVER_ErrorMessage(err));
+          THROW_TRITON_EXCEPTION(err,
+                                 "Failed to get sequence state " << i
+                                 << " for model instance \"" << Name() <<
+                                 "\": " << TRITONSERVER_ErrorMessage(err));
+        }
 
-    //     std::string state_name;
-    //     if (auto err = state.MemberAsString("output_name", &state_name))
-    //     {
-    //       DEBUG_TRACE_ERROR("Failed to get output name for sequence state "
-    //       << i
-    //                         << " for model instance \"" << Name() << "\": "
-    //                         << TRITONSERVER_ErrorMessage(err));
-    //       THROW_TRITON_EXCEPTION(err,
-    //                              "Failed to get output name for sequence
-    //                              state " << i
-    //                              << " for model instance \"" << Name() <<
-    //                              "\": " << TRITONSERVER_ErrorMessage(err));
-    //     }
+        std::string state_name;
+        if (auto err = state.MemberAsString("output_name", &state_name))
+        {
+          DEBUG_TRACE_ERROR("Failed to get output name for sequence state "
+          << i
+                            << " for model instance \"" << Name() << "\": "
+                            << TRITONSERVER_ErrorMessage(err));
+          THROW_TRITON_EXCEPTION(err,
+                                 "Failed to get output name for sequence
+                                 state " << i
+                                 << " for model instance \"" << Name() <<
+                                 "\": " << TRITONSERVER_ErrorMessage(err));
+        }
 
-    //     std::string state_dtype;
-    //     if (auto err = state.MemberAsString("data_type", &state_dtype))
-    //     {
-    //       DEBUG_TRACE_ERROR("Failed to get data type for sequence state
-    //       output \"" << state_name << "\""
-    //                         " for model instance \"" << Name() << "\": " <<
-    //                         TRITONSERVER_ErrorMessage(err));
-    //       THROW_TRITON_EXCEPTION(err,
-    //                              "Failed to get data type for sequence state
-    //                              output \"" << state_name << "\"" " for model
-    //                              instance \"" << Name() << "\": " <<
-    //                              TRITONSERVER_ErrorMessage(err));
-    //     }
+        std::string state_dtype;
+        if (auto err = state.MemberAsString("data_type", &state_dtype))
+        {
+          DEBUG_TRACE_ERROR("Failed to get data type for sequence state
+          output \"" << state_name << "\""
+                            " for model instance \"" << Name() << "\": " <<
+                            TRITONSERVER_ErrorMessage(err));
+          THROW_TRITON_EXCEPTION(err,
+                                 "Failed to get data type for sequence state
+                                 output \"" << state_name << "\"" " for model
+                                 instance \"" << Name() << "\": " <<
+                                 TRITONSERVER_ErrorMessage(err));
+        }
 
-    //     std::vector<int64_t> dims;
-    //     if (auto err = ParseShape(state, "dims", &dims))
-    //     {
-    //       DEBUG_TRACE_ERROR("Failed to parse dims for sequence state output
-    //       \"" << state_name << "\""
-    //                         " for model instance \"" << Name() << "\": " <<
-    //                         TRITONSERVER_ErrorMessage(err));
-    //       THROW_TRITON_EXCEPTION(err,
-    //                              "Failed to parse dims for sequence state
-    //                              output \"" << state_name << "\"" " for model
-    //                              instance \"" << Name() << "\": " <<
-    //                              TRITONSERVER_ErrorMessage(err));
-    //     }
+        std::vector<int64_t> dims;
+        if (auto err = ParseShape(state, "dims", &dims))
+        {
+          DEBUG_TRACE_ERROR("Failed to parse dims for sequence state output
+          \"" << state_name << "\""
+                            " for model instance \"" << Name() << "\": " <<
+                            TRITONSERVER_ErrorMessage(err));
+          THROW_TRITON_EXCEPTION(err,
+                                 "Failed to parse dims for sequence state
+                                 output \"" << state_name << "\"" " for model
+                                 instance \"" << Name() << "\": " <<
+                                 TRITONSERVER_ErrorMessage(err));
+        }
 
-    //     DEBUG_TRACE_INFO("{ name: \"" << Name() << "\""
-    //                      << ", output_index: " << output_index
-    //                      << ", states[" << i << "]:"
-    //                        << " { state_name: \"" << state_name << "\""
-    //                        << ", state_dtype: \"" << state_dtype << "\""
-    //                        << ", len(dims): " << dims.size() << " }"
-    //                      << " }");
+        DEBUG_TRACE_INFO("{ name: \"" << Name() << "\""
+                         << ", output_index: " << output_index
+                         << ", states[" << i << "]:"
+                           << " { state_name: \"" << state_name << "\""
+                           << ", state_dtype: \"" << state_dtype << "\""
+                           << ", len(dims): " << dims.size() << " }"
+                         << " }");
 
-    //     int start_pos = state_name.find(DELIMINATOR);
-    //     output_index = std::atoi(state_name.substr(start_pos + 2).c_str());
+        int start_pos = state_name.find(DELIMINATOR);
+        output_index = std::atoi(state_name.substr(start_pos + 2).c_str());
 
-    //     const auto pr = ModelConfigDataTypeToTorchType(state_dtype);
-    //     if (!pr.first && state_dtype != "TYPE_STRING")
-    //     {
-    //       DEBUG_TRACE_ERROR("Unsupported datatype " << state_dtype << " for
-    //       sequence state output \"" << state_name << "\" for model instance
-    //       \"" << Name() << "\".");
-    //       THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
-    //                              "Unsupported datatype " << state_dtype << "
-    //                              for sequence state output" " \"" <<
-    //                              state_name << "\" for model instance \"" <<
-    //                              Name() << "\".");
-    //     }
+        const auto pr = ModelConfigDataTypeToTorchType(state_dtype);
+        if (!pr.first && state_dtype != "TYPE_STRING")
+        {
+          DEBUG_TRACE_ERROR("Unsupported datatype " << state_dtype << " for
+          sequence state output \"" << state_name << "\" for model instance
+          \"" << Name() << "\".");
+          THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
+                                 "Unsupported datatype " << state_dtype << "
+                                 for sequence state output" " \"" <<
+                                 state_name << "\" for model instance \"" <<
+                                 Name() << "\".");
+        }
 
-    //     // Validate shape for String outputs. Only allow 1 dimension.
-    //     if (state_dtype == "TYPE_STRING")
-    //     {
-    //       if ((dims.size() + (is_batching_supported_ ? 1 : 0)) > 1)
-    //       {
-    //         DEBUG_TRACE_ERROR("Triton only supports 1-dimensional string
-    //         outputs for sequence state output"
-    //                           " \"" << state_name << "\" for model instance
-    //                           \"" << Name() << "\".");
-    //         THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
-    //                                "Triton only supports 1-dimensional string
-    //                                outputs for sequence state output" " \""
-    //                                << state_name << "\" for model instance
-    //                                \"" << Name() << "\".");
-    //       }
-    //     }
+        // Validate shape for String outputs. Only allow 1 dimension.
+        if (state_dtype == "TYPE_STRING")
+        {
+          if ((dims.size() + (is_batching_supported_ ? 1 : 0)) > 1)
+          {
+            DEBUG_TRACE_ERROR("Triton only supports 1-dimensional string
+            outputs for sequence state output"
+                              " \"" << state_name << "\" for model instance
+                              \"" << Name() << "\".");
+            THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
+                                   "Triton only supports 1-dimensional string
+                                   outputs for sequence state output" " \""
+                                   << state_name << "\" for model instance
+                                   \"" << Name() << "\".");
+          }
+        }
 
-    //     // model_->OutputMap()[state_name] = op_index;
-    //     map_outputs_[state_name].triton_dtype() =
-    //     ConvertTorchTypeToDataType(pr.second); DEBUG_TRACE_INFO("{ name: \""
-    //     << Name() << "\""
-    //                      << ", state_name: \"" << state_name << "\""
-    //                      << ", output_index: " <<
-    //                      map_outputs_[state_name].server_index()
-    //                      << ", torch_type: " <<
-    //                      map_outputs_[state_name].torch_dtype()
-    //                      << ", output_dtype: \"" <<
-    //                      TRITONSERVER_DataTypeString(map_outputs_[state_name].triton_dtype())
-    //                      << "\""
-    //                      << " }");
-    //   }
-    // }
+        // model_->OutputMap()[state_name] = op_index;
+        map_outputs_[state_name].triton_dtype() =
+        ConvertTorchTypeToDataType(pr.second); DEBUG_TRACE_INFO("{ name: \""
+        << Name() << "\""
+                         << ", state_name: \"" << state_name << "\""
+                         << ", output_index: " <<
+                         map_outputs_[state_name].server_index()
+                         << ", torch_type: " <<
+                         map_outputs_[state_name].torch_dtype()
+                         << ", output_dtype: \"" <<
+                         TRITONSERVER_DataTypeString(map_outputs_[state_name].triton_dtype())
+                         << "\""
+                         << " }");
+      }
+    }
+    */
   }
 }
 
