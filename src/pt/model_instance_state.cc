@@ -244,7 +244,6 @@ ModelInstanceState::Create(
 void
 ModelInstanceState::CreateCudaEvents(const int32_t& device_id)
 {
-
 #ifdef TRITON_ENABLE_GPU
   // Need to set the CUDA context so that the context that events are
   // created on match with contexts that events are recorded with.
@@ -367,7 +366,6 @@ float
 ModelInstanceState::GetCudaEventElapsedTime(
     const cudaEvent_t& start_event, const cudaEvent_t& end_event)
 {
-
   float duration = 0;
 #ifdef TRITON_ENABLE_GPU
   // [FIXME] in the case of cudaEventElapsedTime failure, should handle
@@ -402,7 +400,6 @@ ModelInstanceState::GetNamingConvention(
     triton::backend::pytorch::NamingConvention* naming_convention,
     const std::vector<std::string>& allowed_ios)
 {
-
   // Rules for (non-Dictionary) input tensor names:
   // 1. Must be in 'allowed_inputs' (arguments in the forward function)
   // 2. Must follow the naming convention i.e. <name>__<index>

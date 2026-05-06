@@ -50,7 +50,6 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
 TRITONSERVER_Error*
 ModelState::AutoCompleteConfig()
 {
-
   // Auto-complete configuration is not supported since PyTorch does not
   // store/capture sufficient model metadata so just log error instead.
   LOG_MESSAGE(

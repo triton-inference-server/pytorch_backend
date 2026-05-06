@@ -1969,10 +1969,10 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_count)
 
   /*
     The code below likely needs to be fixed up as this is where batch input were
-    assigned to the input map and the naming convention and allowed inputs were used to
-    validate the batch input target names and assign them to the input map. This is also
-    where the batch_input_count_ was determined based on the number of batch inputs and
-    the number of target names for each batch input.
+    assigned to the input map and the naming convention and allowed inputs were
+    used to validate the batch input target names and assign them to the input
+    map. This is also where the batch_input_count_ was determined based on the
+    number of batch inputs and the number of target names for each batch input.
   */
 #if false
   for (const auto& batch_input : model_->BatchInputs()) {
@@ -1987,9 +1987,10 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_count)
 #endif
 
   DEBUG_TRACE_INFO(
-      "{ name: \"" << Name() << "\", total_batch_input_target_names: "
-                   << uint32_t i = model_->BatchInputs().size() * batch_input.TargetNames().size();
-                   << ", batch_input_count: " << batch_input_count_ << " }");
+      "{ name: \"" << Name()
+                   << "\", total_batch_input_target_names: " << uint32_t i =
+          model_->BatchInputs().size() * batch_input.TargetNames().size();
+      << ", batch_input_count: " << batch_input_count_ << " }");
 }
 
 void
