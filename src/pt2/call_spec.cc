@@ -128,6 +128,7 @@ namespace triton::backend::pytorch::pt2
         return names;
       }
 
+      // Walk the list of dictionary keys, prepending them as nodes in the format "[key]" to the names of the children nodes.
       for (size_t i = 0; i < dictionary_keys_.size(); i += 1)
       {
         std::string dictionary_entry = "[" + dictionary_keys_.at(i) + "]";
@@ -148,6 +149,7 @@ namespace triton::backend::pytorch::pt2
       }
     }
     else
+    if (type_ == call_spec_type::builtins_list || type_ == call_spec_type::builtins_tuple)
     {
       for (size_t i = 0; i < children_.size(); i += 1)
       {
@@ -167,6 +169,10 @@ namespace triton::backend::pytorch::pt2
           }
         }
       }
+    }
+    else
+    {
+      TRITON_LOG_ERROR("Invalid type \"" << type_ << "\" found in call specification.");
     }
 
     return names;
@@ -366,11 +372,13 @@ namespace triton::backend::pytorch::pt2
 
     constexpr char context_property_name[] = "context";
 
-    // Attempt to parse the context property if it exists.
-    // When the context property exists but is not an array or string, return an error.
-    // When the context property is a string, attempt to parse it as JSON; if parsing fails or the result is not an array, return an error.
-    // When the type of this call specification is builtins.dict, the context property is expected to be an array of strings representing the keys for each dictionary entry in this call specification.
-    // When the type of this call specification is builtins.list or builtins.tuple, the context property is expected to be an empty array since lists and tuples do not have keys.
+    /*
+      Attempt to parse the context property if it exists.
+      When the context property exists but is not an array or string, return an error.
+      When the context property is a string, attempt to parse it as JSON; if parsing fails or the result is not an array, return an error.
+      When the type of this call specification is builtins.dict, the context property is expected to be an array of strings representing the keys for each dictionary entry in this call specification.
+      When the type of this call specification is builtins.list or builtins.tuple, the context property is expected to be an empty array since lists and tuples do not have keys.
+    */
     common::TritonJson::Value context_array;
     if (spec_object.Find(context_property_name)
         && !spec_object.MemberIsNull(context_property_name)

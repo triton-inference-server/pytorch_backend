@@ -47,16 +47,24 @@ namespace triton::backend::pytorch::pt2
       const std::string& name,
       const std::string& ordinal_name)
   {
-    if (contains(name) || (!ordinal_name.empty() && contains(ordinal_name)))
+    if (contains(name))
+    {
       THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_ALREADY_EXISTS,
                              "io_data already contains name: \"" + name + "\"");
+    }
+    if ((!ordinal_name.empty() && contains(ordinal_name)))
+    {
+      THROW_TRITON_EXCEPTION(
+          TRITONSERVER_ERROR_ALREADY_EXISTS,
+          "io_data already contains ordinal name: \"" + ordinal_name + "\"");
+    }
 
     map_[name] = values_.size();
+    values_.push_back(pt2::io_data::data{});
     if (!ordinal_name.empty())
     {
       map_[ordinal_name] = values_.size();
     }
-    values_.push_back(pt2::io_data::data{});
   }
 
   const io_data::data&
