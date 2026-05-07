@@ -55,7 +55,6 @@ ModelInstanceState::ModelInstanceState(
       model_state_(model_state), device_(torch::kCPU), is_dict_input_(false),
       device_cnt_(0)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
 #ifdef TRITON_ENABLE_GPU
     device_ = torch::Device(torch::kCUDA, DeviceId());
@@ -153,7 +152,6 @@ ModelInstanceState::ModelInstanceState(
 
 ModelInstanceState::~ModelInstanceState()
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   torch_model_.reset();
   ClearCache();
 
@@ -183,7 +181,6 @@ ModelInstanceState::AddInputToMap(
     const std::vector<std::string> allowed_inputs, const std::string& io_name,
     const uint32_t index)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   std::string deliminator = "__";
 
   if (is_dict_input_) {
@@ -218,7 +215,6 @@ ModelInstanceState::AddInputToMap(
 void
 ModelInstanceState::ClearCache()
 {
-  DEBUG_TRACE_FUNCTION_CALL();
 #ifdef TRITON_ENABLE_GPU
   if (device_.is_cuda() ||
       ((Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) && (device_cnt_ > 0))) {
@@ -232,7 +228,6 @@ ModelInstanceState::Create(
     ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance,
     ModelInstanceState** state)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   try {
     *state = new ModelInstanceState(model_state, triton_model_instance);
   }
@@ -249,7 +244,6 @@ ModelInstanceState::Create(
 void
 ModelInstanceState::CreateCudaEvents(const int32_t& device_id)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
 #ifdef TRITON_ENABLE_GPU
   // Need to set the CUDA context so that the context that events are
   // created on match with contexts that events are recorded with.
@@ -275,7 +269,6 @@ ModelInstanceState::Execute(
     std::vector<torch::jit::IValue>* input_tensors,
     std::vector<torch::jit::IValue>* output_tensors)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   NVTX_RANGE(nvtx_, "Execute " + Name());
 
   torch::jit::IValue model_outputs;
@@ -373,7 +366,6 @@ float
 ModelInstanceState::GetCudaEventElapsedTime(
     const cudaEvent_t& start_event, const cudaEvent_t& end_event)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   float duration = 0;
 #ifdef TRITON_ENABLE_GPU
   // [FIXME] in the case of cudaEventElapsedTime failure, should handle
@@ -391,7 +383,6 @@ ModelInstanceState::GetCudaEventElapsedTime(
 cudaStream_t
 ModelInstanceState::GetCudaStreamByInstanceKind()
 {
-  DEBUG_TRACE_FUNCTION_CALL();
 #ifdef TRITON_ENABLE_GPU
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
     return stream_;
@@ -409,7 +400,6 @@ ModelInstanceState::GetNamingConvention(
     triton::backend::pytorch::NamingConvention* naming_convention,
     const std::vector<std::string>& allowed_ios)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   // Rules for (non-Dictionary) input tensor names:
   // 1. Must be in 'allowed_inputs' (arguments in the forward function)
   // 2. Must follow the naming convention i.e. <name>__<index>
@@ -564,7 +554,6 @@ void
 ModelInstanceState::ProcessRequests(
     TRITONBACKEND_Request** requests, const uint32_t request_count)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   LOG_MESSAGE(
       TRITONSERVER_LOG_VERBOSE,
       (std::string("TRITONBACKEND_ModelExecute: Running ") + Name() + " with " +
@@ -879,7 +868,6 @@ ModelInstanceState::ReadOutputTensors(
     TRITONBACKEND_Request** requests, const uint32_t request_count,
     std::vector<TRITONBACKEND_Response*>* responses)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   NVTX_RANGE(nvtx_, "ReadOutputTensors " + Name());
 
   BackendOutputResponder responder(
@@ -1051,7 +1039,6 @@ TRITONSERVER_Error*
 ModelInstanceState::RecordBackendTimestamp(
     uint64_t* timestamp, void* cuda_event)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   if ((Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) ||
       ((Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) && (device_cnt_ > 0))) {
 #ifdef TRITON_ENABLE_GPU
@@ -1089,7 +1076,6 @@ ModelInstanceState::SetInputTensors(
     BackendInputCollector* collector, std::vector<const char*>* input_names,
     std::vector<torch::jit::IValue>* input_tensors, bool* cuda_copy)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   // InferenceMode should be used to guard all tensors operations
   torch::InferenceMode infer_guard(model_state_->EnabledInferenceMode());
 
@@ -1283,7 +1269,6 @@ ModelInstanceState::ValidateBooleanSequenceControl(
     triton::common::TritonJson::Value& sequence_batching,
     const std::string& control_kind, bool required, bool* have_control)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   std::string tensor_name;
   std::string tensor_datatype;
   RETURN_IF_ERROR(GetBooleanSequenceControlProperties(
@@ -1325,7 +1310,6 @@ ModelInstanceState::ValidateBooleanSequenceControl(
 TRITONSERVER_Error*
 ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   // Collect all the expected input tensor names and validate that the model
   // configuration specifies only those.
   std::vector<std::string> allowed_inputs;
@@ -1502,7 +1486,6 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
 TRITONSERVER_Error*
 ModelInstanceState::ValidateOutputs()
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   triton::common::TritonJson::Value ios;
   RETURN_IF_ERROR(model_state_->ModelConfig().MemberAsArray("output", &ios));
   std::string deliminator = "__";
@@ -1634,7 +1617,6 @@ ModelInstanceState::ValidateTypedSequenceControl(
     triton::common::TritonJson::Value& sequence_batching,
     const std::string& control_kind, bool required, bool* have_control)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   std::string tensor_name;
   std::string tensor_datatype;
   RETURN_IF_ERROR(GetTypedSequenceControlProperties(

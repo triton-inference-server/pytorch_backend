@@ -26,10 +26,7 @@
 
 #include "model_instance_state.hh"
 
-#include <iostream>
-#include <stdexcept>
-#include <unordered_map>
-#include <vector>
+#include <cstddef>
 
 #include "../libtorch.hh"
 #include "../libtorch_utils.h"
@@ -55,7 +52,6 @@ ModelInstanceState::ModelInstanceState(
     TritonModelState* model, TRITONBACKEND_ModelInstance* triton_model_instance)
     : BackendModelInstance{model, triton_model_instance}, model_{model}
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   if (!model)
     THROW_TRITON_EXCEPTION(
         TRITONSERVER_ERROR_INTERNAL, "Argument `model` cannot be `null`.")
@@ -75,7 +71,11 @@ ModelInstanceState::ModelInstanceState(
   device_count_ = torch::cuda::device_count();
 #endif
 
-  model_->LoadModel(ArtifactFilename(), device_, device_count_, Kind());
+  model_->LoadModel(
+      /* model_file_name= */ ArtifactFilename(),
+      /* device= */ device_,
+      /* device_count= */ device_count_,
+      /* kind= */ Kind());
 
 #ifdef TRITON_ENABLE_GPU
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
@@ -90,7 +90,7 @@ ModelInstanceState::ModelInstanceState(
     // timestamps to prevent timestamp skewing. However, in the future, any
     // modifications to the CUDA stream synchronization logic should be handled
     // with caution.
-    for (int i = 0; i < device_count_; i++) {
+    for (int i = 0; i < device_count_; i += 1) {
       cudaStream_t stream;
       if (auto err = CreateCudaStream(i, 0 /* cuda_stream_priority */, &stream))
         throw triton::backend::BackendModelInstanceException(err);
@@ -106,11 +106,35 @@ ModelInstanceState::ModelInstanceState(
   }
 #endif
 
-  size_t expected_input_count{0};
+  auto model_inputs = model_->InputMap();
+  auto model_outputs = model_->OutputMap();
+
+  for (auto [input_name, input_index] : model_inputs) {
+    std::string ordinal_name = "INPUT__" + std::to_string(input_index);
+    map_inputs_.emplace(input_name, ordinal_name);
+    map_inputs_[input_name].model_index() = input_index;
+  }
+
+  for (auto [output_name, output_index] : model_outputs) {
+    std::string ordinal_name = "OUTPUT__" + std::to_string(output_index);
+    map_outputs_.emplace(output_name, ordinal_name);
+    map_outputs_[output_name].model_index() = output_index;
+  }
+
+  size_t expected_input_count{model_inputs.size()};
 
   TritonJsonValue inputs;
   if (model_->ModelConfig().Find("input", &inputs)) {
     expected_input_count = inputs.ArraySize();
+    if (expected_input_count != inputs.ArraySize())
+      THROW_TRITON_EXCEPTION(
+          TRITONSERVER_ERROR_INTERNAL,
+          "Model instance \""
+              << Name()
+              << "\" has mismatching input count between model config and "
+                 "model definition: model config input count = "
+              << inputs.ArraySize()
+              << ", model definition input count = " << expected_input_count);
   }
 
   TritonJsonValue config_batch_inputs;
@@ -131,6 +155,7 @@ ModelInstanceState::ModelInstanceState(
           " \"CONTROL_SEQUENCE_START\", false /* required */) -> true");
       expected_input_count += 1;
     }
+
     if (ValidateBooleanSequenceControl(
             sequence_batching, "CONTROL_SEQUENCE_END", false /* required */)) {
       DEBUG_TRACE_INFO(
@@ -178,7 +203,6 @@ ModelInstanceState::ModelInstanceState(
 
 ModelInstanceState::~ModelInstanceState()
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   ClearCache();
 
 #ifdef TRITON_ENABLE_GPU
@@ -213,76 +237,15 @@ ModelInstanceState::~ModelInstanceState()
 #endif
 }
 
-void
-ModelInstanceState::AddInputToMap(
-    TritonNamingConvention naming_convention,
-    const std::vector<std::string>& allowed_inputs, const std::string& io_name,
-    uint32_t index)
-{
-  DEBUG_TRACE_FUNCTION_CALL();
-  if (is_dictionary_input_) {
-    input_index_map_[io_name] = index;
-  } else {
-    switch (naming_convention) {
-      case TritonNamingConvention::FORWARD_ARGUMENT: {
-        auto it =
-            std::find(allowed_inputs.begin(), allowed_inputs.end(), io_name);
-        if (it != allowed_inputs.end()) {
-          input_index_map_[io_name] = std::distance(allowed_inputs.begin(), it);
-          DEBUG_TRACE_INFO(
-              "{ name: \"" << Name() << "\""
-                           << ", naming_convention: \"" << naming_convention
-                           << "\", io_name: \"" << io_name << "\""
-                           << ", input_index: " << input_index_map_[io_name]
-                           << " }");
-        }
-      } break;
-
-      case TritonNamingConvention::NAMED_INDEX: {
-        int start_pos = io_name.find(DELIMINATOR);
-        int ip_index = std::atoi(io_name.substr(start_pos + 2).c_str());
-        input_index_map_[io_name] = ip_index;
-        DEBUG_TRACE_INFO(
-            "{ name: \"" << Name() << "\""
-                         << ", naming_convention: \"" << naming_convention
-                         << "\", io_name: \"" << io_name << "\""
-                         << ", input_index: " << input_index_map_[io_name]
-                         << " }");
-      } break;
-
-      case TritonNamingConvention::STRICT_CONFIG_ORDERING: {
-        input_index_map_[io_name] = index;
-        DEBUG_TRACE_INFO(
-            "{ name: \"" << Name() << "\""
-                         << ", naming_convention: \"" << naming_convention
-                         << "\", io_name: \"" << io_name << "\""
-                         << ", input_index: " << input_index_map_[io_name]
-                         << " }");
-      } break;
-
-      default: {
-        DEBUG_TRACE_ERROR(
-            "Invalid naming convention value: " << naming_convention);
-        THROW_TRITON_EXCEPTION(
-            TRITONSERVER_ERROR_INVALID_ARG,
-            "Argument 'naming_convention' value of \""
-                << naming_convention << "\" is invalid or unsupported.");
-      } break;
-    }
-  }
-}
-
 const std::string&
 ModelInstanceState::ArtifactFilename() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return BackendModelInstance::ArtifactFilename();
 }
 
 void
 ModelInstanceState::ClearCache()
 {
-  DEBUG_TRACE_FUNCTION_CALL();
 #ifdef TRITON_ENABLE_GPU
   if (device_.is_cuda() ||
       (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL && device_count_ > 0)) {
@@ -295,7 +258,14 @@ ModelInstanceState*
 ModelInstanceState::Create(
     TritonModelState* model, TRITONBACKEND_ModelInstance* triton_model_instance)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
+  if (!model)
+    THROW_TRITON_EXCEPTION(
+        TRITONSERVER_ERROR_INTERNAL, "Argument `model` cannot be `null`.");
+  if (!triton_model_instance)
+    THROW_TRITON_EXCEPTION(
+        TRITONSERVER_ERROR_INTERNAL,
+        "Argument `triton_model_instance` cannot be `null`.");
+
   try {
     return new ModelInstanceState(model, triton_model_instance);
   }
@@ -324,7 +294,6 @@ ModelInstanceState::Create(
 void
 ModelInstanceState::CreateCudaEvents(int32_t device_id)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
 #ifdef TRITON_ENABLE_GPU
   // Need to set the CUDA context so that the context that events are created on
   // match with contexts that events are recorded with.
@@ -385,27 +354,24 @@ ModelInstanceState::CreateCudaEvents(int32_t device_id)
 cudaStream_t
 ModelInstanceState::CudaStream()
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return BackendModelInstance::CudaStream();
 }
 
 int32_t
 ModelInstanceState::DeviceId() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return BackendModelInstance::DeviceId();
 }
 
 void
 ModelInstanceState::Execute(
     std::vector<TRITONBACKEND_Response*>* responses, uint32_t response_count,
-    std::vector<torch::IValue>& input_tensors,
-    std::vector<torch::IValue>& output_tensors)
+    std::vector<torch::Tensor>& input_tensors,
+    std::vector<torch::Tensor>& output_tensors)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   NVTX_RANGE(nvtx_, "Execute " + Name());
 
-  std::vector<torch::IValue> model_outputs;
+  std::vector<torch::Tensor> model_outputs;
 
   try {
     // Enable/disable inference mode based on the model setting.
@@ -417,50 +383,14 @@ ModelInstanceState::Execute(
 
     torch::NoGradGuard no_grad_guard;
 
-    if (is_dictionary_input_) {
-      // DEBUG_TRACE_ERROR("Dictionary inputs are not supported yet for model
-      // instance \"" << Name() << "\"."); NO SUPPORT FOR DICTIONARY INPUTS YET
-      // torch::Dict<std::string, torch::Tensor> dict_input;
-      // for (auto& input_index : input_index_map_)
-      // {
-      //   const std::string& input_name = input_index.first;
-      //   uint32_t model_input_index = input_index.second;
-
-      //   dict_input.insert(input_name, input_tensors.at(model_input_index));
-      // }
-
-      // std::vector<torch::IValue> model_inputs = {dict_input};
-      // model_outputs = model_->Forward(model_inputs);
-      torch::Dict<std::string, torch::Tensor> input_dictionary{};
-      for (auto& input_index : input_index_map_) {
-        const std::string& input_name = input_index.first;
-        uint32_t model_input_index = input_index.second;
-
-        input_dictionary.insert(
-            input_name, input_tensors.at(model_input_index).toTensor());
-      }
-
-      std::vector<torch::IValue> model_inputs{input_dictionary};
-      DEBUG_TRACE_INFO(
-          "calling Forward() for model instance \""
-          << Name() << "\" with " << model_inputs.size() << " input tensors.");
-      model_outputs = model_->Forward(model_inputs);
-      DEBUG_TRACE_INFO(
-          "Forward() for model instance \"" << Name()
-                                            << "\""
-                                               " returned "
-                                            << model_outputs.size()
-                                            << " output tensors.");
-    } else {
-      DEBUG_TRACE_INFO(
-          "calling Forward() for model instance \""
-          << Name() << "\" with " << input_tensors.size() << " input tensors.");
-      model_outputs = model_->Forward(input_tensors);
-      DEBUG_TRACE_INFO(
-          "Forward() for model instance \"" << Name() << "\" returned "
-                                            << model_outputs.size()
-                                            << " output tensors.");
-    }
+    DEBUG_TRACE_INFO(
+        "calling Forward() for model instance \""
+        << Name() << "\" with " << input_tensors.size() << " input tensors.");
+    model_outputs = model_->Forward(input_tensors);
+    DEBUG_TRACE_INFO(
+        "Forward() for model instance \"" << Name() << "\" returned "
+                                          << model_outputs.size()
+                                          << " output tensors.");
 
     for (auto& output_tensor : model_outputs) {
       output_tensors.push_back(output_tensor);
@@ -487,7 +417,6 @@ float
 ModelInstanceState::GetCudaEventElapsedTime(
     const cudaEvent_t& start_event, const cudaEvent_t& end_event)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   float duration{0};
 #ifdef TRITON_ENABLE_GPU
   if (auto err = ConvertCUDAStatusToTritonError(
@@ -506,7 +435,6 @@ ModelInstanceState::GetCudaEventElapsedTime(
 cudaStream_t
 ModelInstanceState::GetCudaStreamByInstanceKind()
 {
-  DEBUG_TRACE_FUNCTION_CALL();
 #ifdef TRITON_ENABLE_GPU
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
     DEBUG_TRACE_INFO(
@@ -532,7 +460,6 @@ TritonNamingConvention
 ModelInstanceState::GetNamingConvention(
     const std::vector<std::string>& allowed_ios)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   // Rules for (non-Dictionary) input tensor names:
   // 1. Must be in 'allowed_inputs' (arguments in the forward function)
   // 2. Must follow the naming convention i.e. <name>__<index>
@@ -695,35 +622,30 @@ ModelInstanceState::GetNamingConvention(
 const std::string&
 ModelInstanceState::HostPolicyName() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return BackendModelInstance::HostPolicyName();
 }
 
 TritonModelState*
 ModelInstanceState::ModelState() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return model_;
 }
 
 TRITONSERVER_InstanceGroupKind
 ModelInstanceState::Kind() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return BackendModelInstance::Kind();
 }
 
 triton::backend::BackendModel*
 ModelInstanceState::Model() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return BackendModelInstance::Model();
 }
 
 const std::string&
 ModelInstanceState::Name() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return BackendModelInstance::Name();
 }
 
@@ -731,10 +653,10 @@ void
 ModelInstanceState::ProcessRequests(
     TRITONBACKEND_Request** requests, const uint32_t request_count)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   TRITON_LOG_VERBOSE(
       "TRITONBACKEND_ModelExecute: Running model \""
-      << Name() << "\" with " << request_count << " requests");
+      << Name() << "\" with " << request_count
+      << (request_count == 1 ? " request." : " requests."));
 
 #ifdef TRITON_ENABLE_GPU
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
@@ -841,7 +763,7 @@ ModelInstanceState::ProcessRequests(
   }
 
   std::vector<const char*> input_names;
-  std::vector<torch::IValue> input_tensors;
+  std::vector<torch::Tensor> input_tensors;
   bool cuda_copy{false};
   std::unique_ptr<BackendInputCollector> collector;
 
@@ -858,17 +780,30 @@ ModelInstanceState::ProcessRequests(
 #endif
 
   if (!all_response_failed) {
-    collector.reset(new BackendInputCollector(
-        requests, request_count, &responses, model_->TritonMemoryManager(),
-        model_->EnablePinnedInput(), GetCudaStreamByInstanceKind(), nullptr,
-        nullptr, 0, HostPolicyName().c_str()));
+    collector.reset(new BackendInputCollector{
+        /* requests= */ requests,
+        /* request_count= */ request_count,
+        /* responses= */ &responses,
+        /* memory_manager= */ model_->TritonMemoryManager(),
+        /* pinned_enabled= */ model_->EnablePinnedInput(),
+        /* stream= */ GetCudaStreamByInstanceKind(),
+        /* event= */ nullptr,
+        /* buffer_ready_event= */ nullptr,
+        /* kernel_buffer_threshold= */ 0,
+        /* host_policy_name= */ HostPolicyName().c_str()});
 
     triton_exception triton_ex;
     TRITONSERVER_Error* err{nullptr};
     try {
       SetInputTensors(
-          total_batch_size, requests, request_count, &responses,
-          collector.get(), &input_names, &input_tensors, &cuda_copy);
+          /* total_batch_size= */ total_batch_size,
+          /* requests= */ requests,
+          /* request_count= */ request_count,
+          /* responses= */ &responses,
+          /* collector= */ collector.get(),
+          /* input_names= */ &input_names,
+          /* input_tensors= */ &input_tensors,
+          /* cuda_copy= */ &cuda_copy);
     }
     catch (const triton_exception& e) {
       triton_ex = e;
@@ -893,7 +828,7 @@ ModelInstanceState::ProcessRequests(
   }
 #endif
 
-  std::vector<torch::IValue> output_tensors;
+  std::vector<torch::Tensor> output_tensors;
   uint64_t compute_start_ns{0};
   uint64_t compute_infer_start{0};
 
@@ -926,9 +861,8 @@ ModelInstanceState::ProcessRequests(
 
   if (!all_response_failed) {
     DEBUG_TRACE_INFO(
-        "Execute() for { model: \""
-        << Name() << "\""
-        << ", request_count: " << request_count
+        "Execute() { model: \""
+        << Name() << "\", request_count: " << request_count
         << ", len(input_tensors): " << input_tensors.size()
         << ", len(output_tensors): " << output_tensors.size() << " }");
 
@@ -937,6 +871,12 @@ ModelInstanceState::ProcessRequests(
         /* response_count= */ request_count,
         /* input_tensors= */ input_tensors,
         /* output_tensors= */ output_tensors);
+
+    DEBUG_TRACE_INFO(
+        "Execute() -> { model: \""
+        << Name() << "\", request_count: " << request_count
+        << ", len(input_tensors): " << input_tensors.size()
+        << ", len(output_tensors): " << output_tensors.size() << " }");
   }
 
   bool invalid_index{false};
@@ -944,18 +884,18 @@ ModelInstanceState::ProcessRequests(
 
   if (!all_response_failed) {
     for (const auto& name : model_->ModelOutputs()) {
-      int op_index = output_index_map_[name.first];
-      if (op_index < 0 || op_index > max_index) {
+      int output_index = model_->OutputMap()[name.first];
+      if (output_index < 0 || output_index > max_index) {
         RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
             responses, request_count, all_response_failed,
             TRITONSERVER_ErrorNew(
                 TRITONSERVER_ERROR_INVALID_ARG,
                 TOSTRING(
-                    "The output \"" << name.first
-                                    << "\" in the model configuration refers to"
-                                       " an output index which doesn't exist."
-                                       " This model has "
-                                    << max_index << " outputs.")
+                    "The output \""
+                    << name.first
+                    << "\" in the model configuration refers to an output "
+                       "index which doesn't exist. This model has "
+                    << max_index << " outputs.")
                     .c_str()));
         invalid_index = true;
         break;
@@ -1009,16 +949,12 @@ ModelInstanceState::ProcessRequests(
     if (!invalid_index) {
       TRITONSERVER_Error* err{nullptr};
       try {
-        DEBUG_TRACE_INFO(
-            "ReadOutputTensors() for {"
-            << " model: \"" << Name() << "\""
-            << ", total_batch_size: " << total_batch_size
-            << ", len(output_tensors): " << output_tensors.size()
-            << ", request_count: " << request_count
-            << ", responses_count: " << responses.size() << " }");
         ReadOutputTensors(
-            total_batch_size, output_tensors, requests, request_count,
-            responses);
+            /* total_batch_size= */ total_batch_size,
+            /* output_tensors= */ output_tensors,
+            /* requests= */ requests,
+            /* request_count= */ request_count,
+            /* responses= */ responses);
       }
       catch (const triton::backend::pytorch::BackendException& exception) {
         TRITON_LOG_ERROR(
@@ -1059,7 +995,9 @@ ModelInstanceState::ProcessRequests(
   for (auto& response : responses) {
     if (response) {
       if (auto err = TRITONBACKEND_ResponseSend(
-              response, TRITONSERVER_RESPONSE_COMPLETE_FINAL, nullptr)) {
+              /* response= */ response,
+              /* flags= */ TRITONSERVER_RESPONSE_COMPLETE_FINAL,
+              /* userp= */ nullptr)) {
         TRITON_LOG_ERROR(
             "Failed to send PyTorch backend response for model instance \""
             << Name() << "\": " << TRITONSERVER_ErrorMessage(err));
@@ -1137,11 +1075,10 @@ ModelInstanceState::ProcessRequests(
 
 void
 ModelInstanceState::ReadOutputTensors(
-    size_t total_batch_size, const std::vector<torch::IValue>& output_tensors,
+    size_t total_batch_size, const std::vector<torch::Tensor>& output_tensors,
     TRITONBACKEND_Request** requests, uint32_t request_count,
     std::vector<TRITONBACKEND_Response*>& responses)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   if (!requests)
     THROW_TRITON_EXCEPTION(
         TRITONSERVER_ERROR_INVALID_ARG,
@@ -1150,13 +1087,6 @@ ModelInstanceState::ReadOutputTensors(
             << Name() << "\".");
 
   NVTX_RANGE(nvtx_, "ReadOutputTensors " + Name());
-
-  DEBUG_TRACE_INFO(
-      "{ model: \"" + Name() + "\""
-      << ", total_batch_size: " << total_batch_size << ", request_count: "
-      << request_count << ", max_batch_size: " << model_->MaxBatchSize()
-      << ", enable_pinned_input: " << model_->EnablePinnedInput()
-      << ", supports_batching: " << is_batching_supported_ << " }");
 
   triton::backend::BackendOutputResponder responder{
       /* requests= */ requests,
@@ -1171,23 +1101,31 @@ ModelInstanceState::ReadOutputTensors(
   std::vector<std::shared_ptr<std::string>> string_buffers;
 
   for (auto& output : model_->ModelOutputs()) {
-    int op_index = output_index_map_[output.first];
     auto output_name = output.first;
-    auto output_tensor_pair = output.second;
 
-    DEBUG_TRACE_INFO(
-        "{ model_name: \"" << model_->Name() << "\""
-                           << ", output_name: \"" << output_name << "\""
-                           << ", op_index: " << op_index << ", is_tensor: true"
-                           << ", output_tensor_pair: ("
-                           << output_tensor_pair.first << ", "
-                           << output_tensor_pair.second << ")"
-                           << " }");
+    if (!map_outputs_.contains(output_name)) {
+      if (auto err = TRITONSERVER_ErrorNew(
+              TRITONSERVER_ERROR_INTERNAL,
+              TOSTRING(
+                  "Inductor model instance \""
+                  << Name() << "\" output tensor \"" << output_name
+                  << "\" not found in output map.")
+                  .c_str())) {
+        DEBUG_TRACE_ERROR(
+            "{ model_name: \"" << model_->Name() << "\", output_name: \""
+                               << output_name << "\", error: \""
+                               << TRITONSERVER_ErrorMessage(err) << "\" }");
+        THROW_TRITON_EXCEPTION(err, TRITONSERVER_ErrorMessage(err));
+      }
+    }
+
+    auto output_index = map_outputs_[output_name].model_index();
+    auto output_tensor_pair = output.second;
 
     torch::Tensor output_flat;
 
     try {
-      output_flat = output_tensors[op_index].toTensor().contiguous().flatten();
+      output_flat = output_tensors[output_index].contiguous().flatten();
     }
     catch (const std::exception& exception) {
       DEBUG_TRACE_ERROR(
@@ -1199,68 +1137,56 @@ ModelInstanceState::ReadOutputTensors(
               TRITONSERVER_ERROR_INTERNAL,
               TOSTRING(
                   "Inductor model instance \""
-                  << Name() << "\" output tensor \"" << output_name
-                  << "\" not found: " << exception.what())
+                  << Name() << "\""
+                  << " output tensor \"" << output_name << "\""
+                  << " not found: " << exception.what())
                   .c_str())) {
         DEBUG_TRACE_ERROR(
-            "{ model_name: \"" << model_->Name() << "\""
-                               << ", output_name: \"" << output_name << "\""
-                               << ", error: \""
-                               << TRITONSERVER_ErrorMessage(err) << "\""
-                               << " }");
+            "{ model_name: \""
+            << model_->Name() << "\", output_name: \"" << output_name
+            << "\", output_index: " << output_index << ", error: \""
+            << TRITONSERVER_ErrorMessage(err) << "\" }");
         THROW_TRITON_EXCEPTION(err, TRITONSERVER_ErrorMessage(err));
       }
     }
 
     auto scalar_type = output_flat.scalar_type();
     auto output_dtype = ConvertTorchTypeToDataType(scalar_type);
-    auto config_dtype = output_dtype_map_[output_name];
-
-    DEBUG_TRACE_INFO(
-        "{ model_name: \"" << model_->Name() << "\""
-                           << ", output_name: \"" << output_name << "\""
-                           << ", scalar_type: \""
-                           << torch::toString(scalar_type) << "\""
-                           << ", output_dtype: \"TYPE_"
-                           << TRITONSERVER_DataTypeString(output_dtype) << "\""
-                           << ", config_dtype: \"TYPE_"
-                           << TRITONSERVER_DataTypeString(config_dtype) << "\""
-                           << " }");
+    auto config_dtype = map_outputs_[output_name].triton_dtype();
 
     if (output_dtype != config_dtype) {
       DEBUG_TRACE_ERROR(
-          "{ model_name: \"" << model_->Name() << "\""
-                             << ", output_name: \"" << output_name << "\""
-                             << ", scalar_type: \""
-                             << torch::toString(scalar_type) << "\""
-                             << ", output_dtype: TYPE_"
-                             << TRITONSERVER_DataTypeString(output_dtype)
-                             << ", config_dtype: TYPE_"
-                             << TRITONSERVER_DataTypeString(config_dtype)
-                             << ", error: \"datatype mismatch\""
-                             << " }");
+          "{ model_name: \""
+          << model_->Name() << "\", output_name: \"" << output_name
+          << "\", output_index: " << output_index << ", scalar_type: \""
+          << torch::toString(scalar_type) << "\", output_dtype: TYPE_"
+          << TRITONSERVER_DataTypeString(output_dtype)
+          << ", config_dtype: TYPE_"
+          << TRITONSERVER_DataTypeString(config_dtype)
+          << ", error: \"datatype mismatch\" }");
       if (auto err = TRITONSERVER_ErrorNew(
               TRITONSERVER_ERROR_INTERNAL,
               TOSTRING(
                   "Inductor model instance \""
-                  << Name() << "\" output tensor \"" << output_name << "\""
-                  << " has datatype TYPE_"
+                  << Name() << "\" output tensor \"" << output_name
+                  << "\" has datatype TYPE_"
                   << TRITONSERVER_DataTypeString(output_dtype)
                   << " but model configuration expects TYPE_"
                   << TRITONSERVER_DataTypeString(config_dtype) << ".")
                   .c_str())) {
         DEBUG_TRACE_ERROR(
-            "{ model_name: \"" << model_->Name() << "\""
-                               << ", output_name: \"" << output_name << "\""
-                               << ", error: \""
-                               << TRITONSERVER_ErrorMessage(err) << "\""
-                               << " }");
+            "{ model_name: \""
+            << model_->Name() << "\", output_name: \"" << output_name
+            << "\", output_index: " << output_index << ", scalar_type: \""
+            << torch::toString(scalar_type) << "\", output_dtype: TYPE_"
+            << TRITONSERVER_DataTypeString(output_dtype)
+            << ", config_dtype: TYPE_"
+            << TRITONSERVER_DataTypeString(config_dtype) << ", error: \" }");
         THROW_TRITON_EXCEPTION(err, TRITONSERVER_ErrorMessage(err));
       }
     }
 
-    const char* output_buffer =
-        static_cast<const char*>(output_flat.data_ptr());
+    auto output_buffer = static_cast<const char*>(output_flat.data_ptr());
 
     // Output tensors might not reside on the same device as the model instance.
     torch::Device output_device = output_flat.device();
@@ -1270,59 +1196,29 @@ ModelInstanceState::ReadOutputTensors(
     const auto memory_type_id =
         (output_device.type() == torch::kCPU) ? 0 : output_device.index();
 
-    DEBUG_TRACE_INFO(
-        "{ model_name: \"" << model_->Name() << "\""
-                           << ", output_name: \"" << output_name << "\""
-                           << ", output_device: \"" << output_device << "\""
-                           << ", memory_type: \""
-                           << TRITONSERVER_MemoryTypeString(memory_type) << "\""
-                           << ", memory_type_id: " << memory_type_id << " }");
-
     // Batch output doesn't support string data type yet, as it is not trivial
     // to parse string output.
     const triton::backend::BatchOutput* batch_output =
         model_->FindBatchOutput(output_name);
 
     if (!batch_output) {
-      DEBUG_TRACE_INFO(
-          "{ model_name: \"" << model_->Name() << "\", output_name: \""
-                             << output_name << "\", batch_output: NULL }");
       std::vector<int64_t> batch_n_shape;
-      auto shape = output_tensors[op_index].toTensor().sizes();
+      auto shape = output_tensors[output_index].sizes();
       for (auto it = shape.begin(); it != shape.end(); it++) {
         batch_n_shape.push_back(*it);
       }
 
       if (batch_n_shape.size() == 0) {
-        DEBUG_TRACE_ERROR(
-            "{ model_name: \"" << model_->Name() << "\", output_name: \""
-                               << output_name
-                               << "\", error: \"scalar output not supported\""
-                                  " }");
         auto error_message = TOSTRING(
             "Inductor model instance \""
             << Name() << "\" output tensor \"" << output_name
             << "\" is a scalar which is not supported.");
         auto err = TRITONSERVER_ErrorNew(
             TRITONSERVER_ERROR_INTERNAL, error_message.c_str());
-
-        DEBUG_TRACE_ERROR(
-            "{ model_name: \"" << model_->Name() << "\", output_name: \""
-                               << output_name << "\", error: \""
-                               << TRITONSERVER_ErrorMessage(err) << "\" }");
         THROW_TRITON_EXCEPTION(err, error_message);
       }
 
       if (output_tensor_pair.first != -1) {
-        DEBUG_TRACE_INFO(
-            "responder.ProcessTensor { model_name: \""
-            << model_->Name() << "\""
-            << ", output_name: \"" << output_name << "\""
-            << ", output_dtype: TYPE_"
-            << TRITONSERVER_DataTypeString(output_dtype) << ", batch_n_shape: "
-            << triton::backend::ShapeToString(batch_n_shape)
-            << ", memory_type: \"" << TRITONSERVER_MemoryTypeString(memory_type)
-            << "\", memory_type_id: " << memory_type_id << " }");
         responder.ProcessTensor(
             /* output_name= */ output_name,
             /* datatype= */ output_dtype,
@@ -1346,8 +1242,8 @@ ModelInstanceState::ReadOutputTensors(
             DEBUG_TRACE_ERROR(
                 "{ model_name: \"" << model_->Name() << "\", output_name: \""
                                    << output_name
-                                   << "\", error: \"failed to update state\""
-                                      " }");
+                                   << "\", output_index: " << output_index
+                                   << ", error: \"failed to update state\" }");
             THROW_TRITON_EXCEPTION(
                 err, "Failed to update state for model instance \""
                          << Name() << "\": " << TRITONSERVER_ErrorMessage(err));
@@ -1376,7 +1272,6 @@ void
 ModelInstanceState::RecordBackendTimestamp(
     uint64_t* timestamp, void* cuda_event_ptr)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
 #ifdef TRITON_ENABLE_GPU
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU ||
       (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL && device_count_ > 0)) {
@@ -1385,9 +1280,8 @@ ModelInstanceState::RecordBackendTimestamp(
             cudaEventRecord(cuda_event, GetCudaStreamByInstanceKind()),
             TRITONSERVER_ERROR_INTERNAL, "Failed to record CUDA event")) {
       DEBUG_TRACE_ERROR(
-          "{ model_name: \"" << model_->Name() << "\""
-                             << ", error: \"" << TRITONSERVER_ErrorMessage(err)
-                             << "\" }");
+          "{ model_name: \"" << model_->Name() << "\", error: \""
+                             << TRITONSERVER_ErrorMessage(err) << "\" }");
       throw triton_exception{err};
     }
   } else
@@ -1401,7 +1295,6 @@ void
 ModelInstanceState::SetCurrentCudaStream(
     const cudaStream_t& stream, int device_id)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
 #ifdef TRITON_ENABLE_GPU
   DEBUG_TRACE_INFO(
       "Setting current CUDA stream on device "
@@ -1422,9 +1315,8 @@ ModelInstanceState::SetInputTensors(
     const uint32_t request_count,
     std::vector<TRITONBACKEND_Response*>* responses,
     BackendInputCollector* collector, std::vector<const char*>* input_names,
-    std::vector<torch::IValue>* input_tensors, bool* cuda_copy)
+    std::vector<torch::Tensor>* input_tensors, bool* cuda_copy)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   if (!requests)
     THROW_TRITON_EXCEPTION(
         TRITONSERVER_ERROR_INVALID_ARG,
@@ -1449,29 +1341,10 @@ ModelInstanceState::SetInputTensors(
         {TRITONSERVER_MEMORY_CPU_PINNED, 0},
         {TRITONSERVER_MEMORY_CPU, 0},
     };
-
-    DEBUG_TRACE_INFO(
-        "{ model: \"" << Name()
-                      << "\", allocation_preference: ["
-                         " { type: \""
-                      << TRITONSERVER_MemoryTypeString(
-                             TRITONSERVER_MEMORY_CPU_PINNED)
-                      << "\", id: 0 },"
-                         " { type: \""
-                      << TRITONSERVER_MemoryTypeString(TRITONSERVER_MEMORY_CPU)
-                      << "\""
-                         ", id: 0 } ] }");
   } else {
     alloc_preference = {
         {TRITONSERVER_MEMORY_GPU, device_.index()},
     };
-
-    DEBUG_TRACE_INFO(
-        "{ model: \"" << Name()
-                      << "\", allocation_preference: ["
-                         " { type: \""
-                      << TRITONSERVER_MemoryTypeString(TRITONSERVER_MEMORY_GPU)
-                      << "\", id: " << device_.index() << " } ] }");
   }
 
   for (size_t input_idx = 0; input_idx < input_count; input_idx += 1) {
@@ -1491,8 +1364,13 @@ ModelInstanceState::SetInputTensors(
     uint32_t input_dims_count{0};
 
     if (auto err = TRITONBACKEND_InputProperties(
-            input, &input_name, &input_datatype, &input_shape,
-            &input_dims_count, nullptr, nullptr)) {
+            /* input= */ input,
+            /* name= */ &input_name,
+            /* datatype= */ &input_datatype,
+            /* shape= */ &input_shape,
+            /* dims_count= */ &input_dims_count,
+            /* byte_size= */ nullptr,
+            /* buffer_count= */ nullptr)) {
       TRITON_LOG_ERROR(
           "Failed to get properties for input "
           << input_idx << " for request 0 of model instance \"" << Name()
@@ -1574,9 +1452,8 @@ ModelInstanceState::SetInputTensors(
           std::vector<int64_t>{input_shape, input_shape + input_dims_count};
       if (is_batching_supported_) {
         DEBUG_TRACE_INFO(
-            "{ model: \"" << Name() << "\""
-                          << ", input: \"" << input_name << "\""
-                          << ", original_shape: "
+            "{ model: \"" << Name() << "\", input: \"" << input_name
+                          << "\", original_shape: "
                           << triton::backend::ShapeToString(batch_n_shape)
                           << ", batch_n_shape[0]=total_batch_size: "
                           << total_batch_size << " }");
@@ -1646,8 +1523,8 @@ ModelInstanceState::SetInputTensors(
     if (input_datatype == TRITONSERVER_TYPE_BYTES) {
       DEBUG_TRACE_INFO(
           "{ model: \"" << Name() << "\", input: \"" << input_name
-                        << "\", input_datatype: TYPE_BYTES"
-                           " }");
+                        << "\", input_datatype: TYPE_BYTES, batch_n_byte_size: "
+                        << batch_n_byte_size << " }");
 
       // Create the PyTorch list to hold the strings.
       torch::List<std::string> input_list{};
@@ -1656,8 +1533,10 @@ ModelInstanceState::SetInputTensors(
       for (size_t idx = 0; idx < request_count; idx += 1) {
         TRITONBACKEND_Input* input{nullptr};
         RESPOND_AND_SET_NULL_IF_ERROR(
-            &((*responses)[idx]),
-            TRITONBACKEND_RequestInput(requests[idx], input_name, &input));
+            &((*responses)[idx]), TRITONBACKEND_RequestInput(
+                                      /* request= */ requests[idx],
+                                      /* name= */ input_name,
+                                      /* input= */ &input));
 
         const int64_t* shape{nullptr};
         uint32_t dims_count{0};
@@ -1677,31 +1556,38 @@ ModelInstanceState::SetInputTensors(
 
         int64_t batch_element_count = 0;
         RESPOND_AND_SET_NULL_IF_ERROR(
-            &((*responses)[idx]),
-            GetElementCount(shape, dims_count, &batch_element_count));
+            &((*responses)[idx]), GetElementCount(
+                                      /* dims= */ shape,
+                                      /* dims_cnt= */ dims_count,
+                                      /* cnt= */ &batch_element_count));
 
         *cuda_copy |= SetStringInputTensor(
-            &input_list, input, input_name, buffer_count, batch_element_count,
-            &((*responses)[idx]), GetCudaStreamByInstanceKind(),
-            HostPolicyName().c_str());
+            /* input_list= */ &input_list,
+            /* input= */ input,
+            /* name= */ input_name,
+            /* buffer_count= */ buffer_count,
+            /* request_element_cnt= */ batch_element_count,
+            /* response= */ &((*responses)[idx]),
+            /* cuda_stream= */ GetCudaStreamByInstanceKind(),
+            /* host_policy_name= */ HostPolicyName().c_str());
       }
 
-      (*input_tensors)[input_index_map_[input_name]] = input_list;
+      // TODO: make this work
+      // (*input_tensors)[map_inputs_[input_name].model_index()] = input_list;
+      DEBUG_TRACE_ERROR(
+          "(*input_tensors)[map_inputs_[input_name].model_index()] = "
+          "input_list is not supported yet for input \""
+          << input_name << "\" of model instance \"" << Name() << "\".");
     } else {
-      DEBUG_TRACE_INFO(
-          "{ model: \"" << Name() << "\""
-                        << ", input: \"" << input_name << "\""
-                        << ", input_datatype: " << torch_dtype
-                        << ", batch_n_byte_size: " << batch_n_byte_size
-                        << " }");
+      auto input_index = map_inputs_[input_name].model_index();
 
       if (batch_n_byte_size > 0) {
-        (*input_tensors)[input_index_map_[input_name]] = torch::from_blob(
+        (*input_tensors)[input_index] = torch::from_blob(
             const_cast<char*>(input_buffer), torch::IntArrayRef(batch_n_shape),
             updated_options);
       } else {
         // Create an empty tensor for zero-sized input.
-        (*input_tensors)[input_index_map_[input_name]] =
+        (*input_tensors)[input_index] =
             torch::zeros(batch_n_shape, updated_options);
       }
     }
@@ -1722,8 +1608,14 @@ ModelInstanceState::SetInputTensors(
       RESPOND_ALL_AND_SET_NULL_IF_ERROR(
           (*responses), responses->size(),
           collector->ProcessBatchInput(
-              batch_input, nullptr, 0, alloc_preference, &dst_buffer,
-              &dst_buffer_byte_size, &dst_memory_type, &dst_memory_type_id));
+              /* batch_input= */ batch_input,
+              /* buffer= */ nullptr,
+              /* buffer_byte_size= */ 0,
+              /* allowed_input_types= */ alloc_preference,
+              /* dst_buffer= */ &dst_buffer,
+              /* dst_buffer_byte_size= */ &dst_buffer_byte_size,
+              /* dst_memory_type= */ &dst_memory_type,
+              /* dst_memory_type_id= */ &dst_memory_type_id));
 
       const auto torch_dtype =
           ConvertDataTypeToTorchType(batch_input.DataType());
@@ -1732,13 +1624,14 @@ ModelInstanceState::SetInputTensors(
                                  ? options.device(torch::kCUDA, device_.index())
                                  : options.device(torch::kCPU);
 
+      auto input_index = map_inputs_[input_name].model_index();
+
       if (dst_buffer_byte_size) {
-        (*input_tensors)[input_index_map_[input_name]] = torch::from_blob(
+        (*input_tensors)[input_index] = torch::from_blob(
             const_cast<char*>(dst_buffer), shape, updated_options);
       } else {
         // special handle when input has zero size
-        (*input_tensors)[input_index_map_[input_name]] =
-            torch::zeros(shape, updated_options);
+        (*input_tensors)[input_index] = torch::zeros(shape, updated_options);
       }
     }
   }
@@ -1757,13 +1650,26 @@ ModelInstanceState::ValidateBooleanSequenceControl(
     TritonJsonValue& sequence_batching, const std::string& control_kind,
     bool required)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
+  THROW_TRITON_EXCEPTION(
+      TRITONSERVER_ERROR_INTERNAL,
+      "Boolean sequence control validation is not supported for model instance "
+      "\"" << Name()
+           << "\".");
   std::string tensor_name;
   std::string tensor_dtype;
   if (auto err = GetBooleanSequenceControlProperties(
-          sequence_batching, model_->Name(), control_kind, required,
-          &tensor_name, &tensor_dtype, nullptr, nullptr, nullptr, nullptr,
-          nullptr, nullptr)) {
+          /* batcher= */ sequence_batching,
+          /* model_name= */ model_->Name(),
+          /* control_kind= */ control_kind,
+          /* required= */ required,
+          /* tensor_name= */ &tensor_name,
+          /* tensor_datatype= */ &tensor_dtype,
+          /* fp32_false_value= */ nullptr,
+          /* fp32_true_value= */ nullptr,
+          /* int32_false_value= */ nullptr,
+          /* int32_true_value= */ nullptr,
+          /* bool_false_value= */ nullptr,
+          /* bool_true_value= */ nullptr)) {
     DEBUG_TRACE_ERROR(
         "Failed to validate boolean sequence control for model instance \""
         << Name() << "\": " << TRITONSERVER_ErrorMessage(err));
@@ -1807,14 +1713,6 @@ ModelInstanceState::ValidateBooleanSequenceControl(
     }
 
     input_index = std::atoi(tensor_name.substr(start_pos + 2).c_str());
-    input_index_map_[tensor_name] = input_index;
-    DEBUG_TRACE_INFO(
-        "{ model_name: \"" << model_->Name() << "\""
-                           << ", control_kind: \"" << control_kind << "\""
-                           << ", tensor_name: \"" << tensor_name << "\""
-                           << ", tensor_dtype: \"" << tensor_dtype << "\""
-                           << ", input_index: " << input_index_map_[tensor_name]
-                           << " }");
   }
 
   return have_control;
@@ -1823,27 +1721,23 @@ ModelInstanceState::ValidateBooleanSequenceControl(
 void
 ModelInstanceState::ValidateInputs(const size_t expected_input_count)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
-  std::vector<std::string> allowed_inputs{model_->GetModelCallSpec()};
-
-  if (allowed_inputs.size() != expected_input_count) {
+  if (map_inputs_.size() != expected_input_count) {
     DEBUG_TRACE_ERROR(
         "Failed to load model \""
         << Name() << "\" configuration expects " << expected_input_count
-        << " inputs, but model expects " << allowed_inputs.size()
-        << " inputs.");
+        << " inputs, but model expects " << map_inputs_.size() << " inputs.");
     THROW_TRITON_EXCEPTION(
         TRITONSERVER_ERROR_INTERNAL,
         "Failed to load model \""
             << Name() << "\" configuration expects " << expected_input_count
-            << " inputs, but model expects " << allowed_inputs.size()
+            << " inputs, but model expects " << map_inputs_.size()
             << " inputs.");
   }
 
   /* CANNOT VALIDATE INPUTS BY DTYPE DUE TO LACK OF INFORMATION FROM MODEL */
 
-  TritonJsonValue ios;
-  if (auto err = model_->ModelConfig().MemberAsArray("input", &ios)) {
+  TritonJsonValue inputs;
+  if (auto err = model_->ModelConfig().MemberAsArray("input", &inputs)) {
     DEBUG_TRACE_ERROR(
         "Failed to get model \"" << Name() << "\" input configuration: "
                                  << TRITONSERVER_ErrorMessage(err));
@@ -1852,25 +1746,25 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_count)
                                       << TRITONSERVER_ErrorMessage(err));
   }
 
-  if (ios.ArraySize() != expected_input_count) {
+  if (inputs.ArraySize() != expected_input_count) {
     DEBUG_TRACE_ERROR(
         "Failed to load model \""
         << Name() << "\" configuration expects " << expected_input_count
-        << " inputs, but model configuration has " << ios.ArraySize()
+        << " inputs, but model configuration has " << inputs.ArraySize()
         << " inputs.");
     THROW_TRITON_EXCEPTION(
         TRITONSERVER_ERROR_INTERNAL,
         "Failed to load model \""
             << Name() << "\" configuration expects " << expected_input_count
-            << " inputs, but model configuration has " << ios.ArraySize()
+            << " inputs, but model configuration has " << inputs.ArraySize()
             << " inputs.");
   }
 
-  auto naming_convention = GetNamingConvention(allowed_inputs);
+  for (size_t i = 0; i < inputs.ArraySize(); i += 1) {
+    size_t server_index{i};
 
-  for (size_t i = 0; i < ios.ArraySize(); i += 1) {
-    TritonJsonValue io;
-    if (auto err = ios.IndexAsObject(i, &io)) {
+    TritonJsonValue input;
+    if (auto err = inputs.IndexAsObject(i, &input)) {
       DEBUG_TRACE_ERROR(
           "Failed to get input " << i << " for model instance \"" << Name()
                                  << "\": " << TRITONSERVER_ErrorMessage(err));
@@ -1880,8 +1774,8 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_count)
                    << "\": " << TRITONSERVER_ErrorMessage(err));
     }
 
-    std::string io_name;
-    if (auto err = io.MemberAsString("name", &io_name)) {
+    std::string input_name;
+    if (auto err = input.MemberAsString("name", &input_name)) {
       DEBUG_TRACE_ERROR(
           "Failed to get name for input "
           << i << " for model instance \"" << Name()
@@ -1892,181 +1786,218 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_count)
                    << "\": " << TRITONSERVER_ErrorMessage(err));
     }
 
-    AddInputToMap(
-        /* naming_convention= */ naming_convention,
-        /* allowed_inputs= */ allowed_inputs,
-        /* io_name= */ io_name,
-        /* index= */ i);
+    if (!map_inputs_.contains(input_name)) {
+      DEBUG_TRACE_ERROR(
+          "Input \"" << input_name << "\" for model instance \"" << Name()
+                     << "\" is not found in model input map.");
+      THROW_TRITON_EXCEPTION(
+          TRITONSERVER_ERROR_INTERNAL,
+          "Input \"" << input_name << "\" for model instance \"" << Name()
+                     << "\" is not found in model input map.");
+    }
+
+    map_inputs_[input_name].server_index() = server_index;
 
     // Validate dtype
-    std::string io_dtype;
-    if (auto err = io.MemberAsString("data_type", &io_dtype)) {
+    std::string input_dtype_string;
+    if (auto err = input.MemberAsString("data_type", &input_dtype_string)) {
       DEBUG_TRACE_ERROR(
           "Failed to get data type for input \""
-          << io_name << "\" for model instance \"" << Name()
+          << input_name << "\" for model instance \"" << Name()
           << "\": " << TRITONSERVER_ErrorMessage(err));
       THROW_TRITON_EXCEPTION(
           err, "Failed to get data type for input \""
-                   << io_name << "\" for model instance \"" << Name()
+                   << input_name << "\" for model instance \"" << Name()
                    << "\": " << TRITONSERVER_ErrorMessage(err));
     }
 
-    const auto pr = ModelConfigDataTypeToTorchType(io_dtype);
-    if (!pr.first && (io_dtype != "TYPE_STRING")) {
+    const auto pr = ModelConfigDataTypeToTorchType(input_dtype_string);
+    if (!pr.first && (input_dtype_string != "TYPE_STRING")) {
       DEBUG_TRACE_ERROR(
-          "Unsupported datatype " << io_dtype << " for input \"" << io_name
-                                  << "\" for model instance \"" << Name()
-                                  << "\".");
+          "Unsupported datatype " << input_dtype_string << " for input \""
+                                  << input_name << "\" for model instance \""
+                                  << Name() << "\".");
       THROW_TRITON_EXCEPTION(
           TRITONSERVER_ERROR_INTERNAL,
-          "Unsupported datatype " << io_dtype << " for input \"" << io_name
-                                  << "\" for model instance \"" << Name()
-                                  << "\".");
+          "Unsupported datatype " << input_dtype_string << " for input \""
+                                  << input_name << "\" for model instance \""
+                                  << Name() << "\".");
     }
+    auto torch_dtype = pr.second;
 
+    map_inputs_[input_name].torch_dtype() = torch_dtype;
+    map_inputs_[input_name].triton_dtype() =
+        ConvertTorchTypeToDataType(torch_dtype);
+
+    std::vector<int64_t> input_shape{};
     // Validate shape for String inputs. Only allow 1 dimension.
-    if (io_dtype == "TYPE_STRING") {
+    if (input_dtype_string == "TYPE_STRING") {
       // If a reshape is provided for the input then use that when validating
       // the model shapes.
-      std::vector<int64_t> dims;
       TritonJsonValue reshape;
-      if (io.Find("reshape", &reshape)) {
-        if (auto err = ParseShape(reshape, "shape", &dims)) {
+      if (input.Find("reshape", &reshape)) {
+        if (auto err = ParseShape(reshape, "shape", &input_shape)) {
           DEBUG_TRACE_ERROR(
               "Failed to parse reshape dims for input \""
-              << io_name << "\" for model instance \"" << Name()
+              << input_name << "\" for model instance \"" << Name()
               << "\": " << TRITONSERVER_ErrorMessage(err));
           THROW_TRITON_EXCEPTION(
               err, "Failed to parse reshape shape for input \""
-                       << io_name << "\" for model instance \"" << Name()
+                       << input_name << "\" for model instance \"" << Name()
                        << "\": " << TRITONSERVER_ErrorMessage(err));
         }
       } else {
-        if (auto err = ParseShape(io, "dims", &dims)) {
+        if (auto err = ParseShape(input, "dims", &input_shape)) {
           DEBUG_TRACE_ERROR(
               "Failed to parse dims for input \""
-              << io_name << "\" for model instance \"" << Name()
+              << input_name << "\" for model instance \"" << Name()
               << "\": " << TRITONSERVER_ErrorMessage(err));
           THROW_TRITON_EXCEPTION(
               err, "Failed to parse dims for input \""
-                       << io_name << "\" for model instance \"" << Name()
+                       << input_name << "\" for model instance \"" << Name()
                        << "\": " << TRITONSERVER_ErrorMessage(err));
         }
       }
+    } else {
+      if (auto err = ParseShape(input, "dims", &input_shape)) {
+        DEBUG_TRACE_ERROR(
+            "Failed to parse dims for input \""
+            << input_name << "\" for model instance \"" << Name()
+            << "\": " << TRITONSERVER_ErrorMessage(err));
+        TRITONSERVER_ErrorDelete(err);
+        input_shape = {-1};
+      }
     }
+
+    map_inputs_[input_name].shape() = input_shape;
+
+    DEBUG_TRACE_INFO(
+        "{ model: \"" << Name() << "\", input_name: \"" << input_name
+                      << "\", input_index: "
+                      << map_inputs_[input_name].model_index()
+                      << ", input_dtype: " << torch_dtype << ", input_shape: "
+                      << triton::backend::ShapeToString(input_shape)
+                      << ", server_index: "
+                      << map_inputs_[input_name].server_index() << " }");
   }
 
   TritonJsonValue sequence_batching;
   if (model_->ModelConfig().Find("sequence_batching", &sequence_batching)) {
+    throw std::runtime_error("Sequence batching is not supported yet.");
+    /*
     TritonJsonValue states;
-    if (sequence_batching.Find("state", &states)) {
-      for (size_t i = 0; i < states.ArraySize(); i += 1) {
+    if (sequence_batching.Find("state", &states))
+    {
+      for (size_t i = 0; i < states.ArraySize(); i += 1)
+      {
         TritonJsonValue state;
-        if (auto err = states.IndexAsObject(i, &state)) {
-          DEBUG_TRACE_ERROR(
-              "Failed to get sequence state "
-              << i << " for model instance \"" << Name()
-              << "\": " << TRITONSERVER_ErrorMessage(err));
-          THROW_TRITON_EXCEPTION(
-              err, "Failed to get sequence state "
-                       << i << " for model instance \"" << Name()
-                       << "\": " << TRITONSERVER_ErrorMessage(err));
+        if (auto err = states.IndexAsObject(i, &state))
+        {
+          DEBUG_TRACE_ERROR("Failed to get sequence state " << i << " for
+          model instance \"" << Name() << "\": " <<
+          TRITONSERVER_ErrorMessage(err)); THROW_TRITON_EXCEPTION(err,
+                                 "Failed to get sequence state " << i << "
+                                 for model instance \"" << Name() << "\": "
+                                 << TRITONSERVER_ErrorMessage(err));
         }
 
         std::string state_name;
-        if (auto err = state.MemberAsString("input_name", &state_name)) {
-          DEBUG_TRACE_ERROR(
-              "Failed to get input name for sequence state "
-              << i << " for model instance \"" << Name()
-              << "\": " << TRITONSERVER_ErrorMessage(err));
-          THROW_TRITON_EXCEPTION(
-              err, "Failed to get input name for sequence state "
-                       << i << " for model instance \"" << Name()
-                       << "\": " << TRITONSERVER_ErrorMessage(err));
+        if (auto err = state.MemberAsString("input_name", &state_name))
+        {
+          DEBUG_TRACE_ERROR("Failed to get input name for sequence state " <<
+          i << " for model instance \"" << Name() << "\": " <<
+          TRITONSERVER_ErrorMessage(err)); THROW_TRITON_EXCEPTION(err,
+                                 "Failed to get input name for sequence state
+                                 " << i << " for model instance \"" << Name()
+                                 << "\": " <<
+                                 TRITONSERVER_ErrorMessage(err));
         }
 
-        AddInputToMap(naming_convention, allowed_inputs, state_name, i);
+        // TODO: FIXME
+        // AddInputToMap(naming_convention, allowed_inputs, state_name, i);
 
         // Validate dtype
         std::string state_dtype;
-        if (auto err = state.MemberAsString("data_type", &state_dtype)) {
-          DEBUG_TRACE_ERROR(
-              "Failed to get data type for sequence state input \""
-              << state_name << "\" for model instance \"" << Name()
-              << "\": " << TRITONSERVER_ErrorMessage(err));
-          THROW_TRITON_EXCEPTION(
-              err, "Failed to get data type for sequence state input \""
-                       << state_name << "\" for model instance \"" << Name()
-                       << "\": " << TRITONSERVER_ErrorMessage(err));
+        if (auto err = state.MemberAsString("data_type", &state_dtype))
+        {
+          DEBUG_TRACE_ERROR("Failed to get data type for sequence state input
+          \"" << state_name << "\" for model instance \"" << Name() << "\": "
+          << TRITONSERVER_ErrorMessage(err)); THROW_TRITON_EXCEPTION(err,
+                                 "Failed to get data type for sequence state
+                                 input \"" << state_name << "\" for model
+                                 instance \"" << Name() << "\": " <<
+                                 TRITONSERVER_ErrorMessage(err));
         }
 
-        DEBUG_TRACE_INFO(
-            "{ name: \"" << Name() << "\""
+        DEBUG_TRACE_INFO("{ name: \"" << Name() << "\""
                          << ", state_name: \"" << state_name << "\""
                          << ", state_dtype: \"" << state_dtype << "\""
                          << " }");
 
         const auto pr = ModelConfigDataTypeToTorchType(state_dtype);
-        if (!pr.first) {
-          DEBUG_TRACE_ERROR(
-              "Unsupported datatype "
-              << state_dtype << " for sequence state input \"" << state_name
-              << "\" for model instance \"" << Name() << "\".");
-          THROW_TRITON_EXCEPTION(
-              TRITONSERVER_ERROR_INTERNAL,
-              "Unsupported datatype "
-                  << state_dtype << " for sequence state input \"" << state_name
-                  << "\" for model instance \"" << Name() << "\".");
+        if (!pr.first)
+        {
+          DEBUG_TRACE_ERROR("Unsupported datatype " << state_dtype << " for
+          sequence state input \"" << state_name << "\" for model instance
+          \"" << Name() << "\".");
+          THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
+                                 "Unsupported datatype " << state_dtype << "
+                                 for sequence state input \"" << state_name
+                                 << "\" for model instance \"" << Name() <<
+                                 "\".");
         }
 
         // Validate shape for String inputs. Only allow 1 dimension.
-        if (state_dtype == "TYPE_STRING") {
-          if (is_batching_supported_) {
-            DEBUG_TRACE_ERROR(
-                "Triton only supports 1-dimensional string inputs for sequence "
-                "state input \""
-                << state_name << "\" for model \"" << Name()
-                << "\" when batching is enabled.");
-            THROW_TRITON_EXCEPTION(
-                TRITONSERVER_ERROR_INVALID_ARG,
-                "Triton only supports 1-dimensional string inputs for sequence "
-                "state input \""
-                    << state_name << "\" for model \"" << Name() << "\".");
+        if (state_dtype == "TYPE_STRING")
+        {
+          if (is_batching_supported_)
+          {
+            DEBUG_TRACE_ERROR("Triton only supports 1-dimensional string
+            inputs for sequence state input \"" << state_name << "\" for
+            model \"" << Name() << "\" when batching is enabled.");
+            THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INVALID_ARG,
+                                   "Triton only supports 1-dimensional string
+                                   inputs for sequence " "state input \"" <<
+                                   state_name << "\" for model \"" << Name()
+                                   << "\".");
           }
         }
       }
     }
+    */
   }
 
-  uint32_t i = 0;
+  /*
+    The code below likely needs to be fixed up as this is where batch input were
+    assigned to the input map and the naming convention and allowed inputs were
+    used to validate the batch input target names and assign them to the input
+    map. This is also where the batch_input_count_ was determined based on the
+    number of batch inputs and the number of target names for each batch input.
+  */
+#if false
   for (const auto& batch_input : model_->BatchInputs()) {
     for (const auto& input_name : batch_input.TargetNames()) {
-      DEBUG_TRACE_INFO(
-          "{ name: \"" << Name() << "\""
-                       << ", batch_input_name: \"" << input_name << "\""
-                       << ", index: " << i + ios.ArraySize()
-                       << ", naming_convention: " << naming_convention
-                       << ", len(allowed_inputs): " << allowed_inputs.size()
-                       << " }");
-
-      AddInputToMap(
-          naming_convention, allowed_inputs, input_name, i + ios.ArraySize());
-      i += 1;
+      // TODO: FIXME
+      // AddInputToMap(/* naming_convention= */naming_convention,
+      //               /* allowed_inputs= */allowed_inputs,
+      //               /* input_name= */input_name,
+      //               /* index= */i + inputs.ArraySize());
     }
   }
+#endif
 
   DEBUG_TRACE_INFO(
-      "{ name: \"" << Name() << "\""
-                   << ", total_batch_input_target_names: " << i
-                   << ", batch_input_count: " << batch_input_count_ << " }");
+      "{ name: \"" << Name()
+                   << "\", total_batch_input_target_names: " << uint32_t i =
+          model_->BatchInputs().size() * batch_input.TargetNames().size();
+      << ", batch_input_count: " << batch_input_count_ << " }");
 }
 
 void
 ModelInstanceState::ValidateOutputs()
 {
-  DEBUG_TRACE_FUNCTION_CALL();
-  TritonJsonValue ios;
-  if (auto err = model_->ModelConfig().MemberAsArray("output", &ios)) {
+  TritonJsonValue outputs;
+  if (auto err = model_->ModelConfig().MemberAsArray("output", &outputs)) {
     DEBUG_TRACE_ERROR(
         "Failed to get model \"" << Name() << "\" output configuration: "
                                  << TRITONSERVER_ErrorMessage(err));
@@ -2075,9 +2006,9 @@ ModelInstanceState::ValidateOutputs()
                                       << TRITONSERVER_ErrorMessage(err));
   }
 
-  int op_index{0};
+  int output_index{0};
 
-  if (ios.ArraySize() == 0) {
+  if (outputs.ArraySize() == 0) {
     DEBUG_TRACE_ERROR(
         "Configuration for model \""
         << Name()
@@ -2089,11 +2020,11 @@ ModelInstanceState::ValidateOutputs()
             << "\" must define at least one output, none were specified.");
   }
 
-  auto naming_convention = GetNamingConvention({});
+  for (size_t i = 0; i < outputs.ArraySize(); i += 1) {
+    size_t server_index{i};
 
-  for (size_t i = 0; i < ios.ArraySize(); i++) {
-    TritonJsonValue io;
-    if (auto err = ios.IndexAsObject(i, &io)) {
+    TritonJsonValue output;
+    if (auto err = outputs.IndexAsObject(i, &output)) {
       DEBUG_TRACE_ERROR(
           "Failed to get output " << i << " for model instance \"" << Name()
                                   << "\": " << TRITONSERVER_ErrorMessage(err));
@@ -2104,8 +2035,8 @@ ModelInstanceState::ValidateOutputs()
     }
 
     // Validate name
-    std::string io_name;
-    if (auto err = io.MemberAsString("name", &io_name)) {
+    std::string output_name;
+    if (auto err = output.MemberAsString("name", &output_name)) {
       DEBUG_TRACE_ERROR(
           "Failed to get name for output "
           << i << " for model instance \"" << Name()
@@ -2116,230 +2047,244 @@ ModelInstanceState::ValidateOutputs()
                    << "\": " << TRITONSERVER_ErrorMessage(err));
     }
 
-    switch (naming_convention) {
-      case TritonNamingConvention::NAMED_INDEX: {
-        int start_pos = io_name.find(DELIMINATOR);
-        op_index = std::atoi(io_name.substr(start_pos + 2).c_str());
-      } break;
-
-      case TritonNamingConvention::STRICT_CONFIG_ORDERING: {
-        op_index = i;
-      } break;
-
-      default:
-        break;
+    if (!map_outputs_.contains(output_name)) {
+      DEBUG_TRACE_ERROR(
+          "Output \"" << output_name << "\" for model instance \"" << Name()
+                      << "\" is not found in model output map.");
+      THROW_TRITON_EXCEPTION(
+          TRITONSERVER_ERROR_INTERNAL,
+          "Output \"" << output_name << "\" for model instance \"" << Name()
+                      << "\" is not found in model output map.");
     }
 
-    DEBUG_TRACE_INFO(
-        "{ name: \"" << Name() << "\""
-                     << ", io_name: \"" << io_name << "\""
-                     << ", index: " << i << ", naming_convention: "
-                     << naming_convention << ", result: NAMED_INDEX"
-                     << ", op_index: " << op_index << " }");
+    output_index = i;
+    map_outputs_[output_name].server_index() = server_index;
 
     // Validate data type.
-    std::string io_dtype;
-    if (auto err = io.MemberAsString("data_type", &io_dtype)) {
+    std::string output_dtype;
+    if (auto err = output.MemberAsString("data_type", &output_dtype)) {
       DEBUG_TRACE_ERROR(
           "Failed to get data type for output \""
-          << io_name << "\" for model instance \"" << Name()
+          << output_name << "\" for model instance \"" << Name()
           << "\": " << TRITONSERVER_ErrorMessage(err));
       THROW_TRITON_EXCEPTION(
           err, "Failed to get data type for output \""
-                   << io_name << "\" for model instance \"" << Name()
+                   << output_name << "\" for model instance \"" << Name()
                    << "\": " << TRITONSERVER_ErrorMessage(err));
     }
 
-    const auto torch_type = ModelConfigDataTypeToTorchType(io_dtype);
-    if (!torch_type.first && (io_dtype != "TYPE_STRING")) {
+    const auto torch_type = ModelConfigDataTypeToTorchType(output_dtype);
+    if (!torch_type.first && (output_dtype != "TYPE_STRING")) {
       DEBUG_TRACE_ERROR(
-          "Unsupported datatype " << io_dtype << " for output \"" << io_name
-                                  << "\" for model instance \"" << Name()
-                                  << "\".");
+          "Unsupported datatype " << output_dtype << " for output \""
+                                  << output_name << "\" for model instance \""
+                                  << Name() << "\".");
       THROW_TRITON_EXCEPTION(
           TRITONSERVER_ERROR_INTERNAL,
-          "Unsupported datatype " << io_dtype << " for output \"" << io_name
-                                  << "\" for model instance \"" << Name()
-                                  << "\".");
+          "Unsupported datatype " << output_dtype << " for output \""
+                                  << output_name << "\" for model instance \""
+                                  << Name() << "\".");
     }
 
+    map_outputs_[output_name].torch_dtype() = torch_type.second;
+    map_outputs_[output_name].triton_dtype() =
+        ConvertTorchTypeToDataType(torch_type.second);
+
+    std::vector<int64_t> output_shape{};
     // Validate shape for String outputs. Only allow 1 dimension.
-    if (io_dtype == "TYPE_STRING") {
-      std::vector<int64_t> dims;
+    if (output_dtype == "TYPE_STRING") {
       TritonJsonValue reshape;
 
-      if (io.Find("reshape", &reshape)) {
-        if (auto err = ParseShape(reshape, "shape", &dims)) {
+      if (output.Find("reshape", &reshape)) {
+        if (auto err = ParseShape(reshape, "shape", &output_shape)) {
           DEBUG_TRACE_ERROR(
               "Failed to parse reshape shape for output \""
-              << io_name << "\" for model instance \"" << Name()
+              << output_name << "\" for model instance \"" << Name()
               << "\": " << TRITONSERVER_ErrorMessage(err));
           THROW_TRITON_EXCEPTION(
               err, "Failed to parse reshape shape for output \""
-                       << io_name << "\" for model instance \"" << Name()
+                       << output_name << "\" for model instance \"" << Name()
                        << "\": " << TRITONSERVER_ErrorMessage(err));
         }
 
         DEBUG_TRACE_INFO(
             "{ name: \"" << Name() << "\""
-                         << ", io_name: \"" << io_name << "\""
-                         << ", op_index: " << op_index << ", io_dtype: \""
-                         << io_dtype << "\""
-                         << ", reshape: true, len(dims): " << dims.size()
-                         << " }");
+                         << ", output_name: \"" << output_name << "\""
+                         << ", output_index: " << output_index
+                         << ", output_dtype: \"" << output_dtype << "\""
+                         << ", reshape: true"
+                         << ", len(output_shape): " << output_shape.size()
+                         << ", server_index: "
+                         << map_outputs_[output_name].server_index() << " }");
       } else {
-        if (auto err = ParseShape(io, "dims", &dims)) {
+        if (auto err = ParseShape(output, "dims", &output_shape)) {
           DEBUG_TRACE_ERROR(
               "Failed to parse dims for output \""
-              << io_name << "\" for model instance \"" << Name()
+              << output_name << "\" for model instance \"" << Name()
               << "\": " << TRITONSERVER_ErrorMessage(err));
           THROW_TRITON_EXCEPTION(
               err, "Failed to parse dims for output \""
-                       << io_name << "\" for model instance \"" << Name()
+                       << output_name << "\" for model instance \"" << Name()
                        << "\": " << TRITONSERVER_ErrorMessage(err));
         }
 
         DEBUG_TRACE_INFO(
             "{ name: \"" << Name() << "\""
-                         << ", io_name: \"" << io_name << "\""
-                         << ", op_index: " << op_index << ", io_dtype: \""
-                         << io_dtype << "\""
-                         << ", reshape: false, len(dims): " << dims.size()
-                         << " }");
+                         << ", output_name: \"" << output_name << "\""
+                         << ", output_index: " << output_index << ""
+                         << ", output_dtype: \"" << output_dtype << "\""
+                         << ", reshape: false"
+                         << ", len(output_shape): " << output_shape.size()
+                         << ", server_index: "
+                         << map_outputs_[output_name].server_index() << " }");
       }
 
-      if ((dims.size() + (is_batching_supported_ ? 1 : 0)) > 1) {
+      map_outputs_[output_name].shape() = output_shape;
+
+      if ((output_shape.size() + (is_batching_supported_ ? 1 : 0)) > 1) {
         DEBUG_TRACE_ERROR(
             "Triton only supports 1 dimensional List of String as output for \""
-            << io_name << "\" for model instance \"" << Name() << "\".");
+            << output_name << "\" for model instance \"" << Name() << "\".");
         THROW_TRITON_EXCEPTION(
             TRITONSERVER_ERROR_INTERNAL,
-            "Triton only supports 1 dimensional List of String as output for"
-            " \""
-                << io_name << "\" for model instance \"" << Name() << "\".");
+            "Triton only supports 1 dimensional List of String as output for \""
+                << output_name << "\" for model instance \"" << Name()
+                << "\".");
       }
+    } else {
+      if (auto err = ParseShape(output, "dims", &output_shape)) {
+        DEBUG_TRACE_ERROR(
+            "Failed to parse dims for output \""
+            << output_name << "\" for model instance \"" << Name()
+            << "\": " << TRITONSERVER_ErrorMessage(err));
+        TRITONSERVER_ErrorDelete(err);
+        output_shape = {-1};
+      }
+
+      map_outputs_[output_name].shape() = output_shape;
     }
-
-    output_index_map_[io_name] = op_index;
-    output_dtype_map_[io_name] = ConvertTorchTypeToDataType(torch_type.second);
-
-    DEBUG_TRACE_INFO(
-        "{ name: \"" << Name() << "\""
-                     << ", io_name: \"" << io_name << "\""
-                     << ", op_index: " << output_index_map_[io_name]
-                     << ", output_dtype: \""
-                     << TRITONSERVER_DataTypeString(output_dtype_map_[io_name])
-                     << "\" }");
   }
 
   TritonJsonValue sequence_batching;
   if (model_->ModelConfig().Find("sequence_batching", &sequence_batching)) {
+    throw std::runtime_error("Sequence batching is not supported yet.");
+    /*
     TritonJsonValue states;
-    if (sequence_batching.Find("state", &states)) {
-      for (size_t i = 0; i < states.ArraySize(); i += 1) {
+    if (sequence_batching.Find("state", &states))
+    {
+      for (size_t i = 0; i < states.ArraySize(); i += 1)
+      {
         TritonJsonValue state;
-        if (auto err = states.IndexAsObject(i, &state)) {
-          DEBUG_TRACE_ERROR(
-              "Failed to get sequence state "
-              << i << " for model instance \"" << Name()
-              << "\": " << TRITONSERVER_ErrorMessage(err));
-          THROW_TRITON_EXCEPTION(
-              err, "Failed to get sequence state "
-                       << i << " for model instance \"" << Name()
-                       << "\": " << TRITONSERVER_ErrorMessage(err));
+        if (auto err = states.IndexAsObject(i, &state))
+        {
+          DEBUG_TRACE_ERROR("Failed to get sequence state " << i
+                            << " for model instance \"" << Name() << "\": "
+                            << TRITONSERVER_ErrorMessage(err));
+          THROW_TRITON_EXCEPTION(err,
+                                 "Failed to get sequence state " << i
+                                 << " for model instance \"" << Name() <<
+                                 "\": " << TRITONSERVER_ErrorMessage(err));
         }
 
         std::string state_name;
-        if (auto err = state.MemberAsString("output_name", &state_name)) {
-          DEBUG_TRACE_ERROR(
-              "Failed to get output name for sequence state "
-              << i << " for model instance \"" << Name()
-              << "\": " << TRITONSERVER_ErrorMessage(err));
-          THROW_TRITON_EXCEPTION(
-              err, "Failed to get output name for sequence state "
-                       << i << " for model instance \"" << Name()
-                       << "\": " << TRITONSERVER_ErrorMessage(err));
+        if (auto err = state.MemberAsString("output_name", &state_name))
+        {
+          DEBUG_TRACE_ERROR("Failed to get output name for sequence state "
+          << i
+                            << " for model instance \"" << Name() << "\": "
+                            << TRITONSERVER_ErrorMessage(err));
+          THROW_TRITON_EXCEPTION(err,
+                                 "Failed to get output name for sequence
+                                 state " << i
+                                 << " for model instance \"" << Name() <<
+                                 "\": " << TRITONSERVER_ErrorMessage(err));
         }
 
         std::string state_dtype;
-        if (auto err = state.MemberAsString("data_type", &state_dtype)) {
-          DEBUG_TRACE_ERROR(
-              "Failed to get data type for sequence state output \""
-              << state_name << "\" for model instance \"" << Name()
-              << "\": " << TRITONSERVER_ErrorMessage(err));
-          THROW_TRITON_EXCEPTION(
-              err, "Failed to get data type for sequence state output \""
-                       << state_name << "\" for model instance \"" << Name()
-                       << "\": " << TRITONSERVER_ErrorMessage(err));
+        if (auto err = state.MemberAsString("data_type", &state_dtype))
+        {
+          DEBUG_TRACE_ERROR("Failed to get data type for sequence state
+          output \"" << state_name << "\""
+                            " for model instance \"" << Name() << "\": " <<
+                            TRITONSERVER_ErrorMessage(err));
+          THROW_TRITON_EXCEPTION(err,
+                                 "Failed to get data type for sequence state
+                                 output \"" << state_name << "\"" " for model
+                                 instance \"" << Name() << "\": " <<
+                                 TRITONSERVER_ErrorMessage(err));
         }
 
         std::vector<int64_t> dims;
-        if (auto err = ParseShape(state, "dims", &dims)) {
-          DEBUG_TRACE_ERROR(
-              "Failed to parse dims for sequence state output \""
-              << state_name << "\" for model instance \"" << Name()
-              << "\": " << TRITONSERVER_ErrorMessage(err));
-          THROW_TRITON_EXCEPTION(
-              err, "Failed to parse dims for sequence state output \""
-                       << state_name << "\" for model instance \"" << Name()
-                       << "\": " << TRITONSERVER_ErrorMessage(err));
+        if (auto err = ParseShape(state, "dims", &dims))
+        {
+          DEBUG_TRACE_ERROR("Failed to parse dims for sequence state output
+          \"" << state_name << "\""
+                            " for model instance \"" << Name() << "\": " <<
+                            TRITONSERVER_ErrorMessage(err));
+          THROW_TRITON_EXCEPTION(err,
+                                 "Failed to parse dims for sequence state
+                                 output \"" << state_name << "\"" " for model
+                                 instance \"" << Name() << "\": " <<
+                                 TRITONSERVER_ErrorMessage(err));
         }
 
-        DEBUG_TRACE_INFO(
-            "{ name: \"" << Name() << "\""
-                         << ", op_index: " << op_index << ", states[" << i
-                         << "]: { state_name: \"" << state_name << "\""
-                         << ", state_dtype: \"" << state_dtype << "\""
-                         << ", len(dims): " << dims.size() << " } }");
+        DEBUG_TRACE_INFO("{ name: \"" << Name() << "\""
+                         << ", output_index: " << output_index
+                         << ", states[" << i << "]:"
+                           << " { state_name: \"" << state_name << "\""
+                           << ", state_dtype: \"" << state_dtype << "\""
+                           << ", len(dims): " << dims.size() << " }"
+                         << " }");
 
         int start_pos = state_name.find(DELIMINATOR);
-        op_index = std::atoi(state_name.substr(start_pos + 2).c_str());
+        output_index = std::atoi(state_name.substr(start_pos + 2).c_str());
 
         const auto pr = ModelConfigDataTypeToTorchType(state_dtype);
-        if (!pr.first && state_dtype != "TYPE_STRING") {
-          DEBUG_TRACE_ERROR(
-              "Unsupported datatype "
-              << state_dtype << " for sequence state output \"" << state_name
-              << "\" for model instance \"" << Name() << "\".");
-          THROW_TRITON_EXCEPTION(
-              TRITONSERVER_ERROR_INTERNAL, "Unsupported datatype "
-                                               << state_dtype
-                                               << " for sequence state output "
-                                                  "\""
-                                               << state_name
-                                               << "\" for model instance \""
-                                               << Name() << "\".");
+        if (!pr.first && state_dtype != "TYPE_STRING")
+        {
+          DEBUG_TRACE_ERROR("Unsupported datatype " << state_dtype << " for
+          sequence state output \"" << state_name << "\" for model instance
+          \"" << Name() << "\".");
+          THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
+                                 "Unsupported datatype " << state_dtype << "
+                                 for sequence state output" " \"" <<
+                                 state_name << "\" for model instance \"" <<
+                                 Name() << "\".");
         }
 
         // Validate shape for String outputs. Only allow 1 dimension.
-        if (state_dtype == "TYPE_STRING") {
-          if ((dims.size() + (is_batching_supported_ ? 1 : 0)) > 1) {
-            DEBUG_TRACE_ERROR(
-                "Triton only supports 1-dimensional string outputs for "
-                "sequence state output \""
-                << state_name << "\" for model instance \"" << Name() << "\".");
-            THROW_TRITON_EXCEPTION(
-                TRITONSERVER_ERROR_INTERNAL,
-                "Triton only supports 1-dimensional string outputs for "
-                "sequence state output \""
-                    << state_name << "\" for model instance \"" << Name()
-                    << "\".");
+        if (state_dtype == "TYPE_STRING")
+        {
+          if ((dims.size() + (is_batching_supported_ ? 1 : 0)) > 1)
+          {
+            DEBUG_TRACE_ERROR("Triton only supports 1-dimensional string
+            outputs for sequence state output"
+                              " \"" << state_name << "\" for model instance
+                              \"" << Name() << "\".");
+            THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
+                                   "Triton only supports 1-dimensional string
+                                   outputs for sequence state output" " \""
+                                   << state_name << "\" for model instance
+                                   \"" << Name() << "\".");
           }
         }
 
-        output_index_map_[state_name] = op_index;
-        output_dtype_map_[state_name] = ConvertTorchTypeToDataType(pr.second);
-        DEBUG_TRACE_INFO(
-            "{ name: \"" << Name() << "\""
+        // model_->OutputMap()[state_name] = op_index;
+        map_outputs_[state_name].triton_dtype() =
+        ConvertTorchTypeToDataType(pr.second); DEBUG_TRACE_INFO("{ name: \""
+        << Name() << "\""
                          << ", state_name: \"" << state_name << "\""
-                         << ", op_index: " << output_index_map_[state_name]
-                         << ", torch_type: " << static_cast<int>(pr.second)
-                         << ", output_dtype: \""
-                         << TRITONSERVER_DataTypeString(
-                                output_dtype_map_[state_name])
-                         << "\" }");
+                         << ", output_index: " <<
+                         map_outputs_[state_name].server_index()
+                         << ", torch_type: " <<
+                         map_outputs_[state_name].torch_dtype()
+                         << ", output_dtype: \"" <<
+                         TRITONSERVER_DataTypeString(map_outputs_[state_name].triton_dtype())
+                         << "\""
+                         << " }");
       }
     }
+    */
   }
 }
 
@@ -2348,14 +2293,21 @@ ModelInstanceState::ValidateTypedSequenceControl(
     TritonJsonValue& sequence_batching, const std::string& control_kind,
     bool required)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
+  THROW_TRITON_EXCEPTION(
+      TRITONSERVER_ERROR_INTERNAL,
+      "Typed sequence control validation is not supported for model instance \""
+          << Name() << "\".");
 
   std::string tensor_name;
   std::string tensor_dtype;
 
   if (auto err = GetTypedSequenceControlProperties(
-          sequence_batching, model_->Name(), control_kind, required,
-          &tensor_name, &tensor_dtype)) {
+          /* batcher= */ sequence_batching,
+          /* model_name= */ model_->Name(),
+          /* control_kind= */ control_kind,
+          /* required= */ required,
+          /* tensor_name= */ &tensor_name,
+          /* tensor_datatype= */ &tensor_dtype)) {
     DEBUG_TRACE_ERROR(
         "Error validating typed sequence control for model instance \""
         << Name() << "\": " << TRITONSERVER_ErrorMessage(err));
@@ -2365,12 +2317,6 @@ ModelInstanceState::ValidateTypedSequenceControl(
   }
 
   bool have_control{!tensor_name.empty()};
-  DEBUG_TRACE_INFO(
-      "{ name: \"" << Name() << "\", control_kind: \"" << control_kind
-                   << "\", tensor_name: \"" << tensor_name
-                   << "\", tensor_dtype: \"" << tensor_dtype
-                   << "\", have_control: " << (have_control ? "true" : "false")
-                   << " }");
   if (have_control) {
     int input_index{0};
     int start_pos{static_cast<int>(tensor_name.find(DELIMINATOR))};
@@ -2406,28 +2352,17 @@ ModelInstanceState::ValidateTypedSequenceControl(
     // Check if the data type is supported by PyTorch.
     if (!ModelConfigDataTypeToTorchType(tensor_dtype).first) {
       DEBUG_TRACE_ERROR(
-          "Unsupported datatype " << tensor_dtype
-                                  << " for typed sequence control input"
-                                     " \""
-                                  << tensor_name << "\" for model instance \""
-                                  << Name() << "\".");
+          "Unsupported datatype "
+          << tensor_dtype << " for typed sequence control input \""
+          << tensor_name << "\" for model instance \"" << Name() << "\".");
       THROW_TRITON_EXCEPTION(
           TRITONSERVER_ERROR_INTERNAL,
-          "Unsupported datatype " << tensor_dtype
-                                  << " for typed sequence control input"
-                                     " \""
-                                  << tensor_name << "\" for model instance \""
-                                  << Name() << "\".");
+          "Unsupported datatype "
+              << tensor_dtype << " for typed sequence control input \""
+              << tensor_name << "\" for model instance \"" << Name() << "\".");
     }
 
     input_index = std::atoi(tensor_name.substr(start_pos + 2).c_str());
-    input_index_map_[tensor_name] = input_index;
-    DEBUG_TRACE_INFO(
-        "{ name: \"" << Name() << "\", control_kind: \"" << control_kind
-                     << "\", tensor_name: \"" << tensor_name
-                     << "\", tensor_dtype: \"" << tensor_dtype
-                     << "\", have_control: true, index: "
-                     << input_index_map_[tensor_name] << " }");
   }
 
   return have_control;

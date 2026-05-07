@@ -30,6 +30,7 @@
 
 #include "../libtorch.hh"
 #include "../triton_utils.hh"
+#include "call_spec.hh"
 
 #ifdef TRITON_ENABLE_GPU
 #include <c10/cuda/CUDACachingAllocator.h>
@@ -55,7 +56,6 @@ using TritonJsonValue = triton::common::TritonJson::Value;
 ModelState::ModelState(TRITONBACKEND_Model* backend_model)
     : BackendModel{backend_model}
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   if (!backend_model)
     THROW_TRITON_EXCEPTION(
         TRITONSERVER_ERROR_INTERNAL,
@@ -65,7 +65,6 @@ ModelState::ModelState(TRITONBACKEND_Model* backend_model)
 void
 ModelState::AutoCompleteConfig()
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   TRITON_LOG_WARN(
       "Auto-complete configuration is not supported for Inductor models. "
       "Skipping auto-complete for model \""
@@ -75,35 +74,30 @@ ModelState::AutoCompleteConfig()
 const std::vector<triton::backend::BatchInput>&
 ModelState::BatchInputs() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::BatchInputs();
 }
 
 const std::vector<triton::backend::BatchOutput>&
 ModelState::BatchOutputs() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::BatchOutputs();
 }
 
 bool
 ModelState::CacheCleaningEnabled() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return cache_cleaning_enabled_;
 }
 
 void
 ModelState::CacheCleaningEnabled(bool value)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   cache_cleaning_enabled_ = value;
 }
 
 ModelState*
 ModelState::Create(TRITONBACKEND_Model* triton_model)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   if (!triton_model)
     THROW_TRITON_EXCEPTION(
         TRITONSERVER_ERROR_INTERNAL,
@@ -131,6 +125,7 @@ ModelState::Create(TRITONBACKEND_Model* triton_model)
 
   auto& model_outputs = aoti_model->model_outputs_;
   TritonJsonValue sequence_batching;
+
   if (aoti_model->ModelConfig().Find("sequence_batching", &sequence_batching)) {
     TritonJsonValue states;
     if (sequence_batching.Find("state", &states)) {
@@ -158,6 +153,7 @@ ModelState::Create(TRITONBACKEND_Model* triton_model)
               "Failed to get sequence batching state output name at index "
                   << i << ": " << TRITONSERVER_ErrorMessage(err) << ".");
         }
+
         DEBUG_TRACE_INFO(
             "{ auto_complete_config: "
             << (auto_complete_config ? "true" : "false") << ", states[" << i
@@ -183,6 +179,7 @@ ModelState::Create(TRITONBACKEND_Model* triton_model)
         "Failed to get model outputs array: " << TRITONSERVER_ErrorMessage(err)
                                               << ".");
   }
+
   for (size_t i = 0; i < outputs.ArraySize(); i += 1) {
     TritonJsonValue output;
     if (auto err = outputs.IndexAsObject(i, &output)) {
@@ -207,7 +204,7 @@ ModelState::Create(TRITONBACKEND_Model* triton_model)
     }
     DEBUG_TRACE_INFO(
         "{ auto_complete_config: " << (auto_complete_config ? "true" : "false")
-                                   << ", outputs[" << i << "] { output_name: "
+                                   << ", outputs[" << i << "]: { output_name: "
                                    << output_name << " } }");
 
     auto it = model_outputs.find(output_name);
@@ -226,57 +223,37 @@ ModelState::Create(TRITONBACKEND_Model* triton_model)
 bool
 ModelState::CudnnEnabled() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return cudnn_enabled_;
 }
 
 void
 ModelState::CudnnEnabled(bool value)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   cudnn_enabled_ = value;
 }
 
 bool
 ModelState::EnablePinnedInput() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::EnablePinnedInput();
 }
 
 bool
 ModelState::EnablePinnedOutput() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::EnablePinnedOutput();
 }
 
 const triton::backend::BatchOutput*
 ModelState::FindBatchOutput(const std::string& output_name) const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::FindBatchOutput(output_name);
 }
 
-std::vector<std::string>
-ModelState::GetModelCallSpec()
-{
-  DEBUG_TRACE_FUNCTION_CALL();
-  if (!model_loader_) {
-    THROW_TRITON_EXCEPTION(
-        TRITONSERVER_ERROR_INTERNAL,
-        "Model \"" << Name()
-                   << "\" not loaded. Use `LoadModel` before calling "
-                      "`GetModelCallSpec`.");
-  }
-  return model_loader_->get_call_spec();
-}
-
-std::vector<torch::IValue>
+std::vector<torch::Tensor>
 ModelState::Forward(
-    const std::vector<torch::IValue>& inputs, void* stream_handle)
+    const std::vector<torch::Tensor>& inputs, void* stream_handle)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   DEBUG_TRACE_INFO(
       "{ len(inputs): " << inputs.size() << ", stream_handle: "
                         << (stream_handle ? "pointer" : "null") << " }");
@@ -288,46 +265,38 @@ ModelState::Forward(
             << "\" not loaded. Use `LoadModel` before calling `Forward`.");
   }
 
-  std::vector<torch::Tensor> input_tensors;
-  for (const auto& input : inputs) {
-    input_tensors.push_back(input.toTensor());
-  }
+  auto output_tensors = model_loader_->get_runner()->run(inputs, stream_handle);
 
-  auto output_tensors =
-      model_loader_->get_runner()->run(input_tensors, stream_handle);
-
-  std::vector<torch::IValue> outputs{};
-  for (const auto& output_tensor : output_tensors) {
-    outputs.push_back(output_tensor);
-  }
-  return outputs;
+  return output_tensors;
 }
 
 bool
 ModelState::InferenceModeEnabled() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return inference_mode_enabled_;
+}
+
+std::unordered_map<std::string, uint32_t>&
+ModelState::InputMap()
+{
+  return map_input_index_;
 }
 
 bool
 ModelState::IsDictionaryInput() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return is_dictionary_input_;
 }
 
 bool
 ModelState::IsInputRagged(const std::string& input_name) const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::IsInputRagged(input_name);
 }
 
 bool
 ModelState::IsInputOptional(const std::string& input_name) const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::IsInputOptional(input_name);
 }
 
@@ -336,7 +305,6 @@ ModelState::LoadModel(
     const std::string& model_file_name, const torch::Device& device,
     uint32_t device_count, TRITONSERVER_InstanceGroupKind kind)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   if (kind != TRITONSERVER_INSTANCEGROUPKIND_MODEL && !device.is_cpu() &&
       device_count == 0)
     THROW_TRITON_EXCEPTION(
@@ -373,6 +341,7 @@ ModelState::LoadModel(
 
   bool exists{false};
   THROW_IF_BACKEND_MODEL_ERROR(FileExists(local_file_path, &exists));
+
   if (!exists) {
     THROW_TRITON_EXCEPTION(
         TRITONSERVER_ERROR_UNAVAILABLE,
@@ -384,6 +353,7 @@ ModelState::LoadModel(
   if (weight_sharing_enabled_) {
     device_pair = std::make_pair(!device.is_cpu(), device.index());
     auto mit = model_package_loaders_.find(device_pair);
+
     if (mit != model_package_loaders_.end()) {
       // Since the model package loader is already created, reuse it.
       model_loader_ = mit->second;
@@ -396,6 +366,7 @@ ModelState::LoadModel(
   std::string model_data_string;
   THROW_IF_BACKEND_MODEL_ERROR(
       triton::backend::ReadTextFile(local_file_path, &model_data_string));
+
   DEBUG_TRACE_INFO(
       "{ local_file_name: \""
       << local_file_name << "\""
@@ -438,54 +409,151 @@ ModelState::LoadModel(
           << " for model \"" << Name() << "\".");
     }
   }
+
+  auto call_spec = model_loader_->get_call_spec();
+
+  pt2::call_spec input_spec;
+  if (!call_spec::try_parse(call_spec[0], input_spec))
+    THROW_TRITON_EXCEPTION(
+        TRITONSERVER_ERROR_INTERNAL,
+        "Failed to parse input call specification for model \"" << Name()
+                                                                << "\".");
+
+  if (input_spec.type() != call_spec_type::builtins_tuple)
+    THROW_TRITON_EXCEPTION(
+        TRITONSERVER_ERROR_INTERNAL,
+        "Unexpected input call specification type \""
+            << input_spec.type() << "\" for model \"" << Name()
+            << "\". Expected type is \"builtins_tuple\".");
+
+  pt2::call_spec output_spec;
+  if (!call_spec::try_parse(call_spec[1], output_spec))
+    THROW_TRITON_EXCEPTION(
+        TRITONSERVER_ERROR_INTERNAL,
+        "Failed to parse output call specification for model \"" << Name()
+                                                                 << "\".");
+
+  auto input_children = input_spec.children();
+  if (input_children.size() != 2) {
+    THROW_TRITON_EXCEPTION(
+        TRITONSERVER_ERROR_INTERNAL,
+        "Unexpected number of children in input call specification for model \""
+            << Name()
+            << "\". Expected structure to contain two children, but got "
+            << input_children.size() << ".");
+  }
+  if (input_children[0].type() != call_spec_type::builtins_tuple ||
+      input_children[1].type() != call_spec_type::builtins_dict) {
+    THROW_TRITON_EXCEPTION(
+        TRITONSERVER_ERROR_INTERNAL,
+        "Unexpected input call specification structure for model \""
+            << Name() << "\". Expected structure to be tuple["
+            << call_spec_type::builtins_tuple << ", "
+            << call_spec_type::builtins_dict << "], stead got ["
+            << input_children[0].type() << ", " << input_children[1].type()
+            << "].");
+  }
+
+  auto args_names = input_spec.children()[0].get_names();
+  auto kwargs_names = input_spec.children()[1].dictionary_keys();
+
+  const char ARGS_PREFIX[] = "ARGS";
+  const char KWARGS_PREFIX[] = "KWARGS";
+
+  std::stringstream logbuf;
+  logbuf << "(";
+
+  for (size_t i = 0; i < args_names.size(); i += 1) {
+    auto arg_name = ARGS_PREFIX + args_names[i];
+    map_input_index_[arg_name] = i;
+
+    logbuf << (i > 0 ? ", " : "") << arg_name;
+  }
+  for (size_t i = 0; i < kwargs_names.size(); i += 1) {
+    auto kwarg_name = KWARGS_PREFIX + kwargs_names[i];
+    map_input_index_[kwarg_name] = i + args_names.size();
+
+    logbuf << (i > 0 ? ", " : "") << kwarg_name;
+  }
+  logbuf << ")";
+
+  const char RESULT_PREFIX[] = "RESULT";
+
+  logbuf << " -> (";
+
+  // When the output call specification looks like `forward(...) ->
+  // torch.Tensor` (i.e. there's no structure), assume a single unnamed output
+  // and map it to index 0. The default output name of "RESULT" is used to
+  // specify a single torch.Tensor as output.
+  if (output_spec.children().empty()) {
+    // If the output call specification does not contain any names, assume a
+    // single unnamed output.
+    map_output_index_[RESULT_PREFIX] = 0;
+
+    logbuf << RESULT_PREFIX;
+  } else {
+    auto result_names = output_spec.get_names();
+
+    for (size_t i = 0; i < result_names.size(); i += 1) {
+      auto result_name = RESULT_PREFIX + result_names[i];
+      map_output_index_[result_name] = i;
+
+      logbuf << (i > 0 ? ", " : "") << result_name;
+    }
+  }
+
+  logbuf << ")";
+
+  TRITON_LOG_VERBOSE(
+      "Model " << repository_path
+               << " loaded with the following interface: " << logbuf.str());
 }
 
 int
 ModelState::MaxBatchSize() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::MaxBatchSize();
 }
 
 const std::map<std::string, std::pair<int64_t, int64_t>>&
 ModelState::ModelOutputs() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return model_outputs_;
 }
 
 const std::string&
 ModelState::ModelPath() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return model_path_;
 }
 
 const std::string&
 ModelState::Name() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::Name();
 }
 
 bool
 ModelState::OptimizedExecutionEnabled() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return optimized_execution_enabled_;
 }
 
 void
 ModelState::OptimizedExecutionEnabled(bool value)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   optimized_execution_enabled_ = value;
+}
+
+std::unordered_map<std::string, uint32_t>&
+ModelState::OutputMap()
+{
+  return map_output_index_;
 }
 
 void
 ModelState::ParseParameters()
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   TritonJsonValue parameters;
   if (!ModelConfig().Find("parameters", &parameters)) {
     bool disable_optimized_execution{false};
@@ -607,6 +675,7 @@ ModelState::ParseParameters()
       std::call_once(pytorch_intraop_threads_flag, [intra_op_thread_count]() {
         at::set_num_threads(intra_op_thread_count);
       });
+
       TRITON_LOG_INFO(
           "Intra op thread count is set to " << intra_op_thread_count
                                              << " for model instance "
@@ -654,56 +723,48 @@ ModelState::ParseParameters()
 const std::string&
 ModelState::RepositoryPath() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::RepositoryPath();
 }
 
 void
 ModelState::SetMaxBatchSize(int value)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   TritonBackendModel::SetMaxBatchSize(value);
 }
 
 TRITONSERVER_Error*
 ModelState::SupportsFirstDimBatching(bool* value_out)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::SupportsFirstDimBatching(value_out);
 }
 
 TRITONBACKEND_MemoryManager*
 ModelState::TritonMemoryManager()
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::TritonMemoryManager();
 }
 
 TRITONBACKEND_Model*
 ModelState::TritonModel()
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::TritonModel();
 }
 
 TRITONSERVER_Server*
 ModelState::TritonServer()
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::TritonServer();
 }
 
 uint64_t
 ModelState::Version() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return TritonBackendModel::Version();
 }
 
 bool
 ModelState::WeightSharingEnabled() const
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   return weight_sharing_enabled_;
 }
 }  // namespace triton::backend::pytorch::pt2

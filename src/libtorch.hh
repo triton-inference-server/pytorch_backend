@@ -63,16 +63,11 @@ TRITONSERVER_Error* TRITONBACKEND_ModelInstanceExecute(
 #define ENABLE_DEBUG_TRACE_ERROR 0
 #endif
 
-#ifndef ENABLE_DEBUG_TRACE_FUNCTION_CALL
-#define ENABLE_DEBUG_TRACE_FUNCTION_CALL 0
-#endif
-
 #ifndef ENABLE_DEBUG_TRACE_INFO
 #define ENABLE_DEBUG_TRACE_INFO 0
 #endif
 
-#if ENABLE_DEBUG_TRACE_ERROR || ENABLE_DEBUG_TRACE_FUNCTION_CALL || \
-    ENABLE_DEBUG_TRACE_INFO
+#if ENABLE_DEBUG_TRACE_ERROR || ENABLE_DEBUG_TRACE_INFO
 #include <cstring>
 #include <iostream>
 #include <sstream>
@@ -117,28 +112,6 @@ struct __debug_trace_prefix__ {
 
   std::string print() { return _prefix; }
 };
-
-struct __debug_func_printer__ {
-  const char* _func_name;
-
-  __debug_func_printer__(const char* func_name) : _func_name{func_name}
-  {
-    std::stringstream out;
-    out << CONSOLE_YELLOW << __debug_trace_prefix__(_func_name, false).print()
-        << "entered." << CONSOLE_RESET << std::endl;
-    std::cerr << out.str();
-  }
-
-  __debug_func_printer__() : _func_name{nullptr} {}
-
-  ~__debug_func_printer__()
-  {
-    std::stringstream out;
-    out << CONSOLE_YELLOW << __debug_trace_prefix__(_func_name, false).print()
-        << "exited." << CONSOLE_RESET << std::endl;
-    std::cerr << out.str();
-  }
-};
 #endif
 
 #if ENABLE_DEBUG_TRACE_ERROR
@@ -166,15 +139,6 @@ struct __debug_func_printer__ {
   }
 #define DEBUG_TRACE_ERROR_WHEN(condition, string) \
   {                                               \
-  }
-#endif
-
-#if ENABLE_DEBUG_TRACE_FUNCTION_CALL
-#define DEBUG_TRACE_FUNCTION_CALL() \
-  __debug_func_printer__ __H__(__PRETTY_FUNCTION__);
-#else
-#define DEBUG_TRACE_FUNCTION_CALL() \
-  {                                 \
   }
 #endif
 

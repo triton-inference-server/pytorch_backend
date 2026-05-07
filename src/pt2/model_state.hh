@@ -69,6 +69,8 @@ class ModelState : public triton::backend::BackendModel {
   bool cudnn_enabled_{true};
   bool inference_mode_enabled_{true};
   bool is_dictionary_input_{false};
+  std::unordered_map<std::string, uint32_t> map_input_index_;
+  std::unordered_map<std::string, uint32_t> map_output_index_;
   std::shared_ptr<TorchModelLoader> model_loader_{nullptr};
   std::string model_name_;
   std::map<std::string, std::pair<int64_t, int64_t>> model_outputs_;
@@ -93,12 +95,12 @@ class ModelState : public triton::backend::BackendModel {
 
   void CudnnEnabled(bool value);
 
-  [[nodiscard]] std::vector<torch::IValue> Forward(
-      const std::vector<torch::IValue>& inputs, void* stream_handle = nullptr);
-
-  [[nodiscard]] std::vector<std::string> GetModelCallSpec();
+  [[nodiscard]] std::vector<torch::Tensor> Forward(
+      const std::vector<torch::Tensor>& inputs, void* stream_handle = nullptr);
 
   [[nodiscard]] bool InferenceModeEnabled() const;
+
+  [[nodiscard]] std::unordered_map<std::string, uint32_t>& InputMap();
 
   [[nodiscard]] bool IsDictionaryInput() const;
 
@@ -112,6 +114,8 @@ class ModelState : public triton::backend::BackendModel {
   [[nodiscard]] bool OptimizedExecutionEnabled() const;
 
   void OptimizedExecutionEnabled(bool value);
+
+  [[nodiscard]] std::unordered_map<std::string, uint32_t>& OutputMap();
 
   [[nodiscard]] bool WeightSharingEnabled() const;
 

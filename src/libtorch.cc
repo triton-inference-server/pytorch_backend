@@ -260,6 +260,14 @@ TRITONBACKEND_ModelInitialize(TRITONBACKEND_Model* model)
       RETURN_IF_ERROR(TRITONBACKEND_ModelSetState(
           model, reinterpret_cast<void*>(model_state)));
     }
+    catch (const triton::backend::pytorch::BackendException& ex) {
+      RETURN_ERROR_IF_TRUE(
+          true, TRITONSERVER_ERROR_INTERNAL,
+          TOSTRING(
+              "failed to create ModelState for model \""
+              << model_name << "\""
+              << ", version " << model_version << ": " << ex.what()));
+    }
     catch (const std::exception& ex) {
       RETURN_ERROR_IF_TRUE(
           true, TRITONSERVER_ERROR_INTERNAL,

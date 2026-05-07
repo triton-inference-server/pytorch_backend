@@ -45,13 +45,11 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
       enable_jit_profiling_pair_({false, true}),
       enable_jit_executor_pair_({false, true})
 {
-  DEBUG_TRACE_FUNCTION_CALL();
 }
 
 TRITONSERVER_Error*
 ModelState::AutoCompleteConfig()
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   // Auto-complete configuration is not supported since PyTorch does not
   // store/capture sufficient model metadata so just log error instead.
   LOG_MESSAGE(
@@ -66,7 +64,6 @@ ModelState::AutoCompleteConfig()
 TRITONSERVER_Error*
 ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   try {
     *state = new ModelState(triton_model);
   }
@@ -188,7 +185,6 @@ ModelState::LoadModel(
     std::string* model_path, const TRITONSERVER_InstanceGroupKind& kind,
     std::shared_ptr<torch::jit::script::Module>* torch_model)
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   // Find the TorchScript file that describes the model. If the model
   // configuration doesn't have an explicit model file specified then
   // use the default name ("model.pt").
@@ -275,7 +271,6 @@ ModelState::ModelOutputs()
 TRITONSERVER_Error*
 ModelState::ParseParameters()
 {
-  DEBUG_TRACE_FUNCTION_CALL();
   triton::common::TritonJson::Value params;
   bool status = model_config_.Find("parameters", &params);
   if (status) {
