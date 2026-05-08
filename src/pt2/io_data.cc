@@ -56,10 +56,10 @@ io_data::emplace(const std::string& name, const std::string& ordinal_name)
   }
 
   map_[name] = values_.size();
-  values_.push_back(pt2::io_data::data{});
   if (!ordinal_name.empty()) {
     map_[ordinal_name] = values_.size();
   }
+  values_.push_back(pt2::io_data::data{});
 }
 
 const io_data::data&
