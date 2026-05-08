@@ -286,8 +286,8 @@ else()
   )
 endif()
 set(TORCHVISION_LIBS
-    $<IF:$<BOOL:${RHEL_BUILD}>,libjpeg.so.62,libjpeg.so>
-    $<IF:$<BOOL:${RHEL_BUILD}>,libpng16.so.16,libpng16.so>
+    libjpeg.so.62
+    libpng16.so.16
 )
 
 message(TRACE "LIBS_ARCH: ${LIBS_ARCH}")
@@ -336,7 +336,7 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     COMMAND docker cp pytorch_backend_ptlib:/opt/pytorch/pytorch/torch/csrc/jit/codegen include/torch/torch/csrc/jit/.
 
     COMMAND /bin/sh -c "if [ ${RHEL_BUILD} = 'ON' ]; then docker cp -L pytorch_backend_ptlib:/usr/lib64/libjpeg.so.62 libjpeg.so.62; else docker cp -L pytorch_backend_ptlib:/usr/local/lib/libjpeg.so.62 libjpeg.so.62 ; fi;"
-    COMMAND /bin/sh -c "if [ ${RHEL_BUILD} = 'ON' ]; then docker cp -L pytorch_backend_ptlib:/usr/lib64/libpng16.so.16 libpng16.so.16; else docker cp -L pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libpng16.so libpng16.so; fi;"
+    COMMAND /bin/sh -c "if [ ${RHEL_BUILD} = 'ON' ]; then docker cp -L pytorch_backend_ptlib:/usr/lib64/libpng16.so.16 libpng16.so.16; else docker cp -L pytorch_backend_ptlib:/usr/lib/${LIBS_ARCH}-linux-gnu/libpng16.so.16 libpng16.so.16; fi;"
     COMMAND /bin/sh -c "if [ -f libmkl_def.so.1 ]; then patchelf --add-needed libmkl_gnu_thread.so.1 libmkl_def.so.1; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_def.so.1 ]; then patchelf --add-needed libmkl_core.so.1 libmkl_def.so.1; fi"
     COMMAND /bin/sh -c "if [ -f libmkl_avx2.so.1 ]; then patchelf --add-needed libmkl_gnu_thread.so.1 libmkl_avx2.so.1; fi"
@@ -562,17 +562,6 @@ if (${TRITON_PYTORCH_DOCKER_BUILD})
     )
   ENDFOREACH(plib)
 
-  install(
-    CODE
-      "EXECUTE_PROCESS(
-        COMMAND ln -sf libpng16.so libpng16.so.16
-        COMMAND ln -sf libjpeg.so libjpeg.so.8
-        RESULT_VARIABLE LINK_STATUS
-        WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/backends/pytorch)
-      if(LINK_STATUS AND NOT LINK_STATUS EQUAL 0)
-        message(FATAL_ERROR \"FAILED: to create links\")
-      endif()"
-  )
 else()
   FOREACH(plib ${PT_LIBS})
     set(PT_LIB_PATHS ${PT_LIB_PATHS} "${TRITON_PYTORCH_LIB_PATHS}/${plib}")
