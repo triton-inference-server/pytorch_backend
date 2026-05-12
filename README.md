@@ -65,7 +65,7 @@ For example, to build a backend that uses the 26.04 version of the PyTorch conta
 mkdir build
 cd build
 cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_PYTORCH_DOCKER_IMAGE="nvcr.io/nvidia/pytorch:26.04-py3" ..
-make install
+make -j<N> install
 ```
 
 The following required Triton repositories will be pulled and used in the build.
@@ -81,11 +81,11 @@ Currently, Triton requires that a specially patched version of PyTorch be used w
 The full source for these PyTorch versions are available as Docker images from
 [NGC](https://ngc.nvidia.com).
 
-For example, the PyTorch version compatible with the 26.02 release of Triton is available as `nvcr.io/nvidia/pytorch:26.05-py3` which supports PyTorch version ` 2.12.0a0`.
+For example, the PyTorch version compatible with the 26.04 release of Triton is available as `nvcr.io/nvidia/pytorch:26.04-py3` which supports PyTorch version `2.12.0a0`.
 
 > [!NOTE]
 > Additional details and version information can be found in the container's
-> [release notes](https://docs.nvidia.com/deeplearning/frameworks/pytorch-release-notes/rel-26-02.html#rel-26-02).
+> [release notes](https://docs.nvidia.com/deeplearning/frameworks/pytorch-release-notes/rel-26-04.html#rel-26-04).
 
 Copy over the LibTorch and TorchVision headers and libraries from the
 [PyTorch NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch)
@@ -563,21 +563,18 @@ instance_group {
 The following PyTorch settings may be customized by setting parameters on the
 `config.pbtxt`.
 
+> [!IMPORTANT]
+> Only applies with `platform: "pytorch_libtorch"`.
+
 [`torch.set_num_threads(int)`](https://pytorch.org/docs/stable/generated/torch.set_num_threads.html#torch.set_num_threads)
 
 * Key: `NUM_THREADS`
 * Value: The number of threads used for intra-op parallelism on CPU.
 
-> [!IMPORTANT]
-> Only applies with `platform: "pytorch_libtorch"`.
-
 [`torch.set_num_interop_threads(int)`](https://pytorch.org/docs/stable/generated/torch.set_num_interop_threads.html#torch.set_num_interop_threads)
 
 * Key: `NUM_INTEROP_THREADS`
 * Value: The number of threads used for interop parallelism (e.g. in JIT interpreter) on CPU.
-
-> [!IMPORTANT]
-> Only applies with `platform: "pytorch_libtorch"`.
 
 [`torch.compile()` parameters](https://pytorch.org/docs/stable/generated/torch.compile.html#torch-compile)
 
