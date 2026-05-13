@@ -186,6 +186,8 @@ class ExampleAotiModel(torch.nn.Module):
       # OUTPUT__0 or RESULT[AAA]
       "AAA": hdata + vdata,
       # OUTPUT__1 or RESULT[ZZZ]
+      # Notice that the ordinal name of ZZZ is OUTPUT__1 due to its position
+      # in the returned dictionary object.
       "ZZZ": hdata - vdata,
       "BBB": (
         # OUTPUT_2 or RESULT[BBB][0]
@@ -279,6 +281,7 @@ input: [
   { name: "KWARGS[kw_arg2]" ... } // "INPUT__5"
 ]
 output: [
+  // Output results sorted alphabetically instead by ordinal.
   { name: "RESULT[AAA]" ... }, // "OUTPUT__0",
   { name: "RESULT[BBB][0]" ... }, // "OUTPUT__2",
   { name: "RESULT[BBB][1]" ... }, // "OUTPUT__3",
@@ -287,6 +290,7 @@ output: [
   { name: "RESULT[DDD][KA]" ... }, // "OUTPUT__6",
   { name: "RESULT[DDD][KB]" ... }, // "OUTPUT__7",
   { name: "RESULT[ZZZ]" ... } // "OUTPUT__1"
+  // Notice RESULT[ZZZ] would be OUTPUT__1 when using ordinal names.
 ]
 ```
 
@@ -564,7 +568,7 @@ The following PyTorch settings may be customized by setting parameters on the
 `config.pbtxt`.
 
 > [!IMPORTANT]
-> Only applies with `platform: "pytorch_libtorch"`.
+> The following options only apply when `platform: "pytorch_libtorch"` is used.
 
 [`torch.set_num_threads(int)`](https://pytorch.org/docs/stable/generated/torch.set_num_threads.html#torch.set_num_threads)
 
@@ -599,9 +603,6 @@ parameters: {
   value: { string_value: "{\"disable\": true}" }
 }
 ```
-
-> [!IMPORTANT]
-> Only applies with `platform: "pytorch_libtorch"`.
 
 ## Important Notes
 
