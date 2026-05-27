@@ -402,7 +402,7 @@ Triton exposes some flags to control the execution mode of the TorchScript model
   Boolean flag to enable the Inference Mode execution of TorchScript models.
   By default, the inference mode is enabled.
 
-  [InferenceMode](https://pytorch.org/cppdocs/notes/inference_mode.html) is a new RAII guard analogous to `NoGradMode` to be used when you are certain your operations will have no interactions with autograd.
+  [InferenceMode](https://docs.pytorch.org/cppdocs/api/autograd/modes.html#inferencemode) is a new RAII guard analogous to `NoGradMode` to be used when you are certain your operations will have no interactions with autograd.
   Compared to `NoGradMode`, code run under this mode gets better performance by disabling autograd.
 
   Please note that in some models, InferenceMode might not benefit performance and in fewer cases might impact performance negatively.
@@ -620,9 +620,9 @@ parameters: {
   As a limitation of using List instead of Tensor for String I/O, only for 1-dimensional input(s)/output(s) are supported for I/O of String type.
 
 * In a multi-GPU environment, a potential runtime issue can occur when using
-  [Tracing](https://pytorch.org/docs/stable/generated/torch.jit.trace.html)
+  [Tracing](https://docs.pytorch.org/docs/2.10/generated/torch.jit.trace.html)
   to generate a
-  [TorchScript](https://pytorch.org/docs/stable/jit.html)
+  [TorchScript](https://docs.pytorch.org/docs/2.10/generated/torch.jit.script.html#torch.jit.script)
   model.
   This issue arises due to a device mismatch between the model instance and the tensor.
 
@@ -630,7 +630,7 @@ parameters: {
   The runtime error occurs when a request is sent to a model instance with a different GPU device from the one used during the TorchScript generation process.
 
   To address this problem, it is highly recommended to use
-  [Scripting](https://pytorch.org/docs/stable/generated/torch.jit.script.html#torch.jit.script)
+  [Scripting](https://docs.pytorch.org/docs/2.10/generated/torch.jit.script.html#torch.jit.script)
   instead of Tracing for model generation in a multi-GPU environment.
   Scripting avoids the device mismatch issue and ensures compatibility with different GPUs when used with Triton.
 
