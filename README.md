@@ -315,11 +315,17 @@ output: [
 > torch._inductor.aoti_compile_and_package(exported_model, package_path="model.pt2")
 > ```
 
+> [!NOTE]
+> Sequence batching with implicit state is supported for AOT Inductor compiled models.
+> The model's `forward` function must accept the sequence control tensors (e.g. `CONTROL_SEQUENCE_START`, `CONTROL_SEQUENCE_READY`) and any implicit state input as ordinary tensor arguments, and return any new state value as one of its outputs.
+> The control and state tensors may be addressed in the `config.pbtxt` using either the ordinal `INPUT__<index>` / `OUTPUT__<index>` naming convention or the descriptive `<name>__<index>` convention (e.g. `START__2`, `INPUT_STATE__1`, `OUTPUT_STATE__1`) used by the legacy LibTorch backend; the descriptive name's trailing index selects the corresponding ordinal input/output.
+> As with default batching, the PT2 archive must be exported with a dynamic first (batch) dimension on every input.
+
 > [!WARNING]
 > The following features are **not** yet supported for AOT Inductor compiled models packaged as a PT2 model archive:
-> * Sequence batching.
+> * `CONTROL_SEQUENCE_CORRID` (typed sequence control); only the boolean controls `CONTROL_SEQUENCE_START`, `CONTROL_SEQUENCE_END`, and `CONTROL_SEQUENCE_READY` are supported.
 > * Batching of models with complex (nested `dict`/`tuple`/`list`) inputs or outputs; default batching currently targets models whose inputs and outputs are plain tensors.
-> * Batching of `TYPE_STRING` (`torch.export` byte/string) inputs.
+> * Batching of `TYPE_STRING` (`torch.export` byte/string) inputs, including string sequence state.
 
 ### PyTorch 2.0 Models
 

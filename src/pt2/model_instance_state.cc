@@ -27,6 +27,7 @@
 #include "model_instance_state.hh"
 
 #include <cstddef>
+#include <cstdlib>
 
 #include "../libtorch.hh"
 #include "../libtorch_utils.h"
@@ -171,11 +172,11 @@ ModelInstanceState::ModelInstanceState(
           " \"CONTROL_SEQUENCE_READY\", false /* required */) -> true");
       expected_input_count += 1;
     }
-    if (ValidateBooleanSequenceControl(
+    if (ValidateTypedSequenceControl(
             sequence_batching, "CONTROL_SEQUENCE_CORRID",
             false /* required */)) {
       DEBUG_TRACE_INFO(
-          "ValidateBooleanSequenceControl(sequence_batching,"
+          "ValidateTypedSequenceControl(sequence_batching,"
           " \"CONTROL_SEQUENCE_CORRID\", false /* required */) -> true");
       expected_input_count += 1;
     }
@@ -1650,11 +1651,6 @@ ModelInstanceState::ValidateBooleanSequenceControl(
     TritonJsonValue& sequence_batching, const std::string& control_kind,
     bool required)
 {
-  THROW_TRITON_EXCEPTION(
-      TRITONSERVER_ERROR_INTERNAL,
-      "Boolean sequence control validation is not supported for model instance "
-      "\"" << Name()
-           << "\".");
   std::string tensor_name;
   std::string tensor_dtype;
   if (auto err = GetBooleanSequenceControlProperties(
@@ -1681,41 +1677,88 @@ ModelInstanceState::ValidateBooleanSequenceControl(
   bool have_control{!tensor_name.empty()};
 
   if (have_control) {
-    int input_index{0};
-    int start_pos{static_cast<int>(tensor_name.find(DELIMINATOR))};
-
-    if (start_pos == -1) {
-      DEBUG_TRACE_ERROR(
-          "Input \""
-          << tensor_name
-          << "\" does not follow <name>__<index> naming convention.");
-      THROW_TRITON_EXCEPTION(
-          TRITONSERVER_ERROR_INTERNAL,
-          "Input \""
-              << tensor_name
-              << "\" does not follow <name>__<index> naming convention.");
-    }
-
-    // Check if the index part of the name is not an integer.
-    std::string index_str = tensor_name.substr(start_pos + 2);
-    for (auto itr = index_str.begin(); itr != index_str.end(); itr++) {
-      if (std::isdigit(*itr) == 0) {
-        DEBUG_TRACE_ERROR(
-            "Input \""
-            << tensor_name
-            << "\" does not follow <name>__<index> naming convention.");
-        THROW_TRITON_EXCEPTION(
-            TRITONSERVER_ERROR_INTERNAL,
-            "Input \""
-                << tensor_name
-                << "\" does not follow <name>__<index> naming convention.");
-      }
-    }
-
-    input_index = std::atoi(tensor_name.substr(start_pos + 2).c_str());
+    // The sequence scheduler injects the control tensor as a regular request
+    // input, so it must map to one of the model's inputs.
+    RegisterSequenceInput(
+        /* tensor_name= */ tensor_name,
+        /* tensor_dtype= */ tensor_dtype,
+        /* context= */ "control input (" + control_kind + ")");
   }
 
   return have_control;
+}
+
+void
+ModelInstanceState::ResolveOrdinalAlias(
+    pt2::io_data& io_map, const std::string& tensor_name,
+    const std::string& ordinal_prefix, const std::string& context)
+{
+  // The forward-argument/call-spec name (e.g. "ARGS[1]") and the ordinal name
+  // (e.g. "INPUT__1" / "OUTPUT__1") are already present in the map.
+  if (io_map.contains(tensor_name)) {
+    return;
+  }
+
+  // Otherwise accept the descriptive "<name>__<index>" convention (e.g.
+  // "START__1", "INPUT_STATE__1"): split on the first "__", require the
+  // remainder to be all digits, and parse it as an integer index (so e.g.
+  // "START__01" resolves to index 1). The descriptive name is registered as an
+  // alias of the ordinal entry so it also resolves at inference time.
+  std::string index_str;
+  auto start_pos = tensor_name.find(DELIMINATOR);
+  if (start_pos != std::string::npos) {
+    index_str = tensor_name.substr(start_pos + DELIMINATOR.size());
+  }
+
+  bool is_named_index = !index_str.empty();
+  for (char c : index_str) {
+    if (std::isdigit(static_cast<unsigned char>(c)) == 0) {
+      is_named_index = false;
+      break;
+    }
+  }
+
+  if (is_named_index) {
+    int index = std::atoi(index_str.c_str());
+    std::string ordinal_name = ordinal_prefix + std::to_string(index);
+    if (io_map.contains(ordinal_name)) {
+      io_map.alias(ordinal_name, tensor_name);
+      return;
+    }
+  }
+
+  THROW_TRITON_EXCEPTION(
+      TRITONSERVER_ERROR_INVALID_ARG,
+      "Sequence "
+          << context << " \"" << tensor_name << "\" for model \"" << Name()
+          << "\" does not correspond to any model tensor. Sequence control and "
+             "state tensors must be addressed using the ordinal \""
+          << ordinal_prefix
+          << "<index>\" naming convention or the descriptive "
+             "\"<name>__<index>\" convention.");
+}
+
+void
+ModelInstanceState::RegisterSequenceInput(
+    const std::string& tensor_name, const std::string& tensor_dtype,
+    const std::string& context)
+{
+  ResolveOrdinalAlias(map_inputs_, tensor_name, "INPUT__", context);
+
+  // Record the configured datatype on the resolved input entry.
+  if (!tensor_dtype.empty()) {
+    const auto pr = ModelConfigDataTypeToTorchType(tensor_dtype);
+    if (!pr.first) {
+      THROW_TRITON_EXCEPTION(
+          TRITONSERVER_ERROR_INVALID_ARG,
+          "Unsupported datatype " << tensor_dtype << " for sequence " << context
+                                  << " \"" << tensor_name << "\" for model \""
+                                  << Name() << "\".");
+    }
+    map_inputs_[tensor_name].torch_dtype() = pr.second;
+    map_inputs_[tensor_name].triton_dtype() =
+        ConvertTorchTypeToDataType(pr.second);
+  }
 }
 
 void
@@ -1746,18 +1789,22 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_count)
                                       << TRITONSERVER_ErrorMessage(err));
   }
 
-  if (inputs.ArraySize() != expected_input_count) {
+  // The "input" array only enumerates the regular (data) inputs. Sequence
+  // control inputs, implicit-state inputs, and batch inputs are declared
+  // elsewhere in the config but still count towards expected_input_count, so the
+  // regular input array must not exceed the total expected input count.
+  if (inputs.ArraySize() > expected_input_count) {
     DEBUG_TRACE_ERROR(
         "Failed to load model \""
-        << Name() << "\" configuration expects " << expected_input_count
-        << " inputs, but model configuration has " << inputs.ArraySize()
-        << " inputs.");
+        << Name() << "\" expects " << expected_input_count
+        << " total inputs, but model configuration's input array has "
+        << inputs.ArraySize() << " inputs.");
     THROW_TRITON_EXCEPTION(
         TRITONSERVER_ERROR_INTERNAL,
         "Failed to load model \""
-            << Name() << "\" configuration expects " << expected_input_count
-            << " inputs, but model configuration has " << inputs.ArraySize()
-            << " inputs.");
+            << Name() << "\" expects " << expected_input_count
+            << " total inputs, but model configuration's input array has "
+            << inputs.ArraySize() << " inputs.");
   }
 
   for (size_t i = 0; i < inputs.ArraySize(); i += 1) {
@@ -1881,110 +1928,79 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_count)
                       << map_inputs_[input_name].server_index() << " }");
   }
 
+  // Validate implicit sequence-batching state inputs. The sequence scheduler
+  // delivers the state tensor as a regular request input, so it must resolve to
+  // one of the model's call-specification inputs and is registered here so its
+  // datatype/shape are known.
   TritonJsonValue sequence_batching;
   if (model_->ModelConfig().Find("sequence_batching", &sequence_batching)) {
-    throw std::runtime_error("Sequence batching is not supported yet.");
-    /*
     TritonJsonValue states;
-    if (sequence_batching.Find("state", &states))
-    {
-      for (size_t i = 0; i < states.ArraySize(); i += 1)
-      {
+    if (sequence_batching.Find("state", &states)) {
+      for (size_t i = 0; i < states.ArraySize(); i += 1) {
         TritonJsonValue state;
-        if (auto err = states.IndexAsObject(i, &state))
-        {
-          DEBUG_TRACE_ERROR("Failed to get sequence state " << i << " for
-          model instance \"" << Name() << "\": " <<
-          TRITONSERVER_ErrorMessage(err)); THROW_TRITON_EXCEPTION(err,
-                                 "Failed to get sequence state " << i << "
-                                 for model instance \"" << Name() << "\": "
-                                 << TRITONSERVER_ErrorMessage(err));
+        if (auto err = states.IndexAsObject(i, &state)) {
+          DEBUG_TRACE_ERROR(
+              "Failed to get sequence state "
+              << i << " for model instance \"" << Name()
+              << "\": " << TRITONSERVER_ErrorMessage(err));
+          THROW_TRITON_EXCEPTION(
+              err, "Failed to get sequence state "
+                       << i << " for model instance \"" << Name()
+                       << "\": " << TRITONSERVER_ErrorMessage(err));
         }
 
         std::string state_name;
-        if (auto err = state.MemberAsString("input_name", &state_name))
-        {
-          DEBUG_TRACE_ERROR("Failed to get input name for sequence state " <<
-          i << " for model instance \"" << Name() << "\": " <<
-          TRITONSERVER_ErrorMessage(err)); THROW_TRITON_EXCEPTION(err,
-                                 "Failed to get input name for sequence state
-                                 " << i << " for model instance \"" << Name()
-                                 << "\": " <<
-                                 TRITONSERVER_ErrorMessage(err));
+        if (auto err = state.MemberAsString("input_name", &state_name)) {
+          DEBUG_TRACE_ERROR(
+              "Failed to get input name for sequence state "
+              << i << " for model instance \"" << Name()
+              << "\": " << TRITONSERVER_ErrorMessage(err));
+          THROW_TRITON_EXCEPTION(
+              err, "Failed to get input name for sequence state "
+                       << i << " for model instance \"" << Name()
+                       << "\": " << TRITONSERVER_ErrorMessage(err));
         }
 
-        // TODO: FIXME
-        // AddInputToMap(naming_convention, allowed_inputs, state_name, i);
-
-        // Validate dtype
         std::string state_dtype;
-        if (auto err = state.MemberAsString("data_type", &state_dtype))
-        {
-          DEBUG_TRACE_ERROR("Failed to get data type for sequence state input
-          \"" << state_name << "\" for model instance \"" << Name() << "\": "
-          << TRITONSERVER_ErrorMessage(err)); THROW_TRITON_EXCEPTION(err,
-                                 "Failed to get data type for sequence state
-                                 input \"" << state_name << "\" for model
-                                 instance \"" << Name() << "\": " <<
-                                 TRITONSERVER_ErrorMessage(err));
+        if (auto err = state.MemberAsString("data_type", &state_dtype)) {
+          DEBUG_TRACE_ERROR(
+              "Failed to get data type for sequence state input \""
+              << state_name << "\" for model instance \"" << Name()
+              << "\": " << TRITONSERVER_ErrorMessage(err));
+          THROW_TRITON_EXCEPTION(
+              err, "Failed to get data type for sequence state input \""
+                       << state_name << "\" for model instance \"" << Name()
+                       << "\": " << TRITONSERVER_ErrorMessage(err));
         }
 
-        DEBUG_TRACE_INFO("{ name: \"" << Name() << "\""
-                         << ", state_name: \"" << state_name << "\""
-                         << ", state_dtype: \"" << state_dtype << "\""
-                         << " }");
-
-        const auto pr = ModelConfigDataTypeToTorchType(state_dtype);
-        if (!pr.first)
-        {
-          DEBUG_TRACE_ERROR("Unsupported datatype " << state_dtype << " for
-          sequence state input \"" << state_name << "\" for model instance
-          \"" << Name() << "\".");
-          THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
-                                 "Unsupported datatype " << state_dtype << "
-                                 for sequence state input \"" << state_name
-                                 << "\" for model instance \"" << Name() <<
-                                 "\".");
+        if (state_dtype == "TYPE_STRING") {
+          THROW_TRITON_EXCEPTION(
+              TRITONSERVER_ERROR_UNSUPPORTED,
+              "TYPE_STRING sequence state input \""
+                  << state_name << "\" is not yet supported for AOT Inductor "
+                  << "(PT2) model \"" << Name() << "\".");
         }
 
-        // Validate shape for String inputs. Only allow 1 dimension.
-        if (state_dtype == "TYPE_STRING")
-        {
-          if (is_batching_supported_)
-          {
-            DEBUG_TRACE_ERROR("Triton only supports 1-dimensional string
-            inputs for sequence state input \"" << state_name << "\" for
-            model \"" << Name() << "\" when batching is enabled.");
-            THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INVALID_ARG,
-                                   "Triton only supports 1-dimensional string
-                                   inputs for sequence " "state input \"" <<
-                                   state_name << "\" for model \"" << Name()
-                                   << "\".");
-          }
+        RegisterSequenceInput(
+            /* tensor_name= */ state_name,
+            /* tensor_dtype= */ state_dtype,
+            /* context= */ "state input");
+
+        std::vector<int64_t> state_shape;
+        if (auto err = ParseShape(state, "dims", &state_shape)) {
+          TRITONSERVER_ErrorDelete(err);
+          state_shape = {-1};
         }
+        map_inputs_[state_name].shape() = state_shape;
+
+        DEBUG_TRACE_INFO(
+            "{ name: \"" << Name() << "\", state_input_name: \"" << state_name
+                         << "\", state_dtype: \"" << state_dtype
+                         << "\", model_index: "
+                         << map_inputs_[state_name].model_index() << " }");
       }
     }
-    */
   }
-
-  /*
-    The code below likely needs to be fixed up as this is where batch input were
-    assigned to the input map and the naming convention and allowed inputs were
-    used to validate the batch input target names and assign them to the input
-    map. This is also where the batch_input_count_ was determined based on the
-    number of batch inputs and the number of target names for each batch input.
-  */
-#if false
-  for (const auto& batch_input : model_->BatchInputs()) {
-    for (const auto& input_name : batch_input.TargetNames()) {
-      // TODO: FIXME
-      // AddInputToMap(/* naming_convention= */naming_convention,
-      //               /* allowed_inputs= */allowed_inputs,
-      //               /* input_name= */input_name,
-      //               /* index= */i + inputs.ArraySize());
-    }
-  }
-#endif
 
   DEBUG_TRACE_INFO(
       "{ name: \"" << Name()
@@ -2163,126 +2179,98 @@ ModelInstanceState::ValidateOutputs()
     }
   }
 
+  // Validate implicit sequence-batching state outputs. The new state value is
+  // produced as one of the model's outputs; record its datatype/shape so that
+  // ReadOutputTensors can route it through the state responder. The
+  // output<->state association (model_->ModelOutputs() pairs) is set up in
+  // ModelState::Create().
   TritonJsonValue sequence_batching;
   if (model_->ModelConfig().Find("sequence_batching", &sequence_batching)) {
-    throw std::runtime_error("Sequence batching is not supported yet.");
-    /*
     TritonJsonValue states;
-    if (sequence_batching.Find("state", &states))
-    {
-      for (size_t i = 0; i < states.ArraySize(); i += 1)
-      {
+    if (sequence_batching.Find("state", &states)) {
+      for (size_t i = 0; i < states.ArraySize(); i += 1) {
         TritonJsonValue state;
-        if (auto err = states.IndexAsObject(i, &state))
-        {
-          DEBUG_TRACE_ERROR("Failed to get sequence state " << i
-                            << " for model instance \"" << Name() << "\": "
-                            << TRITONSERVER_ErrorMessage(err));
-          THROW_TRITON_EXCEPTION(err,
-                                 "Failed to get sequence state " << i
-                                 << " for model instance \"" << Name() <<
-                                 "\": " << TRITONSERVER_ErrorMessage(err));
+        if (auto err = states.IndexAsObject(i, &state)) {
+          DEBUG_TRACE_ERROR(
+              "Failed to get sequence state "
+              << i << " for model instance \"" << Name()
+              << "\": " << TRITONSERVER_ErrorMessage(err));
+          THROW_TRITON_EXCEPTION(
+              err, "Failed to get sequence state "
+                       << i << " for model instance \"" << Name()
+                       << "\": " << TRITONSERVER_ErrorMessage(err));
         }
 
         std::string state_name;
-        if (auto err = state.MemberAsString("output_name", &state_name))
-        {
-          DEBUG_TRACE_ERROR("Failed to get output name for sequence state "
-          << i
-                            << " for model instance \"" << Name() << "\": "
-                            << TRITONSERVER_ErrorMessage(err));
-          THROW_TRITON_EXCEPTION(err,
-                                 "Failed to get output name for sequence
-                                 state " << i
-                                 << " for model instance \"" << Name() <<
-                                 "\": " << TRITONSERVER_ErrorMessage(err));
+        if (auto err = state.MemberAsString("output_name", &state_name)) {
+          DEBUG_TRACE_ERROR(
+              "Failed to get output name for sequence state "
+              << i << " for model instance \"" << Name()
+              << "\": " << TRITONSERVER_ErrorMessage(err));
+          THROW_TRITON_EXCEPTION(
+              err, "Failed to get output name for sequence state "
+                       << i << " for model instance \"" << Name()
+                       << "\": " << TRITONSERVER_ErrorMessage(err));
         }
 
         std::string state_dtype;
-        if (auto err = state.MemberAsString("data_type", &state_dtype))
-        {
-          DEBUG_TRACE_ERROR("Failed to get data type for sequence state
-          output \"" << state_name << "\""
-                            " for model instance \"" << Name() << "\": " <<
-                            TRITONSERVER_ErrorMessage(err));
-          THROW_TRITON_EXCEPTION(err,
-                                 "Failed to get data type for sequence state
-                                 output \"" << state_name << "\"" " for model
-                                 instance \"" << Name() << "\": " <<
-                                 TRITONSERVER_ErrorMessage(err));
+        if (auto err = state.MemberAsString("data_type", &state_dtype)) {
+          DEBUG_TRACE_ERROR(
+              "Failed to get data type for sequence state output \""
+              << state_name << "\" for model instance \"" << Name()
+              << "\": " << TRITONSERVER_ErrorMessage(err));
+          THROW_TRITON_EXCEPTION(
+              err, "Failed to get data type for sequence state output \""
+                       << state_name << "\" for model instance \"" << Name()
+                       << "\": " << TRITONSERVER_ErrorMessage(err));
         }
 
-        std::vector<int64_t> dims;
-        if (auto err = ParseShape(state, "dims", &dims))
-        {
-          DEBUG_TRACE_ERROR("Failed to parse dims for sequence state output
-          \"" << state_name << "\""
-                            " for model instance \"" << Name() << "\": " <<
-                            TRITONSERVER_ErrorMessage(err));
-          THROW_TRITON_EXCEPTION(err,
-                                 "Failed to parse dims for sequence state
-                                 output \"" << state_name << "\"" " for model
-                                 instance \"" << Name() << "\": " <<
-                                 TRITONSERVER_ErrorMessage(err));
+        if (state_dtype == "TYPE_STRING") {
+          THROW_TRITON_EXCEPTION(
+              TRITONSERVER_ERROR_UNSUPPORTED,
+              "TYPE_STRING sequence state output \""
+                  << state_name << "\" is not yet supported for AOT Inductor "
+                  << "(PT2) model \"" << Name() << "\".");
         }
-
-        DEBUG_TRACE_INFO("{ name: \"" << Name() << "\""
-                         << ", output_index: " << output_index
-                         << ", states[" << i << "]:"
-                           << " { state_name: \"" << state_name << "\""
-                           << ", state_dtype: \"" << state_dtype << "\""
-                           << ", len(dims): " << dims.size() << " }"
-                         << " }");
-
-        int start_pos = state_name.find(DELIMINATOR);
-        output_index = std::atoi(state_name.substr(start_pos + 2).c_str());
 
         const auto pr = ModelConfigDataTypeToTorchType(state_dtype);
-        if (!pr.first && state_dtype != "TYPE_STRING")
-        {
-          DEBUG_TRACE_ERROR("Unsupported datatype " << state_dtype << " for
-          sequence state output \"" << state_name << "\" for model instance
-          \"" << Name() << "\".");
-          THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
-                                 "Unsupported datatype " << state_dtype << "
-                                 for sequence state output" " \"" <<
-                                 state_name << "\" for model instance \"" <<
-                                 Name() << "\".");
+        if (!pr.first) {
+          DEBUG_TRACE_ERROR(
+              "Unsupported datatype "
+              << state_dtype << " for sequence state output \"" << state_name
+              << "\" for model instance \"" << Name() << "\".");
+          THROW_TRITON_EXCEPTION(
+              TRITONSERVER_ERROR_INVALID_ARG,
+              "Unsupported datatype "
+                  << state_dtype << " for sequence state output \""
+                  << state_name << "\" for model instance \"" << Name()
+                  << "\".");
         }
 
-        // Validate shape for String outputs. Only allow 1 dimension.
-        if (state_dtype == "TYPE_STRING")
-        {
-          if ((dims.size() + (is_batching_supported_ ? 1 : 0)) > 1)
-          {
-            DEBUG_TRACE_ERROR("Triton only supports 1-dimensional string
-            outputs for sequence state output"
-                              " \"" << state_name << "\" for model instance
-                              \"" << Name() << "\".");
-            THROW_TRITON_EXCEPTION(TRITONSERVER_ERROR_INTERNAL,
-                                   "Triton only supports 1-dimensional string
-                                   outputs for sequence state output" " \""
-                                   << state_name << "\" for model instance
-                                   \"" << Name() << "\".");
-          }
-        }
+        // The state output must resolve to one of the model's call
+        // specification outputs, via the ordinal "OUTPUT__<index>" name, the
+        // forward-result name, or the descriptive "<name>__<index>" convention.
+        ResolveOrdinalAlias(
+            map_outputs_, state_name, "OUTPUT__", "state output");
 
-        // model_->OutputMap()[state_name] = op_index;
+        map_outputs_[state_name].torch_dtype() = pr.second;
         map_outputs_[state_name].triton_dtype() =
-        ConvertTorchTypeToDataType(pr.second); DEBUG_TRACE_INFO("{ name: \""
-        << Name() << "\""
-                         << ", state_name: \"" << state_name << "\""
-                         << ", output_index: " <<
-                         map_outputs_[state_name].server_index()
-                         << ", torch_type: " <<
-                         map_outputs_[state_name].torch_dtype()
-                         << ", output_dtype: \"" <<
-                         TRITONSERVER_DataTypeString(map_outputs_[state_name].triton_dtype())
-                         << "\""
-                         << " }");
+            ConvertTorchTypeToDataType(pr.second);
+
+        std::vector<int64_t> state_shape;
+        if (auto err = ParseShape(state, "dims", &state_shape)) {
+          TRITONSERVER_ErrorDelete(err);
+          state_shape = {-1};
+        }
+        map_outputs_[state_name].shape() = state_shape;
+
+        DEBUG_TRACE_INFO(
+            "{ name: \"" << Name() << "\", state_output_name: \"" << state_name
+                         << "\", state_dtype: \"" << state_dtype
+                         << "\", model_index: "
+                         << map_outputs_[state_name].model_index() << " }");
       }
     }
-    */
   }
 }
 
@@ -2291,11 +2279,6 @@ ModelInstanceState::ValidateTypedSequenceControl(
     TritonJsonValue& sequence_batching, const std::string& control_kind,
     bool required)
 {
-  THROW_TRITON_EXCEPTION(
-      TRITONSERVER_ERROR_INTERNAL,
-      "Typed sequence control validation is not supported for model instance \""
-          << Name() << "\".");
-
   std::string tensor_name;
   std::string tensor_dtype;
 
@@ -2316,51 +2299,20 @@ ModelInstanceState::ValidateTypedSequenceControl(
 
   bool have_control{!tensor_name.empty()};
   if (have_control) {
-    int input_index{0};
-    int start_pos{static_cast<int>(tensor_name.find(DELIMINATOR))};
-
-    if (start_pos == -1) {
-      DEBUG_TRACE_ERROR(
-          "Input \""
-          << tensor_name
-          << "\" does not follow <name>__<index> naming convention.");
-      THROW_TRITON_EXCEPTION(
-          TRITONSERVER_ERROR_INTERNAL,
-          "Input \""
-              << tensor_name
-              << "\" does not follow <name>__<index> naming convention.");
-    }
-
-    // Check if the index part of the name is not an integer.
-    std::string index_str{tensor_name.substr(start_pos + 2)};
-    for (auto itr = index_str.begin(); itr != index_str.end(); itr++) {
-      if (std::isdigit(*itr) == 0) {
-        DEBUG_TRACE_ERROR(
-            "Input \""
-            << tensor_name
-            << "\" does not follow <name>__<index> naming convention.");
-        THROW_TRITON_EXCEPTION(
-            TRITONSERVER_ERROR_INTERNAL,
-            "Input \""
-                << tensor_name
-                << "\" does not follow <name>__<index> naming convention.");
-      }
-    }
-
-    // Check if the data type is supported by PyTorch.
-    if (!ModelConfigDataTypeToTorchType(tensor_dtype).first) {
-      DEBUG_TRACE_ERROR(
-          "Unsupported datatype "
-          << tensor_dtype << " for typed sequence control input \""
-          << tensor_name << "\" for model instance \"" << Name() << "\".");
-      THROW_TRITON_EXCEPTION(
-          TRITONSERVER_ERROR_INTERNAL,
-          "Unsupported datatype "
-              << tensor_dtype << " for typed sequence control input \""
-              << tensor_name << "\" for model instance \"" << Name() << "\".");
-    }
-
-    input_index = std::atoi(tensor_name.substr(start_pos + 2).c_str());
+    // CONTROL_SEQUENCE_CORRID is not supported: the correlation id is commonly
+    // a TYPE_STRING tensor, which this backend does not yet support. Reject the
+    // model rather than silently producing incorrect results.
+    DEBUG_TRACE_ERROR(
+        "Typed sequence control \""
+        << control_kind << "\" (tensor \"" << tensor_name
+        << "\") is not supported for model instance \"" << Name() << "\".");
+    THROW_TRITON_EXCEPTION(
+        TRITONSERVER_ERROR_UNSUPPORTED,
+        "Typed sequence control \""
+            << control_kind
+            << "\" is not yet supported for AOT Inductor (PT2) model \""
+            << Name()
+            << "\". CONTROL_SEQUENCE_CORRID support is not implemented.");
   }
 
   return have_control;

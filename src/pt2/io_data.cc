@@ -62,6 +62,35 @@ io_data::emplace(const std::string& name, const std::string& ordinal_name)
   values_.push_back(pt2::io_data::data{});
 }
 
+void
+io_data::alias(const std::string& existing_name, const std::string& alias_name)
+{
+  auto iter = map_.find(existing_name);
+  if (iter == map_.end()) {
+    THROW_TRITON_EXCEPTION(
+        TRITONSERVER_ERROR_NOT_FOUND,
+        "io_data does not contain name: \"" + existing_name + "\"");
+  }
+
+  if (alias_name.empty()) {
+    return;
+  }
+
+  auto existing = map_.find(alias_name);
+  if (existing != map_.end()) {
+    // Idempotent when the alias already points at the same entry; conflicting
+    // otherwise.
+    if (existing->second == iter->second) {
+      return;
+    }
+    THROW_TRITON_EXCEPTION(
+        TRITONSERVER_ERROR_ALREADY_EXISTS,
+        "io_data already contains name: \"" + alias_name + "\"");
+  }
+
+  map_[alias_name] = iter->second;
+}
+
 const io_data::data&
 io_data::get(const std::string& name) const
 {
