@@ -1093,7 +1093,7 @@ ModelInstanceState::ReadOutputTensors(
       /* request_count= */ request_count,
       /* responses= */ &responses,
       /* memory_manager= */ model_->TritonMemoryManager(),
-      /* first_dim_batching= */ false,
+      /* first_dim_batching= */ is_batching_supported_,
       /* pinned_enabled= */ model_->EnablePinnedInput(),
       /* stream= */ GetCudaStreamByInstanceKind()};
 
@@ -1988,9 +1988,7 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_count)
 
   DEBUG_TRACE_INFO(
       "{ name: \"" << Name()
-                   << "\", total_batch_input_target_names: " << uint32_t i =
-          model_->BatchInputs().size() * batch_input.TargetNames().size();
-      << ", batch_input_count: " << batch_input_count_ << " }");
+                   << "\", batch_input_count: " << batch_input_count_ << " }");
 }
 
 void

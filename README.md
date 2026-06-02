@@ -301,9 +301,25 @@ output: [
 >
 > Dictionary keys cannot contain `"`, `[`, or `]`, nor can they contain whitespace or non-printable characters.
 
+> [!NOTE]
+> Default (first-dimension) batching is supported for AOT Inductor compiled models.
+> To enable it, set `max_batch_size` greater than `0` in the model's `config.pbtxt` (just like other backends) and specify the per-sample `dims` (i.e. without the leading batch dimension).
+> The model's PT2 archive **must** be exported with a dynamic first (batch) dimension, otherwise the AOT Inductor compiled model will specialize to a fixed batch size and reject other batch sizes at runtime.
+> Use [`torch.export.Dim`](https://docs.pytorch.org/docs/stable/export.html) together with the `dynamic_shapes` argument of `torch.export.export` to mark dimension `0` of each input as dynamic before compiling and packaging the model. For example:
+>
+> ```python
+> batch = torch.export.Dim("batch", min=1, max=8)
+> exported_model = torch.export.export(
+>     model, sample_inputs, dynamic_shapes=({0: batch}, {0: batch})
+> )
+> torch._inductor.aoti_compile_and_package(exported_model, package_path="model.pt2")
+> ```
+
 > [!WARNING]
-> Support for batch sizes greater than 1 and for sequence batching for AOT Inductor compiled models has not be completed.
-> These Triton Server features are currently unavailable for PyTorch models compiled using AOT Inductor and packaged as a PT2 model archive.
+> The following features are **not** yet supported for AOT Inductor compiled models packaged as a PT2 model archive:
+> * Sequence batching.
+> * Batching of models with complex (nested `dict`/`tuple`/`list`) inputs or outputs; default batching currently targets models whose inputs and outputs are plain tensors.
+> * Batching of `TYPE_STRING` (`torch.export` byte/string) inputs.
 
 ### PyTorch 2.0 Models
 
