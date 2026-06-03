@@ -1791,8 +1791,8 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_count)
 
   // The "input" array only enumerates the regular (data) inputs. Sequence
   // control inputs, implicit-state inputs, and batch inputs are declared
-  // elsewhere in the config but still count towards expected_input_count, so the
-  // regular input array must not exceed the total expected input count.
+  // elsewhere in the config but still count towards expected_input_count, so
+  // the regular input array must not exceed the total expected input count.
   if (inputs.ArraySize() > expected_input_count) {
     DEBUG_TRACE_ERROR(
         "Failed to load model \""
@@ -2003,8 +2003,8 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_count)
   }
 
   DEBUG_TRACE_INFO(
-      "{ name: \"" << Name()
-                   << "\", batch_input_count: " << batch_input_count_ << " }");
+      "{ name: \"" << Name() << "\", batch_input_count: " << batch_input_count_
+                   << " }");
 }
 
 void
