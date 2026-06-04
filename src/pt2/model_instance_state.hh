@@ -142,16 +142,6 @@ class ModelInstanceState : public triton::backend::BackendModelInstance {
       const std::string& tensor_name, const std::string& tensor_dtype,
       const std::string& context);
 
-  // Ensures a sequence-batching tensor name resolves in the given input/output
-  // map. The name may use pt2's ordinal/forward name directly, or the
-  // descriptive "<name>__<index>" convention, in which case the descriptive
-  // name is registered as an alias of the ordinal entry (ordinal_prefix +
-  // index, e.g. "INPUT__3" / "OUTPUT__1"). Throws if the name cannot be
-  // resolved.
-  void ResolveOrdinalAlias(
-      pt2::io_data& io_map, const std::string& tensor_name,
-      const std::string& ordinal_prefix, const std::string& context);
-
   void SetCurrentCudaStream(const cudaStream_t& stream, int device_id);
 
   void SetInputTensors(

@@ -319,7 +319,7 @@ output: [
 > Sequence batching with implicit state is supported for AOT Inductor compiled models.
 > The model's `forward` function must accept the sequence control tensors (e.g. `CONTROL_SEQUENCE_START`, `CONTROL_SEQUENCE_READY`, `CONTROL_SEQUENCE_CORRID`) and any implicit state input as ordinary tensor arguments, and return any new state value as one of its outputs.
 > `CONTROL_SEQUENCE_CORRID` is supported when configured with a numeric `data_type` (e.g. `TYPE_INT32`, `TYPE_INT64`); a `TYPE_STRING` correlation id is not supported because the AOT Inductor runtime is tensor-only.
-> The control and state tensors may be addressed in the `config.pbtxt` using either the ordinal `INPUT__<index>` / `OUTPUT__<index>` naming convention or the descriptive `<name>__<index>` convention (e.g. `START__2`, `INPUT_STATE__1`, `OUTPUT_STATE__1`) used by the legacy LibTorch backend; the descriptive name's trailing index selects the corresponding ordinal input/output.
+> The control and state tensors are addressed in the `config.pbtxt` using the ordinal `INPUT__<index>` / `OUTPUT__<index>` naming convention; the `control_input` `kind` (e.g. `CONTROL_SEQUENCE_START`) identifies the control's role, while the `name` selects which ordinal input it maps to. For example, a `control_input` named `INPUT__2` with `kind: CONTROL_SEQUENCE_START` maps the start signal onto the model's third input.
 > As with default batching, the PT2 archive must be exported with a dynamic first (batch) dimension on every input.
 
 > [!WARNING]

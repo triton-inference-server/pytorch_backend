@@ -27,7 +27,6 @@
 #include "model_instance_state.hh"
 
 #include <cstddef>
-#include <cstdlib>
 
 #include "../libtorch.hh"
 #include "../libtorch_utils.h"
@@ -1689,61 +1688,22 @@ ModelInstanceState::ValidateBooleanSequenceControl(
 }
 
 void
-ModelInstanceState::ResolveOrdinalAlias(
-    pt2::io_data& io_map, const std::string& tensor_name,
-    const std::string& ordinal_prefix, const std::string& context)
-{
-  // The forward-argument/call-spec name (e.g. "ARGS[1]") and the ordinal name
-  // (e.g. "INPUT__1" / "OUTPUT__1") are already present in the map.
-  if (io_map.contains(tensor_name)) {
-    return;
-  }
-
-  // Otherwise accept the descriptive "<name>__<index>" convention (e.g.
-  // "START__1", "INPUT_STATE__1"): split on the first "__", require the
-  // remainder to be all digits, and parse it as an integer index (so e.g.
-  // "START__01" resolves to index 1). The descriptive name is registered as an
-  // alias of the ordinal entry so it also resolves at inference time.
-  std::string index_str;
-  auto start_pos = tensor_name.find(DELIMINATOR);
-  if (start_pos != std::string::npos) {
-    index_str = tensor_name.substr(start_pos + DELIMINATOR.size());
-  }
-
-  bool is_named_index = !index_str.empty();
-  for (char c : index_str) {
-    if (std::isdigit(static_cast<unsigned char>(c)) == 0) {
-      is_named_index = false;
-      break;
-    }
-  }
-
-  if (is_named_index) {
-    int index = std::atoi(index_str.c_str());
-    std::string ordinal_name = ordinal_prefix + std::to_string(index);
-    if (io_map.contains(ordinal_name)) {
-      io_map.alias(ordinal_name, tensor_name);
-      return;
-    }
-  }
-
-  THROW_TRITON_EXCEPTION(
-      TRITONSERVER_ERROR_INVALID_ARG,
-      "Sequence "
-          << context << " \"" << tensor_name << "\" for model \"" << Name()
-          << "\" does not correspond to any model tensor. Sequence control and "
-             "state tensors must be addressed using the ordinal \""
-          << ordinal_prefix
-          << "<index>\" naming convention or the descriptive "
-             "\"<name>__<index>\" convention.");
-}
-
-void
 ModelInstanceState::RegisterSequenceInput(
     const std::string& tensor_name, const std::string& tensor_dtype,
     const std::string& context)
 {
-  ResolveOrdinalAlias(map_inputs_, tensor_name, "INPUT__", context);
+  // The control/state tensor must resolve to one of the model's inputs using
+  // the ordinal "INPUT__<index>" name or the forward-argument name.
+  if (!map_inputs_.contains(tensor_name)) {
+    THROW_TRITON_EXCEPTION(
+        TRITONSERVER_ERROR_INVALID_ARG,
+        "Sequence " << context << " \"" << tensor_name << "\" for model \""
+                    << Name()
+                    << "\" does not correspond to any model input. Sequence "
+                       "control and "
+                       "state tensors must be addressed using the ordinal "
+                       "\"INPUT__<index>\" naming convention.");
+  }
 
   // Record the configured datatype on the resolved input entry.
   if (!tensor_dtype.empty()) {
@@ -2248,10 +2208,17 @@ ModelInstanceState::ValidateOutputs()
         }
 
         // The state output must resolve to one of the model's call
-        // specification outputs, via the ordinal "OUTPUT__<index>" name, the
-        // forward-result name, or the descriptive "<name>__<index>" convention.
-        ResolveOrdinalAlias(
-            map_outputs_, state_name, "OUTPUT__", "state output");
+        // specification outputs, via the ordinal "OUTPUT__<index>" name or the
+        // forward-result name.
+        if (!map_outputs_.contains(state_name)) {
+          THROW_TRITON_EXCEPTION(
+              TRITONSERVER_ERROR_INVALID_ARG,
+              "Sequence state output \""
+                  << state_name << "\" for model \"" << Name()
+                  << "\" does not correspond to any model output. Sequence "
+                     "state tensors must be addressed using the ordinal "
+                     "\"OUTPUT__<index>\" naming convention.");
+        }
 
         map_outputs_[state_name].torch_dtype() = pr.second;
         map_outputs_[state_name].triton_dtype() =

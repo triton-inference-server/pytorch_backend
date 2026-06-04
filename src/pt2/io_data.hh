@@ -119,16 +119,6 @@ class io_data {
   ///                     For example, "INPUT__0" or "OUTPUT__0".
   void emplace(const std::string& name, const std::string& ordinal_name);
 
-  /// @brief Registers an additional name as an alias of an existing data
-  ///        specification. This allows the same underlying input/output to be
-  ///        addressed by more than one name, e.g. mapping the descriptive
-  ///        sequence-batching name "START__1" onto the ordinal name "INPUT__1".
-  /// @param existing_name A name (or ordinal name) already present in this
-  ///                      object.
-  /// @param alias_name The new alias to register. The call is a no-op if the
-  ///                   alias already refers to the same entry.
-  void alias(const std::string& existing_name, const std::string& alias_name);
-
   /// @brief Gets the data specification associated with the given name.
   /// @param name The name of the data specification to get.
   ///             Either the name or ordinal name can be used to retrieve the
