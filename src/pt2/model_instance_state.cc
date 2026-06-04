@@ -2299,20 +2299,23 @@ ModelInstanceState::ValidateTypedSequenceControl(
 
   bool have_control{!tensor_name.empty()};
   if (have_control) {
-    // CONTROL_SEQUENCE_CORRID is not supported: the correlation id is commonly
-    // a TYPE_STRING tensor, which this backend does not yet support. Reject the
-    // model rather than silently producing incorrect results.
-    DEBUG_TRACE_ERROR(
-        "Typed sequence control \""
-        << control_kind << "\" (tensor \"" << tensor_name
-        << "\") is not supported for model instance \"" << Name() << "\".");
-    THROW_TRITON_EXCEPTION(
-        TRITONSERVER_ERROR_UNSUPPORTED,
-        "Typed sequence control \""
-            << control_kind
-            << "\" is not yet supported for AOT Inductor (PT2) model \""
-            << Name()
-            << "\". CONTROL_SEQUENCE_CORRID support is not implemented.");
+    // The correlation id (CONTROL_SEQUENCE_CORRID) is injected by the scheduler
+    // as a regular request input. Only a numeric correlation id is supported:
+    // the AOT Inductor runtime is tensor-only, so a TYPE_STRING correlation id
+    // cannot be passed to the model.
+    if (tensor_dtype == "TYPE_STRING") {
+      THROW_TRITON_EXCEPTION(
+          TRITONSERVER_ERROR_UNSUPPORTED,
+          "TYPE_STRING correlation id (control \""
+              << control_kind << "\") is not supported for AOT Inductor (PT2) "
+              << "model \"" << Name()
+              << "\". Use a numeric correlation id data type.");
+    }
+
+    RegisterSequenceInput(
+        /* tensor_name= */ tensor_name,
+        /* tensor_dtype= */ tensor_dtype,
+        /* context= */ "control input (" + control_kind + ")");
   }
 
   return have_control;

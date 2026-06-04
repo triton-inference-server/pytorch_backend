@@ -317,15 +317,15 @@ output: [
 
 > [!NOTE]
 > Sequence batching with implicit state is supported for AOT Inductor compiled models.
-> The model's `forward` function must accept the sequence control tensors (e.g. `CONTROL_SEQUENCE_START`, `CONTROL_SEQUENCE_READY`) and any implicit state input as ordinary tensor arguments, and return any new state value as one of its outputs.
+> The model's `forward` function must accept the sequence control tensors (e.g. `CONTROL_SEQUENCE_START`, `CONTROL_SEQUENCE_READY`, `CONTROL_SEQUENCE_CORRID`) and any implicit state input as ordinary tensor arguments, and return any new state value as one of its outputs.
+> `CONTROL_SEQUENCE_CORRID` is supported when configured with a numeric `data_type` (e.g. `TYPE_INT32`, `TYPE_INT64`); a `TYPE_STRING` correlation id is not supported because the AOT Inductor runtime is tensor-only.
 > The control and state tensors may be addressed in the `config.pbtxt` using either the ordinal `INPUT__<index>` / `OUTPUT__<index>` naming convention or the descriptive `<name>__<index>` convention (e.g. `START__2`, `INPUT_STATE__1`, `OUTPUT_STATE__1`) used by the legacy LibTorch backend; the descriptive name's trailing index selects the corresponding ordinal input/output.
 > As with default batching, the PT2 archive must be exported with a dynamic first (batch) dimension on every input.
 
 > [!WARNING]
 > The following features are **not** yet supported for AOT Inductor compiled models packaged as a PT2 model archive:
-> * `CONTROL_SEQUENCE_CORRID` (typed sequence control); only the boolean controls `CONTROL_SEQUENCE_START`, `CONTROL_SEQUENCE_END`, and `CONTROL_SEQUENCE_READY` are supported.
+> * `TYPE_STRING` (`torch.export` byte/string) inputs and outputs, including string sequence state and a `TYPE_STRING` `CONTROL_SEQUENCE_CORRID`. The AOT Inductor runtime is tensor-only and cannot carry string values.
 > * Batching of models with complex (nested `dict`/`tuple`/`list`) inputs or outputs; default batching currently targets models whose inputs and outputs are plain tensors.
-> * Batching of `TYPE_STRING` (`torch.export` byte/string) inputs, including string sequence state.
 
 ### PyTorch 2.0 Models
 
