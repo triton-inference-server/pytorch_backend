@@ -1700,9 +1700,8 @@ ModelInstanceState::RegisterSequenceInput(
         "Sequence " << context << " \"" << tensor_name << "\" for model \""
                     << Name()
                     << "\" does not correspond to any model input. Sequence "
-                       "control and "
-                       "state tensors must be addressed using the ordinal "
-                       "\"INPUT__<index>\" naming convention.");
+                       "control and state tensors must be addressed using the "
+                       "ordinal \"INPUT__<index>\" naming convention.");
   }
 
   // Record the configured datatype on the resolved input entry.
