@@ -326,6 +326,7 @@ output: [
 > The following features are **not** yet supported for AOT Inductor compiled models packaged as a PT2 model archive:
 > * `TYPE_STRING` (`torch.export` byte/string) inputs and outputs, including string sequence state and a `TYPE_STRING` `CONTROL_SEQUENCE_CORRID`. The AOT Inductor runtime is tensor-only and cannot carry string values.
 > * Batching of models with complex (nested `dict`/`tuple`/`list`) inputs or outputs; default batching currently targets models whose inputs and outputs are plain tensors.
+> * RHEL (manylinux) builds. AOT Inductor is not currently supported on RHEL.
 
 ### PyTorch 2.0 Models
 
