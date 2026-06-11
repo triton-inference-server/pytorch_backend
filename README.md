@@ -305,6 +305,56 @@ output: [
 > Support for batch sizes greater than 1 and for sequence batching for AOT Inductor compiled models has not be completed.
 > These Triton Server features are currently unavailable for PyTorch models compiled using AOT Inductor and packaged as a PT2 model archive.
 
+### Model Initialization Hook (`MODEL_INIT_LIBRARY`)
+
+Some models need to run one-time **native** initialization at load time — before
+the model package is loaded — that cannot be expressed inside `model.pt2`. A
+typical case is a model whose custom operators resolve large weights from a
+process-global registry at execute time, where those weights live outside the
+package (e.g. in sidecar files next to `model.pt2`) and must be read into memory
+and registered first.
+
+The PT2 path supports an optional, per-model hook for this. When a model's
+`config.pbtxt` sets the `MODEL_INIT_LIBRARY` parameter, the backend `dlopen()`s
+that shared library at model load and calls its initialization entry point. The
+backend does **not** link against the library and knows nothing about what it
+does; it only loads it, calls a fixed entry point, and releases it on unload.
+
+```
+parameters {
+  key: "MODEL_INIT_LIBRARY"
+  value: { string_value: "/abs/path/to/libmy_model_init.so" }
+}
+```
+
+The library must export the following C entry point, and may optionally export a
+matching finalizer:
+
+```c
+// Called once at model load, before the model package is loaded.
+//   model_dir    : the versioned model directory (the one containing model.pt2)
+//   device_index : the GPU ordinal for the instance, or -1 for CPU
+// Returns an opaque handle that is passed back to the finalizer on unload, or
+// NULL if there is nothing to keep.
+extern "C" void* triton_pytorch_model_init(const char* model_dir, int device_index);
+
+// Optional. Called once on model unload with the handle returned above.
+extern "C" void  triton_pytorch_model_fini(void* state);
+```
+
+If `MODEL_INIT_LIBRARY` is unset (the default), no library is loaded and this is
+a complete no-op. If it is set but the library cannot be `dlopen()`ed or does not
+export `triton_pytorch_model_init`, model load fails with an error.
+
+> [!WARNING]
+> `MODEL_INIT_LIBRARY` makes the backend load and execute native code from the
+> path given in the model configuration, in the server process and with its
+> privileges. Only point it at libraries you trust. This is the same trust level
+> already required for the model repository itself — a PT2 package contains
+> compiled code that runs when the model is loaded — so it does not widen the
+> trust boundary, but the model repository must remain a trusted,
+> operator-controlled source.
+
 ### PyTorch 2.0 Models
 
 PyTorch 2.0 features are available.

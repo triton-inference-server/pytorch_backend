@@ -503,6 +503,7 @@ target_link_libraries(
     triton-core-backendapi # from repo-core
     triton-core-serverstub # from repo-core
     triton-backend-utils   # from repo-backend
+    ${CMAKE_DL_LIBS}       # dlopen/dlsym/dlclose for the MODEL_INIT_LIBRARY hook
     ${TRITON_PYTORCH_LDFLAGS}
     ${TRITON_PYTORCH_LIBS}
     $<$<BOOL:${TRITON_PYTORCH_OPTREE}>:optree>

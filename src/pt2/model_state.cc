@@ -26,6 +26,8 @@
 
 #include "model_state.hh"
 
+#include <dlfcn.h>
+
 #include <mutex>
 
 #include "../libtorch.hh"
@@ -349,6 +351,13 @@ ModelState::LoadModel(
             << local_file_path << "\" is unreachable or inaccessible.");
   }
 
+  // Optional per-model native init hook (MODEL_INIT_LIBRARY parameter). Lets a
+  // model run one-time native setup before its package is loaded -- e.g.
+  // loading external embedding weights into a process-global registry -- without
+  // the backend linking against or knowing anything about that library. No-op
+  // when the parameter is unset.
+  MaybeRunModelInitHook(repository_path, repository_version, device);
+
   std::pair<bool, int> device_pair{false, 0};
   if (weight_sharing_enabled_) {
     device_pair = std::make_pair(!device.is_cpu(), device.index());
@@ -555,7 +564,7 @@ void
 ModelState::ParseParameters()
 {
   TritonJsonValue parameters;
-  if (!ModelConfig().Find("parameters", &parameters)) {
+  if (ModelConfig().Find("parameters", &parameters)) {
     bool disable_optimized_execution{false};
     if (auto err = ParseParameter(
             parameters, "DISABLE_OPTIMIZED_EXECUTION",
@@ -696,6 +705,29 @@ ModelState::ParseParameters()
       }
       TRITONSERVER_ErrorDelete(err);
     }
+    {
+      TritonJsonValue init_lib_param;
+      if (parameters.Find("MODEL_INIT_LIBRARY", &init_lib_param)) {
+        if (auto err = init_lib_param.MemberAsString(
+                "string_value", &model_init_library_)) {
+          DEBUG_TRACE_ERROR(
+              "{ model: \"" << Name() << "\", error: \""
+                            << TRITONSERVER_ErrorMessage(err) << "\" }");
+          THROW_TRITON_EXCEPTION(
+              TRITONSERVER_ErrorCode(err),
+              "Failed to parse 'MODEL_INIT_LIBRARY' parameter for model \""
+                  << Name() << "\": " << TRITONSERVER_ErrorMessage(err) << ".");
+        }
+      }
+    }
+
+    if (!model_init_library_.empty()) {
+      TRITON_LOG_INFO(
+          "Model-init library is \""
+          << model_init_library_ << "\" for model instance \"" << Name()
+          << "\".");
+    }
+
     DEBUG_TRACE_INFO(
         "{ disable_optimized_execution: "
         << (disable_optimized_execution ? "true" : "false")
@@ -717,6 +749,68 @@ ModelState::ParseParameters()
                                              << " for model instance "
                                              << "\"" << Name() << "\".");
     }
+  }
+}
+
+void
+ModelState::MaybeRunModelInitHook(
+    const std::string& repository_path, const std::string& repository_version,
+    const torch::Device& device)
+{
+  // No hook configured, or it already ran for this model.
+  if (model_init_library_.empty() || model_init_dl_handle_ != nullptr) {
+    return;
+  }
+
+  const std::string package_dir =
+      triton::backend::JoinPath({repository_path, repository_version});
+  // GPU ordinal; -1 for CPU. The hook decides how to interpret it.
+  const int device_index = device.index();
+
+  void* handle = dlopen(model_init_library_.c_str(), RTLD_NOW | RTLD_LOCAL);
+  if (handle == nullptr) {
+    const char* dl_err = dlerror();
+    THROW_TRITON_EXCEPTION(
+        TRITONSERVER_ERROR_INVALID_ARG,
+        "Failed to dlopen MODEL_INIT_LIBRARY \""
+            << model_init_library_ << "\" for model \"" << Name()
+            << "\": " << (dl_err != nullptr ? dl_err : "unknown error") << ".");
+  }
+
+  using ModelInitFn = void* (*)(const char*, int);
+  dlerror();  // Clear any stale error.
+  auto* init_fn =
+      reinterpret_cast<ModelInitFn>(dlsym(handle, "triton_pytorch_model_init"));
+  const char* sym_err = dlerror();
+  if (init_fn == nullptr || sym_err != nullptr) {
+    dlclose(handle);
+    THROW_TRITON_EXCEPTION(
+        TRITONSERVER_ERROR_INVALID_ARG,
+        "MODEL_INIT_LIBRARY \""
+            << model_init_library_
+            << "\" does not export 'triton_pytorch_model_init' for model \""
+            << Name() << "\": " << (sym_err != nullptr ? sym_err : "not found")
+            << ".");
+  }
+
+  model_init_state_ = init_fn(package_dir.c_str(), device_index);
+  model_init_dl_handle_ = handle;
+  TRITON_LOG_INFO(
+      "Ran model-init hook \"" << model_init_library_ << "\" for model \""
+                               << Name() << "\" (device_index=" << device_index
+                               << ").");
+}
+
+ModelState::~ModelState()
+{
+  if (model_init_dl_handle_ != nullptr) {
+    using ModelFiniFn = void (*)(void*);
+    auto* fini_fn = reinterpret_cast<ModelFiniFn>(
+        dlsym(model_init_dl_handle_, "triton_pytorch_model_fini"));
+    if (fini_fn != nullptr) {
+      fini_fn(model_init_state_);
+    }
+    dlclose(model_init_dl_handle_);
   }
 }
 
