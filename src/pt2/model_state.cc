@@ -353,9 +353,9 @@ ModelState::LoadModel(
 
   // Optional per-model native init hook (MODEL_INIT_LIBRARY parameter). Lets a
   // model run one-time native setup before its package is loaded -- e.g.
-  // loading external embedding weights into a process-global registry -- without
-  // the backend linking against or knowing anything about that library. No-op
-  // when the parameter is unset.
+  // loading external embedding weights into a process-global registry --
+  // without the backend linking against or knowing anything about that library.
+  // No-op when the parameter is unset.
   MaybeRunModelInitHook(repository_path, repository_version, device);
 
   std::pair<bool, int> device_pair{false, 0};
@@ -723,9 +723,9 @@ ModelState::ParseParameters()
 
     if (!model_init_library_.empty()) {
       TRITON_LOG_INFO(
-          "Model-init library is \""
-          << model_init_library_ << "\" for model instance \"" << Name()
-          << "\".");
+          "Model-init library is \"" << model_init_library_
+                                     << "\" for model instance \"" << Name()
+                                     << "\".");
     }
 
     DEBUG_TRACE_INFO(

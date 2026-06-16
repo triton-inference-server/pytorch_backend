@@ -176,7 +176,7 @@ class ModelState : public triton::backend::BackendModel {
   // library and calls its triton_pytorch_model_init(); throws on failure so a
   // misconfigured hook fails model load loudly. The backend does not link it.
   void MaybeRunModelInitHook(
-      const std::string& repository_path,
-      const std::string& repository_version, const torch::Device& device);
+      const std::string& repository_path, const std::string& repository_version,
+      const torch::Device& device);
 };
 }  // namespace triton::backend::pytorch::pt2
