@@ -301,9 +301,32 @@ output: [
 >
 > Dictionary keys cannot contain `"`, `[`, or `]`, nor can they contain whitespace or non-printable characters.
 
+> [!NOTE]
+> Default (first-dimension) batching is supported for AOT Inductor compiled models.
+> To enable it, set `max_batch_size` greater than `0` in the model's `config.pbtxt` (just like other backends) and specify the per-sample `dims` (i.e. without the leading batch dimension).
+> The model's PT2 archive **must** be exported with a dynamic first (batch) dimension, otherwise the AOT Inductor compiled model will specialize to a fixed batch size and reject other batch sizes at runtime.
+> Use [`torch.export.Dim`](https://docs.pytorch.org/docs/stable/export.html) together with the `dynamic_shapes` argument of `torch.export.export` to mark dimension `0` of each input as dynamic before compiling and packaging the model. For example:
+>
+> ```python
+> batch = torch.export.Dim("batch", min=1, max=8)
+> exported_model = torch.export.export(
+>     model, sample_inputs, dynamic_shapes=({0: batch}, {0: batch})
+> )
+> torch._inductor.aoti_compile_and_package(exported_model, package_path="model.pt2")
+> ```
+
+> [!NOTE]
+> Sequence batching with implicit state is supported for AOT Inductor compiled models.
+> The model's `forward` function must accept the sequence control tensors (e.g. `CONTROL_SEQUENCE_START`, `CONTROL_SEQUENCE_READY`, `CONTROL_SEQUENCE_CORRID`) and any implicit state input as ordinary tensor arguments, and return any new state value as one of its outputs.
+> `CONTROL_SEQUENCE_CORRID` is supported when configured with a numeric `data_type` (e.g. `TYPE_INT32`, `TYPE_INT64`); a `TYPE_STRING` correlation id is not supported because the AOT Inductor runtime is tensor-only.
+> The control and state tensors are addressed in the `config.pbtxt` using the ordinal `INPUT__<index>` / `OUTPUT__<index>` naming convention; the `control_input` `kind` (e.g. `CONTROL_SEQUENCE_START`) identifies the control's role, while the `name` selects which ordinal input it maps to. For example, a `control_input` named `INPUT__2` with `kind: CONTROL_SEQUENCE_START` maps the start signal onto the model's third input.
+> As with default batching, the PT2 archive must be exported with a dynamic first (batch) dimension on every input.
+
 > [!WARNING]
-> Support for batch sizes greater than 1 and for sequence batching for AOT Inductor compiled models has not be completed.
-> These Triton Server features are currently unavailable for PyTorch models compiled using AOT Inductor and packaged as a PT2 model archive.
+> The following features are **not** yet supported for AOT Inductor compiled models packaged as a PT2 model archive:
+> * `TYPE_STRING` (`torch.export` byte/string) inputs and outputs, including string sequence state and a `TYPE_STRING` `CONTROL_SEQUENCE_CORRID`. The AOT Inductor runtime is tensor-only and cannot carry string values.
+> * Batching of models with complex (nested `dict`/`tuple`/`list`) inputs or outputs; default batching currently targets models whose inputs and outputs are plain tensors.
+> * RHEL (manylinux) builds. AOT Inductor is not currently supported on RHEL.
 
 ### Model Initialization Hook (`MODEL_INIT_LIBRARY`)
 

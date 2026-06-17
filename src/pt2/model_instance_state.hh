@@ -136,6 +136,12 @@ class ModelInstanceState : public triton::backend::BackendModelInstance {
 
   void RecordBackendTimestamp(uint64_t* timestamp, void* cuda_event);
 
+  // Resolves a sequence-batching tensor (control input or implicit-state input)
+  // to one of the model's call-specification inputs and records its datatype.
+  void RegisterSequenceInput(
+      const std::string& tensor_name, const std::string& tensor_dtype,
+      const std::string& context);
+
   void SetCurrentCudaStream(const cudaStream_t& stream, int device_id);
 
   void SetInputTensors(
