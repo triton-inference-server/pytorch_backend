@@ -80,10 +80,17 @@ class ModelState : public triton::backend::BackendModel {
   bool optimized_execution_enabled_{true};
   bool weight_sharing_enabled_{false};
 
+  // Optional per-model native init hook (MODEL_INIT_LIBRARY parameter). The
+  // backend dlopen()s this library at model load and calls its
+  // triton_pytorch_model_init() entry point; it never links against it.
+  std::string model_init_library_;
+  void* model_init_dl_handle_{nullptr};
+  void* model_init_state_{nullptr};
+
  public:
   ModelState() = delete;
 
-  virtual ~ModelState() = default;
+  virtual ~ModelState();
 
   [[nodiscard]] bool CacheCleaningEnabled() const;
 
@@ -164,5 +171,12 @@ class ModelState : public triton::backend::BackendModel {
   void AutoCompleteConfig();
 
   void ParseParameters();
+
+  // Run the optional MODEL_INIT_LIBRARY hook (no-op if unset). dlopen()s the
+  // library and calls its triton_pytorch_model_init(); throws on failure so a
+  // misconfigured hook fails model load loudly. The backend does not link it.
+  void MaybeRunModelInitHook(
+      const std::string& repository_path, const std::string& repository_version,
+      const torch::Device& device);
 };
 }  // namespace triton::backend::pytorch::pt2
