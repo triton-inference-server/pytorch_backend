@@ -380,10 +380,10 @@ export `triton_pytorch_model_init`, model load fails with an error.
 
 ### HSTU (Generative Recommenders)
 
-HSTU (Hierarchical Sequential Transduction Unit) is the encoder architecture
-behind Generative Recommenders (GRs), which reframe recommendation as a
-sequential, generative modeling problem over a user's interaction history
-rather than independently scoring candidate items.
+HSTU (Hierarchical Sequential Transduction Unit) is the sequence encoder used
+in Generative Recommenders (GRs), which reframe recommendation as a sequential,
+generative modeling problem over a user's interaction history rather than
+independently scoring candidate items.
 
 HSTU generative recommender models can be served with
 `platform: "torch_aoti"`. For an end-to-end guide, see the
