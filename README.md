@@ -378,6 +378,14 @@ export `triton_pytorch_model_init`, model load fails with an error.
 > trust boundary, but the model repository must remain a trusted,
 > operator-controlled source.
 
+### HSTU (Generative Recommenders)
+
+HSTU generative recommender models can be served with
+`platform: "torch_aoti"`. For an end-to-end guide, see the
+[HSTU tutorial](https://github.com/triton-inference-server/tutorials/tree/main/Popular_Models_Guide/HSTU)
+and the
+[recsys-examples HSTU inference docs](https://github.com/NVIDIA/recsys-examples/blob/main/examples/hstu/inference/README.md).
+
 ### PyTorch 2.0 Models
 
 PyTorch 2.0 features are available.
