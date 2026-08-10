@@ -47,6 +47,12 @@
 namespace {
 std::once_flag pytorch_interop_threads_flag;
 std::once_flag pytorch_intraop_threads_flag;
+
+// AOTIModelPackageLoader construction is not thread-safe: libtorch's
+// load_json_file() (model_package_loader.cpp) parses into a shared static
+// nlohmann::json, so concurrent package loads corrupt each other's metadata.
+// Serialize construction until this is fixed upstream.
+std::mutex aoti_package_loader_ctor_mutex{};
 }  // namespace
 
 namespace triton::backend::pytorch::pt2 {
@@ -386,6 +392,8 @@ ModelState::LoadModel(
       << ", len(model_data_string): " << model_data_string.size() << " }");
 
   torch::InferenceMode infer_guard{InferenceModeEnabled()};
+
+  std::lock_guard loader_ctor_lock{aoti_package_loader_ctor_mutex};
 
   TorchModelLoader* model_loader{nullptr};
   if (device.is_cuda()) {
