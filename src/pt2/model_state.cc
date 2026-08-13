@@ -393,27 +393,28 @@ ModelState::LoadModel(
 
   torch::InferenceMode infer_guard{InferenceModeEnabled()};
 
-  std::lock_guard loader_ctor_lock{aoti_package_loader_ctor_mutex};
-
   TorchModelLoader* model_loader{nullptr};
-  if (device.is_cuda()) {
-    DEBUG_TRACE_INFO(
-        "Creating model loader for GPU device " << device.str() << ".");
-    model_loader = new TorchModelLoader{
-        /*model_package_path=*/local_file_path,
-        /*model_name=*/local_name,
-        /*run_single_threaded=*/false,
-        /*num_runners=*/1,
-        /*device_index=*/device.index()};
-  } else {
-    DEBUG_TRACE_INFO(
-        "Creating model loader for CPU device " << device.str() << ".");
-    model_loader = new TorchModelLoader{
-        /*model_package_path=*/local_file_path,
-        /*model_name=*/local_name,
-        /*run_single_threaded=*/false,
-        /*num_runners=*/1,
-        /*device_index=*/-1};
+  {
+    std::lock_guard loader_ctor_lock{aoti_package_loader_ctor_mutex};
+    if (device.is_cuda()) {
+      DEBUG_TRACE_INFO(
+          "Creating model loader for GPU device " << device.str() << ".");
+      model_loader = new TorchModelLoader{
+          /*model_package_path=*/local_file_path,
+          /*model_name=*/local_name,
+          /*run_single_threaded=*/false,
+          /*num_runners=*/1,
+          /*device_index=*/device.index()};
+    } else {
+      DEBUG_TRACE_INFO(
+          "Creating model loader for CPU device " << device.str() << ".");
+      model_loader = new TorchModelLoader{
+          /*model_package_path=*/local_file_path,
+          /*model_name=*/local_name,
+          /*run_single_threaded=*/false,
+          /*num_runners=*/1,
+          /*device_index=*/-1};
+    }
   }
 
   model_loader_.reset(model_loader);
