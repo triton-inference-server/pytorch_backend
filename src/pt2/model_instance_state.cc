@@ -1037,9 +1037,9 @@ ModelInstanceState::ProcessRequests(
             /* request= */ request,
             /* success= */ (responses[r] != nullptr),
             /* exec_start_ns= */ exec_start_ns,
-            /* exec_end_ns= */ exec_end_ns,
             /* compute_start_ns= */ compute_start_ns,
-            /* compute_end_ns= */ compute_end_ns)) {
+            /* compute_end_ns= */ compute_end_ns,
+            /* exec_end_ns= */ exec_end_ns)) {
       TRITON_LOG_ERROR(
           "Failed to report statistics for request "
           << r << " of model instance \"" << Name()
