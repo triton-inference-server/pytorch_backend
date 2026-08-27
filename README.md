@@ -101,7 +101,7 @@ make install
 
 ## Using the PyTorch Backend
 
-## AOT Inductor Support (Beta)
+## AOT Inductor Support
 
 Starting with the 26.03 release of Triton, support for ahead-of-time (AOT) inductor compiled and packaged model archives is available.
 The new model archive package (PT2) can be generated using the following example, and generally uses the `.pt2` file extension.
