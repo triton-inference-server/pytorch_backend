@@ -648,17 +648,20 @@ instance_group {
 }
 ```
 
-### Python `model.py` Customization
+### Python Support Customization (`src/model.py`)
 
 The following PyTorch settings may be customized by setting parameters on the
 `config.pbtxt`.
 
 > [!IMPORTANT]
-> The following options are only used when Triton loads a Python model class
-> from `model.py`.
-> They do not apply to serialized TorchScript (`model.pt`) or PT2 (`model.pt2`)
-> models.
-> For LibTorch / PT2 CPU thread tuning, use `INTER_OP_THREAD_COUNT` and
+> The following options are read by the Python support entrypoint in
+> `src/model.py`.
+> That path can load either a Python `model.py` class or a serialized
+> TorchScript `model.pt`, and it applies these settings before selecting which
+> artifact to load.
+> They do not apply to the native LibTorch / PT2 loaders in
+> `src/pt/model_state.cc` and `src/pt2/model_state.cc`.
+> For those code paths, use `INTER_OP_THREAD_COUNT` and
 > `INTRA_OP_THREAD_COUNT` from the main `Parameters` section above.
 
 [`torch.set_num_threads(int)`](https://pytorch.org/docs/stable/generated/torch.set_num_threads.html#torch.set_num_threads)
@@ -681,6 +684,11 @@ The following PyTorch settings may be customized by setting parameters on the
   * `mode` (`str`): Can be either `"default"`, `"reduce-overhead"`, or `"max-autotune"`.
   * `options` (`dict`): A dictionary of options to pass to the backend.
   * `disable` (`bool`): Turn `torch.compile()` into a no-op for testing.
+
+  These parameters are used by the Python support path in `src/model.py`.
+  When batching is enabled they are passed to the helper functions used for
+  gather/scatter, and when a Python `model.py` class is loaded they are also
+  passed to `torch.compile(self._raw_model, **params)`.
 
 For example:
 
