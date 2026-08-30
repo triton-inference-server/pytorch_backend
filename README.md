@@ -566,7 +566,7 @@ Triton exposes some flags to control the execution mode of the TorchScript model
 
   > [!TIP]
   > Refer to
-  > [CPU Threading TorchScript](https://pytorch.org/docs/stable/notes/cpu_threading_torchscript_inference.html)
+  > [CPU Threading TorchScript (PyTorch 2.8)](https://docs.pytorch.org/docs/2.8/notes/cpu_threading_torchscript_inference.html)
   > on how to set this parameter properly.
 
   To set the inter-op thread count, use the configuration example below:
@@ -592,7 +592,7 @@ Triton exposes some flags to control the execution mode of the TorchScript model
 
   > [!TIP]
   > Refer to
-  > [CPU Threading TorchScript](https://pytorch.org/docs/stable/notes/cpu_threading_torchscript_inference.html)
+  > [CPU Threading TorchScript (PyTorch 2.8)](https://docs.pytorch.org/docs/2.8/notes/cpu_threading_torchscript_inference.html)
   > on how to set this parameter properly.
 
   To set the intra-op thread count, use the configuration example below:
@@ -648,13 +648,18 @@ instance_group {
 }
 ```
 
-### Customization
+### Python `model.py` Customization
 
 The following PyTorch settings may be customized by setting parameters on the
 `config.pbtxt`.
 
 > [!IMPORTANT]
-> The following options only apply when `platform: "pytorch_libtorch"` is used.
+> The following options are only used when Triton loads a Python model class
+> from `model.py`.
+> They do not apply to serialized TorchScript (`model.pt`) or PT2 (`model.pt2`)
+> models.
+> For LibTorch / PT2 CPU thread tuning, use `INTER_OP_THREAD_COUNT` and
+> `INTRA_OP_THREAD_COUNT` from the main `Parameters` section above.
 
 [`torch.set_num_threads(int)`](https://pytorch.org/docs/stable/generated/torch.set_num_threads.html#torch.set_num_threads)
 
