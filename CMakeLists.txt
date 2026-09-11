@@ -28,8 +28,15 @@ cmake_minimum_required (VERSION 3.31.8)
 
 project(tritonpytorchbackend LANGUAGES C CXX)
 
-# Use C++17 standard as Triton's minimum required.
-set(TRITON_MIN_CXX_STANDARD 17 CACHE STRING "The minimum C++ standard which features are requested to build this target.")
+# Use C++20 standard as Triton's minimum required.
+# A stale CMake cache from a build tree configured before this bump would
+# otherwise keep TRITON_MIN_CXX_STANDARD at its old cached value, so raise it
+# to the new floor while still allowing a user to cache a higher override.
+if(DEFINED TRITON_MIN_CXX_STANDARD AND TRITON_MIN_CXX_STANDARD LESS 20)
+  set(TRITON_MIN_CXX_STANDARD 20 CACHE STRING "The minimum C++ standard which features are requested to build this target." FORCE)
+else()
+  set(TRITON_MIN_CXX_STANDARD 20 CACHE STRING "The minimum C++ standard which features are requested to build this target.")
+endif()
 
 #
 # Options
