@@ -751,10 +751,15 @@ ModelState::ParseParameters()
 
     if (inter_op_thread_count > 0) {
       std::call_once(pytorch_interop_threads_flag, [inter_op_thread_count]() {
-        at::set_num_interop_threads(inter_op_thread_count);
+        try {
+          at::set_num_interop_threads(inter_op_thread_count);
+        }
+        catch (const c10::Error&) {
+          // Another loader may have already initialized the global thread pool.
+        }
       });
       TRITON_LOG_INFO(
-          "Inter op thread count is set to " << inter_op_thread_count
+          "Inter op thread count is set to " << at::get_num_interop_threads()
                                              << " for model instance "
                                              << "\"" << Name() << "\".");
     }
