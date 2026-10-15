@@ -47,6 +47,8 @@ ConvertTorchTypeToDataType(const torch::ScalarType& stype)
       return TRITONSERVER_TYPE_INT64;
     case torch::kHalf:
       return TRITONSERVER_TYPE_FP16;
+    case torch::kBFloat16:
+      return TRITONSERVER_TYPE_BF16;
     case torch::kFloat:
       return TRITONSERVER_TYPE_FP32;
     case torch::kDouble:
@@ -83,6 +85,9 @@ ConvertDataTypeToTorchType(const TRITONSERVER_DataType dtype)
       break;
     case TRITONSERVER_TYPE_FP16:
       type = torch::kHalf;
+      break;
+    case TRITONSERVER_TYPE_BF16:
+      type = torch::kBFloat16;
       break;
     case TRITONSERVER_TYPE_FP32:
       type = torch::kFloat;
@@ -127,6 +132,8 @@ ModelConfigDataTypeToTorchType(const std::string& data_type_str)
     type = torch::kLong;
   } else if (dtype == "FP16") {
     type = torch::kHalf;
+  } else if (dtype == "BF16") {
+    type = torch::kBFloat16;
   } else if (dtype == "FP32") {
     type = torch::kFloat;
   } else if (dtype == "FP64") {
