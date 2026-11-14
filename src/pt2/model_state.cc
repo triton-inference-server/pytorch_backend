@@ -378,18 +378,13 @@ ModelState::LoadModel(
     }
   }
 
-  std::string model_data_string;
-  THROW_IF_BACKEND_MODEL_ERROR(
-      triton::backend::ReadTextFile(local_file_path, &model_data_string));
-
   DEBUG_TRACE_INFO(
       "{ local_file_name: \""
       << local_file_name << "\""
       << ", local_name: \"" << local_name << "\""
       << ", repository_path: \"" << repository_path << "\""
       << ", repository_version: \"" << repository_version << "\""
-      << ", local_file_path: \"" << local_file_path << "\""
-      << ", len(model_data_string): " << model_data_string.size() << " }");
+      << ", local_file_path: \"" << local_file_path << "\" }");
 
   torch::InferenceMode infer_guard{InferenceModeEnabled()};
 
