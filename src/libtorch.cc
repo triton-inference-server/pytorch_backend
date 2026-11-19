@@ -260,6 +260,12 @@ TRITONBACKEND_ModelInitialize(TRITONBACKEND_Model* model)
       RETURN_IF_ERROR(TRITONBACKEND_ModelSetState(
           model, reinterpret_cast<void*>(model_state)));
     }
+    catch (const triton::backend::BackendModelException& ex) {
+      RETURN_ERROR_IF_TRUE(
+          ex.err_ == nullptr, TRITONSERVER_ERROR_INTERNAL,
+          std::string("unexpected nullptr in BackendModelException"));
+      RETURN_IF_ERROR(ex.err_);
+    }
     catch (const triton::backend::pytorch::BackendException& ex) {
       RETURN_ERROR_IF_TRUE(
           true, TRITONSERVER_ERROR_INTERNAL,
@@ -353,6 +359,18 @@ TRITONBACKEND_ModelInstanceInitialize(TRITONBACKEND_ModelInstance* instance)
           pt2::ModelInstanceState::Create(model_state, instance);
       RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceSetState(
           instance, reinterpret_cast<void*>(instance_state)));
+    }
+    catch (const triton::backend::BackendModelInstanceException& ex) {
+      RETURN_ERROR_IF_TRUE(
+          ex.err_ == nullptr, TRITONSERVER_ERROR_INTERNAL,
+          std::string("unexpected nullptr in BackendModelInstanceException"));
+      RETURN_IF_ERROR(ex.err_);
+    }
+    catch (const triton::backend::BackendModelException& ex) {
+      RETURN_ERROR_IF_TRUE(
+          ex.err_ == nullptr, TRITONSERVER_ERROR_INTERNAL,
+          std::string("unexpected nullptr in BackendModelException"));
+      RETURN_IF_ERROR(ex.err_);
     }
     catch (const triton::backend::pytorch::BackendException& ex) {
       RETURN_ERROR_IF_TRUE(

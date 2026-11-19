@@ -37,6 +37,15 @@ triton_exception::triton_exception(TRITONSERVER_Error* error)
 triton_exception::triton_exception() : error_{nullptr} {}
 
 TRITONSERVER_Error*
+triton_exception::copy_error() const
+{
+  return error_ ? TRITONSERVER_ErrorNew(
+                      TRITONSERVER_ErrorCode(error_.get()),
+                      TRITONSERVER_ErrorMessage(error_.get()))
+                : nullptr;
+}
+
+TRITONSERVER_Error*
 triton_exception::get_error() const noexcept
 {
   return error_ ? error_.get() : nullptr;

@@ -71,7 +71,6 @@ class ModelState : public triton::backend::BackendModel {
   bool is_dictionary_input_{false};
   std::unordered_map<std::string, uint32_t> map_input_index_;
   std::unordered_map<std::string, uint32_t> map_output_index_;
-  std::shared_ptr<TorchModelLoader> model_loader_{nullptr};
   std::string model_name_;
   std::map<std::string, std::pair<int64_t, int64_t>> model_outputs_;
   std::string model_path_;
@@ -102,9 +101,6 @@ class ModelState : public triton::backend::BackendModel {
 
   void CudnnEnabled(bool value);
 
-  [[nodiscard]] std::vector<torch::Tensor> Forward(
-      const std::vector<torch::Tensor>& inputs, void* stream_handle = nullptr);
-
   [[nodiscard]] bool InferenceModeEnabled() const;
 
   [[nodiscard]] std::unordered_map<std::string, uint32_t>& InputMap();
@@ -113,7 +109,8 @@ class ModelState : public triton::backend::BackendModel {
 
   void LoadModel(
       const std::string& model_file_name, const torch::Device& device,
-      uint32_t device_count, TRITONSERVER_InstanceGroupKind kind);
+      uint32_t device_count, TRITONSERVER_InstanceGroupKind kind,
+      std::shared_ptr<TorchModelLoader>* model_loader);
 
   [[nodiscard]] const std::map<std::string, std::pair<int64_t, int64_t>>&
   ModelOutputs() const;
