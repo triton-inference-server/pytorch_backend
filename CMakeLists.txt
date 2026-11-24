@@ -96,10 +96,17 @@ endif()
 # Python.h needed by torch headers.
 find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module)
 
+# Python version of the PyTorch docker image, used to locate the torch
+# package inside it. Defaults to the build host's Python, which matches when
+# both come from the same Ubuntu release.
+set(TRITON_PYTORCH_PYTHON_VERSION
+    "${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}"
+    CACHE STRING "Python major.minor version of TRITON_PYTORCH_DOCKER_IMAGE.")
+
 set(RHEL_BUILD OFF)
 set(LIB_DIR "lib")
 set(LIBTORCH_LIBS_PATH "/usr/local/lib")
-set(PY_INSTALL_PATH "/usr/local/lib/python3.12/dist-packages")
+set(PY_INSTALL_PATH "/usr/local/lib/python${TRITON_PYTORCH_PYTHON_VERSION}/dist-packages")
 if(LINUX)
   file(STRINGS "/etc/os-release" DISTRO_ID_LIKE REGEX "ID_LIKE")
   if(${DISTRO_ID_LIKE} MATCHES "rhel|centos")
@@ -131,6 +138,7 @@ message(TRACE "TRITON_PYTORCH_DOCKER_BUILD: ${TRITON_PYTORCH_DOCKER_BUILD}")
 message(TRACE "RHEL_BUILD: ${RHEL_BUILD}")
 message(TRACE "LIB_DIR: ${LIB_DIR}")
 message(TRACE "LIBTORCH_LIBS_PATH: ${LIBTORCH_LIBS_PATH}")
+message(TRACE "TRITON_PYTORCH_PYTHON_VERSION: ${TRITON_PYTORCH_PYTHON_VERSION}")
 message(TRACE "PY_INSTALL_PATH: ${PY_INSTALL_PATH}")
 
 #
