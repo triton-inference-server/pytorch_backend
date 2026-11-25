@@ -45,6 +45,9 @@ class triton_exception : public std::exception {
 
   ~triton_exception() = default;
 
+  // Returns a copy of the error that the caller owns, or `nullptr`.
+  [[nodiscard]] TRITONSERVER_Error* copy_error() const;
+
   TRITONSERVER_Error* get_error() const noexcept;
 
   const char* what() const noexcept override;

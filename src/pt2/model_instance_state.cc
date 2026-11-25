@@ -75,12 +75,13 @@ ModelInstanceState::ModelInstanceState(
       /* model_file_name= */ ArtifactFilename(),
       /* device= */ device_,
       /* device_count= */ device_count_,
-      /* kind= */ Kind());
+      /* kind= */ Kind(),
+      /* model_loader= */ &model_loader_);
 
 #ifdef TRITON_ENABLE_GPU
-  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
+  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) {
     DEBUG_TRACE_INFO(
-        "{ Kind(): TRITONSERVER_INSTANCEGROUPKIND_GPU, len(device_count_): "
+        "{ Kind(): TRITONSERVER_INSTANCEGROUPKIND_MODEL, len(device_count_): "
         << device_count_ << " }");
     // Since we cannot determine the exact devices used by the model, we create
     // a CUDA stream for every available device to ensure proper synchronization
@@ -203,6 +204,7 @@ ModelInstanceState::ModelInstanceState(
 
 ModelInstanceState::~ModelInstanceState()
 {
+  model_loader_.reset();
   ClearCache();
 
 #ifdef TRITON_ENABLE_GPU
@@ -249,7 +251,16 @@ ModelInstanceState::ClearCache()
 #ifdef TRITON_ENABLE_GPU
   if (device_.is_cuda() ||
       (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL && device_count_ > 0)) {
-    c10::cuda::CUDACachingAllocator::emptyCache();
+    // Called from the destructor, where an exception terminates the server;
+    // emptying the cache throws after a CUDA error on the device.
+    try {
+      c10::cuda::CUDACachingAllocator::emptyCache();
+    }
+    catch (const std::exception& exception) {
+      TRITON_LOG_ERROR(
+          "Failed to empty the CUDA cache for model instance \""
+          << Name() << "\": " << exception.what());
+    }
   }
 #endif
 }
@@ -383,10 +394,19 @@ ModelInstanceState::Execute(
 
     torch::NoGradGuard no_grad_guard;
 
+#ifdef TRITON_ENABLE_GPU
+    // The AOT Inductor runtime uses the calling thread's current CUDA device
+    // for its completion event and stream, so make it this instance's device.
+    c10::cuda::OptionalCUDAGuard device_guard;
+    if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
+      device_guard.reset_device(device_);
+    }
+#endif
+
     DEBUG_TRACE_INFO(
         "calling Forward() for model instance \""
         << Name() << "\" with " << input_tensors.size() << " input tensors.");
-    model_outputs = model_->Forward(input_tensors);
+    model_outputs = model_loader_->get_runner()->run(input_tensors);
     DEBUG_TRACE_INFO(
         "Forward() for model instance \"" << Name() << "\" returned "
                                           << model_outputs.size()
@@ -664,7 +684,7 @@ ModelInstanceState::ProcessRequests(
   } else if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_MODEL) {
     // Replace the default stream of each device with the one we created.
     for (size_t i = 0; i < stream_vector_.size(); i += 1) {
-      SetCurrentCudaStream(stream_vector_[i], DeviceId());
+      SetCurrentCudaStream(stream_vector_[i], i);
     }
   }
 #endif
@@ -737,7 +757,6 @@ ModelInstanceState::ProcessRequests(
       if (err) {
         RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
             responses, request_count, all_response_failed, err);
-        TRITONSERVER_ErrorDelete(err);
       }
     } else {
       total_batch_size += 1;
@@ -792,7 +811,6 @@ ModelInstanceState::ProcessRequests(
         /* kernel_buffer_threshold= */ 0,
         /* host_policy_name= */ HostPolicyName().c_str()});
 
-    triton_exception triton_ex;
     TRITONSERVER_Error* err{nullptr};
     try {
       SetInputTensors(
@@ -806,7 +824,7 @@ ModelInstanceState::ProcessRequests(
           /* cuda_copy= */ &cuda_copy);
     }
     catch (const triton_exception& e) {
-      triton_ex = e;
+      err = e.copy_error();
     }
     catch (const std::exception& e) {
       err = TRITONSERVER_ErrorNew(
@@ -816,7 +834,6 @@ ModelInstanceState::ProcessRequests(
               << Name() << "\": " << e.what())
               .c_str());
     }
-    err = err ? err : triton_ex.get_error();
     RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
         responses, request_count, all_response_failed, err);
   }
@@ -832,7 +849,6 @@ ModelInstanceState::ProcessRequests(
   uint64_t compute_start_ns{0};
   uint64_t compute_infer_start{0};
 
-  triton_exception triton_ex;
   TRITONSERVER_Error* err{nullptr};
   try {
     RecordBackendTimestamp(
@@ -840,7 +856,7 @@ ModelInstanceState::ProcessRequests(
         reinterpret_cast<void*>(&compute_infer_start_event_));
   }
   catch (const triton_exception& e) {
-    triton_ex = e;
+    err = e.copy_error();
   }
   catch (const std::exception& e) {
     err = TRITONSERVER_ErrorNew(
@@ -850,7 +866,6 @@ ModelInstanceState::ProcessRequests(
             << Name() << "\": " << e.what())
             .c_str());
   }
-  err = err ? err : triton_ex.get_error();
 
   RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
       responses, request_count, all_response_failed, err);
@@ -883,8 +898,12 @@ ModelInstanceState::ProcessRequests(
   int max_index{static_cast<int>(output_tensors.size() - 1)};
 
   if (!all_response_failed) {
+    // The output map belongs to the model and is shared by all of its
+    // instances, so only look names up here; never insert into it.
+    const auto& output_map = model_->OutputMap();
     for (const auto& name : model_->ModelOutputs()) {
-      int output_index = model_->OutputMap()[name.first];
+      const auto it = output_map.find(name.first);
+      int output_index = (it != output_map.end()) ? it->second : 0;
       if (output_index < 0 || output_index > max_index) {
         RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
             responses, request_count, all_response_failed,
@@ -922,7 +941,6 @@ ModelInstanceState::ProcessRequests(
   } else
 #endif
   {
-    triton_exception triton_ex;
     TRITONSERVER_Error* err{nullptr};
     try {
       RecordBackendTimestamp(
@@ -930,7 +948,7 @@ ModelInstanceState::ProcessRequests(
           reinterpret_cast<void*>(&compute_output_start_event_));
     }
     catch (const triton_exception& e) {
-      triton_ex = e;
+      err = e.copy_error();
     }
     catch (const std::exception& e) {
       err = TRITONSERVER_ErrorNew(
@@ -940,7 +958,6 @@ ModelInstanceState::ProcessRequests(
               << Name() << "\": " << e.what())
               .c_str());
     }
-    err = err ? err : triton_ex.get_error();
     RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
         responses, request_count, all_response_failed, err);
   }

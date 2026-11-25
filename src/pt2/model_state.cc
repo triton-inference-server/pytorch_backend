@@ -258,26 +258,6 @@ ModelState::FindBatchOutput(const std::string& output_name) const
   return TritonBackendModel::FindBatchOutput(output_name);
 }
 
-std::vector<torch::Tensor>
-ModelState::Forward(
-    const std::vector<torch::Tensor>& inputs, void* stream_handle)
-{
-  DEBUG_TRACE_INFO(
-      "{ len(inputs): " << inputs.size() << ", stream_handle: "
-                        << (stream_handle ? "pointer" : "null") << " }");
-  if (!model_loader_) {
-    THROW_TRITON_EXCEPTION(
-        TRITONSERVER_ERROR_INTERNAL,
-        "Model \""
-            << Name()
-            << "\" not loaded. Use `LoadModel` before calling `Forward`.");
-  }
-
-  auto output_tensors = model_loader_->get_runner()->run(inputs, stream_handle);
-
-  return output_tensors;
-}
-
 bool
 ModelState::InferenceModeEnabled() const
 {
@@ -311,8 +291,14 @@ ModelState::IsInputOptional(const std::string& input_name) const
 void
 ModelState::LoadModel(
     const std::string& model_file_name, const torch::Device& device,
-    uint32_t device_count, TRITONSERVER_InstanceGroupKind kind)
+    uint32_t device_count, TRITONSERVER_InstanceGroupKind kind,
+    std::shared_ptr<TorchModelLoader>* model_loader)
 {
+  if (!model_loader)
+    THROW_TRITON_EXCEPTION(
+        TRITONSERVER_ERROR_INTERNAL,
+        "Argument `model_loader` cannot be `null`.");
+
   if (kind != TRITONSERVER_INSTANCEGROUPKIND_MODEL && !device.is_cpu() &&
       device_count == 0)
     THROW_TRITON_EXCEPTION(
@@ -371,7 +357,7 @@ ModelState::LoadModel(
 
     if (mit != model_package_loaders_.end()) {
       // Since the model package loader is already created, reuse it.
-      model_loader_ = mit->second;
+      *model_loader = mit->second;
       TRITON_LOG_INFO(
           "Reusing Inductor model loader for instance \"" << Name() << "\".");
       return;
@@ -393,34 +379,41 @@ ModelState::LoadModel(
 
   torch::InferenceMode infer_guard{InferenceModeEnabled()};
 
-  TorchModelLoader* model_loader{nullptr};
+  // The loader is owned by the model instance that requested it, so that each
+  // instance runs the model on its own device.
   {
     std::lock_guard loader_ctor_lock{aoti_package_loader_ctor_mutex};
     if (device.is_cuda()) {
       DEBUG_TRACE_INFO(
           "Creating model loader for GPU device " << device.str() << ".");
-      model_loader = new TorchModelLoader{
+      model_loader->reset(new TorchModelLoader{
           /*model_package_path=*/local_file_path,
           /*model_name=*/local_name,
           /*run_single_threaded=*/false,
           /*num_runners=*/1,
-          /*device_index=*/device.index()};
+          /*device_index=*/device.index()});
     } else {
       DEBUG_TRACE_INFO(
           "Creating model loader for CPU device " << device.str() << ".");
-      model_loader = new TorchModelLoader{
+#ifdef TRITON_ENABLE_GPU
+      // Without a device index, a package compiled for CUDA is placed on the
+      // calling thread's current CUDA device; make that the first device.
+      c10::cuda::OptionalCUDAGuard first_device_guard;
+      if (torch::cuda::device_count() > 0) {
+        first_device_guard.reset_device(torch::Device{torch::kCUDA, 0});
+      }
+#endif
+      model_loader->reset(new TorchModelLoader{
           /*model_package_path=*/local_file_path,
           /*model_name=*/local_name,
           /*run_single_threaded=*/false,
           /*num_runners=*/1,
-          /*device_index=*/-1};
+          /*device_index=*/-1});
     }
   }
 
-  model_loader_.reset(model_loader);
-
   if (weight_sharing_enabled_) {
-    if (!model_package_loaders_.emplace(device_pair, model_loader_).second) {
+    if (!model_package_loaders_.emplace(device_pair, *model_loader).second) {
       TRITON_LOG_WARN(
           "Model already found on target "
           << (device.is_cpu() ? "CPU" : "GPU") << " device " << device.index()
@@ -428,7 +421,7 @@ ModelState::LoadModel(
     }
   }
 
-  auto call_spec = model_loader_->get_call_spec();
+  auto call_spec = (*model_loader)->get_call_spec();
 
   pt2::call_spec input_spec;
   if (!call_spec::try_parse(call_spec[0], input_spec))

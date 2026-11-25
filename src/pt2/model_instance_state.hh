@@ -70,6 +70,7 @@ class ModelInstanceState : public triton::backend::BackendModelInstance {
   pt2::io_data map_inputs_;
   pt2::io_data map_outputs_;
   TritonModelState* model_{nullptr};
+  std::shared_ptr<TorchModelLoader> model_loader_{nullptr};
   std::string model_path_;
 #ifdef TRITON_ENABLE_GPU
   std::vector<cudaStream_t> stream_vector_;

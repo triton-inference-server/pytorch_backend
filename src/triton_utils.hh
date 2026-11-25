@@ -35,7 +35,7 @@
 #include "triton/core/tritonserver.h"
 
 namespace triton::backend::pytorch {
-class BackendException : std::runtime_error {
+class BackendException : public std::runtime_error {
  private:
   TRITONSERVER_Error_Code error_code_;
 
@@ -76,9 +76,9 @@ TRITONSERVER_Error_Code __to_error_code__(triton::common::Error::Code value);
   do {                                                               \
     TRITONSERVER_Error_Code ec =                                     \
         triton::backend::pytorch::__to_error_code__(error);          \
-    __delete_error__(error);                                         \
     std::stringstream buf;                                           \
     buf << message;                                                  \
+    __delete_error__(error);                                         \
     throw triton::backend::pytorch::BackendException{ec, buf.str()}; \
   } while (false);
 
